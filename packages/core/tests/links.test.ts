@@ -293,11 +293,15 @@ describe('for agents', () => {
       body: { text: 'bring the adapter' },
       links: [{ rel: 'about', to: todo.key }],
     });
-    const onIt = z
-      .array(z.object({ body: z.object({ text: z.string() }) }))
-      .parse(await runAction(me, 'records_linked', { space, key: todo.key, collection: 'std.comment' }));
+    const onIt = z.object({ records: z.array(z.object({ body: z.object({ text: z.string() }) })) }).parse(
+      await runAction(me, 'records_query', {
+        space,
+        collection: 'std.comment',
+        where: { 'link:about': todo.key },
+      }),
+    );
     assert.deepEqual(
-      onIt.map((c) => c.body.text),
+      onIt.records.map((c) => c.body.text),
       ['bring the adapter'],
     );
   });

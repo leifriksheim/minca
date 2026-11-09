@@ -527,4 +527,67 @@ describe('actions', () => {
     );
     await assert.rejects(runAction(node, 'no_such_thing'), /Unknown action/);
   });
+
+  test('a record reads without the bookkeeping every sound version shares', async () => {
+    const node = await startNode();
+    const { id: space } = await node.spaces.create({ name: 'Lean', visibility: 'private' });
+    const note = await node.records.put(space, 'app.note', { text: 'hi' });
+    const found = z
+      .object({ records: z.array(z.record(z.string(), z.unknown())) })
+      .parse(await runAction(node, 'records_query', { space, collection: 'app.note' }));
+    const read = z
+      .record(z.string(), z.unknown())
+      .parse(await runAction(node, 'records_get', { space, key: note.key }));
+    for (const record of [found.records[0], read]) {
+      assert.deepEqual(Object.keys(record ?? {}).sort(), [
+        'body',
+        'collection',
+        'createdAt',
+        'createdBy',
+        'key',
+        'links',
+        'root',
+        'updatedAt',
+      ]);
+      assert.deepEqual(record?.body, { text: 'hi' });
+    }
+  });
+
+  test('a page of long records stops early, and its cursor picks up after the last one given', async () => {
+    const node = await startNode();
+    const { id: space } = await node.spaces.create({ name: 'Long', visibility: 'public' });
+    for (const n of [1, 2, 3]) await node.records.put(space, 'app.page', { n, text: 'x'.repeat(25_000) });
+    const page = z.object({
+      records: z.array(z.object({ body: z.object({ n: z.number() }) })),
+      cursor: z.string().nullable(),
+    });
+    const seen: number[] = [];
+    let cursor: string | null | undefined;
+    do {
+      const next = page.parse(
+        await runAction(node, 'records_query', {
+          space,
+          collection: 'app.page',
+          ...(cursor ? { cursor } : {}),
+        }),
+      );
+      assert.equal(next.records.length, 1);
+      seen.push(...next.records.map((r) => r.body.n));
+      cursor = next.cursor;
+    } while (cursor);
+    assert.deepEqual(seen.sort(), [1, 2, 3]);
+  });
+
+  test('spaces_list leaves out the role this node last saw; spaces_access reads it', async () => {
+    const node = await startNode();
+    const { id: space } = await node.spaces.create({ name: 'Mine', visibility: 'private' });
+    const listed = z.array(z.record(z.string(), z.unknown())).parse(await runAction(node, 'spaces_list', {}));
+    const mine = listed.find((s) => s.id === space);
+    assert.ok(mine);
+    assert.equal('writable' in mine || 'role' in mine, false);
+    const access = z
+      .object({ founder: z.boolean() })
+      .parse(await runAction(node, 'spaces_access', { space }));
+    assert.equal(access.founder, true);
+  });
 });

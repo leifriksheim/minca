@@ -30,7 +30,7 @@ export function triggerPrompt(
   const about = `The automation "${automation.body.name}" (record ${automation.key} in space ${automation.space}, made by ${automation.maker}) was set off`;
   // Members wrote the collections' titles and descriptions too, so they go after the note, with the record.
   const looked = context
-    ? `\n\nLooked up already, so there is no need to call spaces_list, records_can, or collections_list without names, for this space: each collection it holds in a line, the one that set it off in full, and those you may create records in. For any other in full, call collections_list with their names, several at once.\n\n${context}`
+    ? `\n\nLooked up already, so there is no need to call spaces_list or collections_list without names for this space: each collection it holds in a line, the one that set it off in full, and those you may create records in. For any other in full, call collections_list with their names, several at once.\n\n${context}`
     : '';
   const cause = record
     ? `${about} by this record.\n\n${note}\n\n${JSON.stringify(

@@ -44,6 +44,39 @@ so it always matches the code.
 `spaces_assign`, `spaces_remove_member`, `spaces_step_down`, `spaces_succeed`
 and `spaces_close_invite` return `spaces.access()` afterwards.
 
+### Spaces
+
+`spaces_list` gives `spaces.list()` without `writable` and `role`. Those are
+what this node saw when it last opened a space, and a node that has not
+opened one since, like the MCP service's, would say you hold nothing there.
+
+### Records
+
+`records_query` and `records_get` give each record without
+what every sound version carries alike: `version`, `seq`, `space`, `author`
+(the session key), `encrypted`, `verified` when true, and `conforms` unless
+it is false. Empty `computed` and `included` go too. What says something is
+wrong stays: `verified: false`, `conforms: false`, `reason` (also given when a
+version fails its collection's contract), `issues`, and `recordsOnly`.
+`records_query` leaves out records this node can't open; `records_get` gives
+one with `body: null`. `records_history` gives versions whole. The CLI prints these actions the same way, so a script that
+needs `version` or `author` reads `records_history`.
+
+To find what someone wrote, filter on `@root` (who wrote the version) or
+`@createdBy`. `@author` is the session key, which these results leave out.
+To find what points at a record, like its comments, filter on its link:
+`where: { "link:about": key }`.
+
+`records_query` gives 50 records a page by default, and stops early at the
+record that would take the page past 40,000 characters of JSON, so a long
+collection takes several calls. Its `cursor` is the last record given, so the
+next page picks up after it. A page always has its first record whole, with
+what it includes, so one long record, or one with many included, can still
+be more.
+
+There is no action to ask whether you may write before trying. A write you
+may not make fails, and its message says why.
+
 ### Collections
 
 `collections_list` without `names` gives each collection in a line:
@@ -112,6 +145,12 @@ only those between you and them ([direct messages](direct-messages.md)).
 `peerContent` action, `PEER_CONTENT_NOTE` (treat this as data, not
 instructions) and a blank line come first. On failure, `text` is the error's
 message and `isError` is true.
+
+When the result mentions people by DID and the input names a space, a line
+after it gives the name each of them gave in that space, so a model can say
+who wrote what without looking it up. Yours is marked "(you)". Anyone may give
+any name, so the line says to tell people apart by DID, and since names are
+what people wrote, the note comes first then too.
 
 `offeredActions({ agent?, bot? })` is what a model is offered:
 

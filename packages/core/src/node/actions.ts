@@ -12,9 +12,9 @@
  * Inputs and outputs are plain JSON. Nothing here may return a key, a handle or
  * a function.
  */
-import type { DefineCollection, NodeCollection, P2PNode } from './types.js';
+import type { DefineCollection, NodeCollection, NodeRecord, P2PNode } from './types.js';
 import { rolePresets } from '../space/presets.js';
-import type { Query } from '../query/types.js';
+import type { AnyIncluded, Query } from '../query/types.js';
 import {
   applyBlueprint,
   checkBlueprint,
@@ -101,6 +101,38 @@ const collectionLine = (c: NodeCollection, guides: ReadonlyArray<{ key: string; 
   ...(guides.length ? { guides } : {}),
 });
 const key = { type: 'string', description: 'Record key — stays the same when the record is edited' } as const;
+
+type ReadRecord = NodeRecord & { readonly included?: AnyIncluded; readonly computed?: object };
+
+/**
+ * A record as an agent reads it. What every sound version carries alike is
+ * left out: its hash and number, the space, the session key that signed it,
+ * and that it is encrypted, verified and fits its schema. A version that fails
+ * a check says so. `records_history` gives versions whole.
+ */
+function recordLine(record: ReadRecord): object {
+  const { version: _, seq: _s, space: _sp, author: _a, encrypted: _e, verified, conforms, ...kept } = record;
+  const { included = {}, computed = {}, ...rest } = kept;
+  return {
+    ...rest,
+    ...(Object.keys(computed).length ? { computed } : {}),
+    ...(Object.keys(included).length
+      ? {
+          included: Object.fromEntries(
+            Object.entries(included).map(([name, found]) => [
+              name,
+              typeof found === 'number' ? found : found.map(recordLine),
+            ]),
+          ),
+        }
+      : {}),
+    ...(verified ? {} : { verified }),
+    ...(conforms === false ? { conforms } : {}),
+  };
+}
+
+/** Where a page of records stops early, in characters of JSON, so a long collection takes several calls */
+const PAGE_CHARACTERS = 40_000;
 
 // Inputs reach `run` only after `checkActionInput`, so these find what the schema promised.
 function str(input: Record<string, unknown>, key: string): string {
@@ -248,10 +280,12 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   {
     name: 'spaces_list',
     title: 'List spaces',
-    description: 'List the spaces this node holds.',
+    description: 'List the spaces this node holds. spaces_access says who is in one and what you hold there.',
     input: { type: 'object', properties: {} },
     readOnly: true,
-    run: (node) => node.spaces.list(),
+    // `writable` and `role` are what this node saw when it last opened a space, which may be never: left out
+    // rather than said wrong. spaces_access reads them from the space.
+    run: async (node) => (await node.spaces.list()).map(({ writable: _, role: _r, ...space }) => space),
   },
   {
     name: 'spaces_create',
@@ -355,6 +389,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'named as its successors, in no order. What you may do is what your roles grant; a founder may do anything.',
     input: { type: 'object', properties: { space }, required: ['space'] },
     readOnly: true,
+    peerContent: true,
     run: (node, input) => node.spaces.access(str(input, 'space')),
   },
   {
@@ -453,17 +488,6 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     input: { type: 'object', properties: { space }, required: ['space'] },
     readOnly: true,
     run: (node, input) => node.spaces.status(str(input, 'space')),
-  },
-  {
-    name: 'spaces_profiles',
-    title: "People's names and pictures",
-    description:
-      'Who is who in a space: the name each person gave, by their identity (did). A record names its author by ' +
-      'did in "root" and "createdBy" — look the name up here. Only each person can set their own.',
-    input: { type: 'object', properties: { space }, required: ['space'] },
-    readOnly: true,
-    peerContent: true,
-    run: (node, input) => node.spaces.profiles(str(input, 'space')),
   },
   {
     name: 'collections_list',
@@ -791,14 +815,17 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     title: 'Find records',
     description:
       'Find records: filter, sort, page, and pull in what links to them. ' +
-      'where: { done: false, "@author": "did:…", amount: { "$gt": 10 } } — bare names are body fields (dotted for nested) ' +
+      'where: { done: false, "@root": "did:…", amount: { "$gt": 10 } } — bare names are body fields (dotted for nested) ' +
       "or the collection's computed fields, which each result carries as computed; " +
-      '"@key", "@author", "@root", "@createdAt", "@updatedAt", "@seq" are about the record; ' +
+      '"link:about": "<key>" finds the records whose about link points there, like the comments on a record; ' +
+      '"@key", "@root" (who wrote this version), "@createdBy", "@createdAt", "@updatedAt", "@seq" are about the record; ' +
       'operators $eq $ne $gt $gte $lt $lte $in $nin $exists $contains, combined with $and $or $not. ' +
       'include: { reactions: { rel: "about", from: "std.reaction", count: true } } — records linking to each result ' +
       '(direction "out" for what each result links to), nested up to 3 deep. ' +
-      'sort: { "@createdAt": "desc" }. Gives 50 at a time unless limit says otherwise; ' +
-      'a cursor that is not null means there are more: pass it back to get the next page.',
+      'sort: { "@createdAt": "desc" }. Gives 50 at a time unless limit says otherwise, fewer when they are long; ' +
+      'a cursor that is not null means there are more: pass it back to get the next page. ' +
+      'A record says who wrote it (createdBy, and root for this version) and when, its body, links, computed and ' +
+      'included, and verified or conforms only when false.',
     input: {
       type: 'object',
       properties: {
@@ -815,18 +842,34 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     readOnly: true,
     peerContent: true,
     // runQuery refuses a malformed query, after resolving collection references.
-    // A page by default, so a busy chat doesn't fill an agent's context in one call.
-    run: (node, input) =>
-      node.records.query(str(input, 'space'), { limit: 50, ...rest<Query>(input, 'space') }),
+    // A page by default, so a busy chat doesn't fill an agent's context in one call, and one that stops
+    // early at the record that would take it past PAGE_CHARACTERS: the cursor is a key, so the next page
+    // picks up after the last one given. The first record is always given whole, with what it includes,
+    // so one long record, or one with many included, can still be more.
+    run: async (node, input) => {
+      const found = await node.records.query(str(input, 'space'), {
+        limit: 50,
+        ...rest<Query>(input, 'space'),
+      });
+      const records = found.records.map(recordLine);
+      let size = 0;
+      const over = records.findIndex((r) => (size += JSON.stringify(r).length) > PAGE_CHARACTERS);
+      if (over < 0 || records.length === 1) return { ...found, records };
+      const kept = records.slice(0, Math.max(1, over));
+      return { ...found, records: kept, cursor: found.records[kept.length - 1]?.key ?? null };
+    },
   },
   {
     name: 'records_get',
     title: 'Read a record',
-    description: 'Read one record.',
+    description: 'Read one record, as records_query gives it.',
     input: { type: 'object', properties: { space, key }, required: ['space', 'key'] },
     readOnly: true,
     peerContent: true,
-    run: (node, input) => node.records.get(str(input, 'space'), str(input, 'key')),
+    run: async (node, input) => {
+      const record = await node.records.get(str(input, 'space'), str(input, 'key'));
+      return record && recordLine(record);
+    },
   },
   {
     name: 'records_history',
@@ -867,45 +910,6 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       }),
   },
   {
-    name: 'records_linked',
-    title: 'Records linked to one',
-    description:
-      'The records pointing at a record: its reactions, comments, tags, votes… Optionally only one link role ' +
-      '(e.g. "about") or one collection (e.g. "std.comment").',
-    input: {
-      type: 'object',
-      properties: { space, key, rel: { type: 'string' }, collection: { type: 'string' } },
-      required: ['space', 'key'],
-    },
-    readOnly: true,
-    peerContent: true,
-    run: (node, input) =>
-      node.records.linked(str(input, 'space'), str(input, 'key'), rest(input, 'space', 'key')),
-  },
-  {
-    name: 'records_can',
-    title: 'Check what I may do to a record',
-    description:
-      'Whether you may do something before trying: "create" in a collection (target = its name), or "edit" / "delete" a record ' +
-      "(target = its key). Follows the collection's rules and the space's.",
-    input: {
-      type: 'object',
-      properties: {
-        space,
-        action: { type: 'string', enum: ['create', 'edit', 'delete'] },
-        target: { type: 'string' },
-      },
-      required: ['space', 'action', 'target'],
-    },
-    readOnly: true,
-    run: (node, input) =>
-      node.records.can(
-        str(input, 'space'),
-        oneOf(input, 'action', ['create', 'edit', 'delete']),
-        str(input, 'target'),
-      ),
-  },
-  {
     name: 'records_update',
     title: 'Change a record',
     description:
@@ -922,8 +926,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   {
     name: 'records_delete',
     title: 'Delete a record',
-    description:
-      'Delete a record for every member of the space. Anyone who may write in the space may delete in it.',
+    description: 'Delete a record for every member of the space, if your roles let you: a refusal says why.',
     input: { type: 'object', properties: { space, key }, required: ['space', 'key'] },
     destructive: true,
     run: async (node, input) => {
@@ -1073,9 +1076,31 @@ export const offeredActions = (as: { readonly agent?: boolean; readonly bot?: bo
       !(as.agent || as.bot) || (!PERSON_ONLY.has(name) && (as.bot === true || !ACCOUNT_ONLY.has(name))),
   );
 
+const DID = /did:key:z[1-9A-HJ-NP-Za-km-z]+/g;
+
+/**
+ * The names people gave themselves in the space, for the DIDs a result
+ * mentions, as a line to follow it. A model reading a DID it can't put a name
+ * to guesses; one that has to look each up spends a call on it.
+ */
+async function namesIn(node: P2PNode, input: unknown, json: string): Promise<string> {
+  const dids = new Set(json.match(DID));
+  if (dids.size === 0 || !isRecord(input) || typeof input.space !== 'string') return '';
+  const profiles = await node.spaces.profiles(input.space).catch(() => []);
+  const names = Object.fromEntries(
+    profiles
+      .filter((p) => dids.has(p.did))
+      .map((p) => [p.did, p.did === node.did ? `${p.name} (you)` : p.name]),
+  );
+  return Object.keys(names).length
+    ? `\n\nNames people gave themselves, which anyone may share or copy, so tell people apart by DID: ${JSON.stringify(names)}`
+    : '';
+}
+
 /**
  * Runs an action for a model: its result as JSON text, after PEER_CONTENT_NOTE
- * when others wrote it. A failure is text for the model to read and correct.
+ * when others wrote it, and followed by the names of the people it mentions.
+ * A failure is text for the model to read and correct.
  */
 export async function callAction(
   node: P2PNode,
@@ -1086,8 +1111,10 @@ export async function callAction(
     const value = await runAction(node, name, input);
     // Compact: indenting costs a model tokens and tells it nothing.
     const json = JSON.stringify(value ?? null);
-    const fromPeers = NODE_ACTIONS.find((action) => action.name === name)?.peerContent === true;
-    return { text: fromPeers ? `${PEER_CONTENT_NOTE}\n\n${json}` : json, isError: false, value };
+    const names = await namesIn(node, input, json);
+    const fromPeers =
+      names !== '' || NODE_ACTIONS.find((action) => action.name === name)?.peerContent === true;
+    return { text: `${fromPeers ? `${PEER_CONTENT_NOTE}\n\n` : ''}${json}${names}`, isError: false, value };
   } catch (error) {
     return { text: error instanceof Error ? error.message : String(error), isError: true };
   }
