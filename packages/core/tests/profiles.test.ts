@@ -173,7 +173,7 @@ describe('profiles', () => {
     );
     await alice.node.records.put(space, 'app.note', { text: 'hi' });
     const { text } = await callAction(alice.node, 'records_query', { space, collection: 'app.note' });
-    assert.ok(text.endsWith(`Names, as each person gave theirs: {"${alice.node.did}":"Alice"}`), text);
+    assert.ok(text.endsWith(`tell people apart by DID: {"${alice.node.did}":"Alice (you)"}`), text);
     assert.ok(text.startsWith(PEER_CONTENT_NOTE), 'names are what others wrote');
   });
 });

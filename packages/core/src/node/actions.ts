@@ -926,8 +926,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   {
     name: 'records_delete',
     title: 'Delete a record',
-    description:
-      'Delete a record for every member of the space. Anyone who may write in the space may delete in it.',
+    description: 'Delete a record for every member of the space, if your roles let you: a refusal says why.',
     input: { type: 'object', properties: { space, key }, required: ['space', 'key'] },
     destructive: true,
     run: async (node, input) => {
@@ -1088,8 +1087,14 @@ async function namesIn(node: P2PNode, input: unknown, json: string): Promise<str
   const dids = new Set(json.match(DID));
   if (dids.size === 0 || !isRecord(input) || typeof input.space !== 'string') return '';
   const profiles = await node.spaces.profiles(input.space).catch(() => []);
-  const names = Object.fromEntries(profiles.filter((p) => dids.has(p.did)).map((p) => [p.did, p.name]));
-  return Object.keys(names).length ? `\n\nNames, as each person gave theirs: ${JSON.stringify(names)}` : '';
+  const names = Object.fromEntries(
+    profiles
+      .filter((p) => dids.has(p.did))
+      .map((p) => [p.did, p.did === node.did ? `${p.name} (you)` : p.name]),
+  );
+  return Object.keys(names).length
+    ? `\n\nNames people gave themselves, which anyone may share or copy, so tell people apart by DID: ${JSON.stringify(names)}`
+    : '';
 }
 
 /**

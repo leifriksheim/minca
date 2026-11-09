@@ -54,11 +54,12 @@ opened one since, like the MCP service's, would say you hold nothing there.
 
 `records_query` and `records_get` give each record without
 what every sound version carries alike: `version`, `seq`, `space`, `author`
-(the session key), `encrypted`, and `verified` and `conforms` when they are
-true. Empty `computed` and `included` go too. A version that fails a check
-keeps `verified: false` or `conforms: false`, with its `reason` or `issues`.
-`body` is null when this node can't open the record. `records_history` gives
-versions whole. The CLI prints these actions the same way, so a script that
+(the session key), `encrypted`, `verified` when true, and `conforms` unless
+it is false. Empty `computed` and `included` go too. What says something is
+wrong stays: `verified: false`, `conforms: false`, `reason` (also given when a
+version fails its collection's contract), `issues`, and `recordsOnly`.
+`records_query` leaves out records this node can't open; `records_get` gives
+one with `body: null`. `records_history` gives versions whole. The CLI prints these actions the same way, so a script that
 needs `version` or `author` reads `records_history`.
 
 To find what someone wrote, filter on `@root` (who wrote the version) or
@@ -147,8 +148,9 @@ message and `isError` is true.
 
 When the result mentions people by DID and the input names a space, a line
 after it gives the name each of them gave in that space, so a model can say
-who wrote what without looking it up. Names are what people wrote, so the
-note comes first then too.
+who wrote what without looking it up. Yours is marked "(you)". Anyone may give
+any name, so the line says to tell people apart by DID, and since names are
+what people wrote, the note comes first then too.
 
 `offeredActions({ agent?, bot? })` is what a model is offered:
 
