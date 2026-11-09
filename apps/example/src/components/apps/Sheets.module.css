@@ -1,0 +1,28 @@
+/* The collections down the side, the open one beside them; the app fills the window, so this brings its own margin and scroll */
+.layout {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--space-section);
+  align-items: start;
+  padding: 20px 24px;
+}
+
+.side {
+  position: sticky;
+  top: 0;
+}
+
+/* On a phone the list of collections at the start is the way in, so the side goes */
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .side {
+    display: none;
+  }
+}

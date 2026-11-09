@@ -214,8 +214,8 @@ VITE_SIGNALING_URL=wss://your-relay.example npm run dev
 ### Derived UI
 
 A space opens on its **Apps** tab: apps built on the standard schemas (a chat,
-a kanban board, lists, shared bills, polls, decisions, events, a marketplace
-and a call log) show
+a kanban board, lists, shared bills, polls, decisions, events, a marketplace,
+a call log, and Sheets) show
 up once someone who may add collections has put them on the space's launcher
 (`launcher.app` records, `src/components/apps/launcher.ts`). Adding one
 defines every collection it uses, and someone who may can arrange or remove
@@ -233,6 +233,16 @@ stored as `1` shows as "Lisbon", its form offers the poll's options, and the
 poll shows a tally. The helpers are pure functions
 (`src/derive/schema-ui.ts`). An empty space offers a small "define a
 collection" form; an agent can do the same over WebMCP.
+
+**Sheets** is the same collection view as an app anyone can add, like a
+small Airtable (`src/components/apps/Sheets.tsx`). The app draws it itself
+rather than in a screen, since it shows every collection in the space and a
+screen sees only its app's. Each collection opens as a table whose plain
+cells change in place, a board, cards or a list, with the fields, filters and
+order picked for it. "Everything" is how this device last looked at it; a
+view saved with "+ View" is a `sheets.view` record (`sheet-views.ts`), so
+everyone in the space sees it, and whoever may edit that record may rename
+or change it. "New collection" defines one, as the Collections tab does.
 
 ### Calls
 

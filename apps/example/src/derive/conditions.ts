@@ -1,6 +1,6 @@
 /** Conditions picked from a collection's schema, for filters, notifications and rules: kept as picked, turned into a filter when used. */
 import type { Filter, NodeCollection } from '@minca/core';
-import { choicesOf, fieldsOf, type Choice } from './schema-ui';
+import { choicesOf, fieldsOf, isObject, type Choice } from './schema-ui';
 import { fieldTypeOf, type FieldTypeName } from './field-types';
 
 /** How a field is compared. `search` is text in a query, which can also match a part of it. */
@@ -51,6 +51,13 @@ const OP_WORDS: Readonly<Record<ClauseOp, string>> = {
   filled: 'is filled in',
   empty: 'is empty',
 };
+
+/** Whether something read from a record is a condition as picked */
+export function isClause(value: unknown): value is Clause {
+  return (
+    isObject(value) && typeof value.field === 'string' && typeof value.op === 'string' && value.op in OP_WORDS
+  );
+}
 
 const OPS: Readonly<Record<ClauseKind, ReadonlyArray<ClauseOp>>> = {
   choice: ['is', 'isNot', 'filled', 'empty'],

@@ -11,6 +11,7 @@ import {
   type LauncherApp,
 } from './launcher';
 import { TEMPLATES } from './templates';
+import { isSheets } from './sheet-views';
 
 /**
  * An app a space can open: a launcher record (`launcher.ts`), ready-made or
@@ -65,8 +66,9 @@ const entryOf = (record: NodeRecord<LauncherApp>, id = `made:${record.key}`): Ap
   notify: record.body ? madeNotify(record.body) : [],
 });
 
-/** Whether an app takes the whole window: a screen of its own does, and so do direct messages */
-export const fills = (entry: AppEntry): boolean => !!entry.record.body?.screen || isDirect(entry.record.body);
+/** Whether an app takes the whole window: a screen of its own does, and so do direct messages and Sheets */
+export const fills = (entry: AppEntry): boolean =>
+  !!entry.record.body?.screen || isDirect(entry.record.body) || isSheets(entry.record.body);
 
 /** The space's launcher records, live */
 export function useLauncherRecords(spaceId: string): ReadonlyArray<NodeRecord<LauncherApp>> {

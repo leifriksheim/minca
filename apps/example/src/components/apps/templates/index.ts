@@ -1,9 +1,10 @@
 /**
  * The ready-made apps: each an ordinary app with a screen (`screens.ts`),
  * written the way an agent would write one, and copied into a space when
- * someone adds it (`addTemplate` in `launcher.ts`). Direct messages are the one
- * without a screen: the app draws them itself (`DirectMessages.tsx`), since a
- * screen must never be handed text sealed for its viewer alone.
+ * someone adds it (`addTemplate` in `launcher.ts`). Two have no screen and are
+ * drawn by the app itself: direct messages (`DirectMessages.tsx`), since a
+ * screen must never be handed text sealed for its viewer alone, and Sheets
+ * (`Sheets.tsx`), since it shows every collection and a screen sees only its own.
  */
 import {
   column,
@@ -28,6 +29,7 @@ import {
   vote,
 } from '@minca/core/schemas';
 import { DIRECT, type Template } from '../launcher';
+import { SHEETS, sheetView } from '../sheet-views';
 import bills from './bills.html?raw';
 import chat from './chat.html?raw';
 import events from './events.html?raw';
@@ -139,6 +141,16 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       screen: bills,
     },
     needs: [expense, settlement, comment, list, listItem],
+  },
+  {
+    app: {
+      template: SHEETS,
+      title: 'Sheets',
+      description:
+        'Every collection in the space as a table, a board, cards or a list: change cells in place, save views for everyone, and make collections of your own.',
+      collections: [sheetView.name],
+    },
+    needs: [sheetView],
   },
   {
     app: {

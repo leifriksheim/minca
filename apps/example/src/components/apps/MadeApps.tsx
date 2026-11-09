@@ -19,6 +19,8 @@ import {
   type LauncherApp,
 } from './launcher';
 import { DirectMessages } from './DirectMessages';
+import { Sheets } from './Sheets';
+import { isSheets } from './sheet-views';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '@minca/ui/time';
 import { Person } from '../Person';
@@ -365,6 +367,8 @@ export function MadeAppScreen({
     <section aria-label={body.title} className={styles.app}>
       {isDirect(body) ? (
         <DirectMessages space={space} shown={shown} onShown={onShown} view={view ?? null} onGo={onGo} />
+      ) : isSheets(body) ? (
+        <Sheets space={space} collections={collections} onOpen={onOpen} view={view ?? null} onGo={onGo} />
       ) : screen ? (
         <ScreenFrame
           spaceId={space.id}

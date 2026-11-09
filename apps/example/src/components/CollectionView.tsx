@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { Icon } from '@minca/app-shared/Icon';
 import { PersonFace } from './PersonFace';
 import { useNode, useLive, useProfiles, useCan, useAccount } from '@minca/react';
 import type { Filter, NodeCollection, NodeRecord, Query, QueryRecord, SpaceSummary } from '@minca/core';
@@ -12,14 +13,15 @@ import {
   collectionLabel,
   columnsOf,
   computedFieldsOf,
+  fieldsOf,
   groupFields,
   isComputed,
-  metaFields,
   quickAddBody,
   recordLabel,
   textOf,
   titleField,
   labelOf,
+  valueKindOf,
   valueOf,
   withComputed,
   type Field,
@@ -36,16 +38,15 @@ import { useAction } from '@minca/app-shared/action';
 import { Lane } from './Lane';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
-import { useRemembered } from '../kept';
+import { usePopover } from './usePopover';
 import { QueryBuilder, PAGE_SIZES } from './QueryBuilder';
 import { NEWEST_FIRST, type Sort } from '../derive/filters';
 import { clauseFields, whereOf, type Clause } from '../derive/conditions';
+import { LAYOUT_LABELS, LAYOUTS, type Layout, type Look } from '../derive/look';
 import styles from './CollectionView.module.css';
 import table from './table.module.css';
 
-const LAYOUTS = ['list', 'table', 'board'] as const;
-type Layout = (typeof LAYOUTS)[number];
-const isLayout = (value: unknown): value is Layout => LAYOUTS.some((layout) => layout === value);
+const LAYOUT_ICONS = { table: 'table', board: 'board', cards: 'card', list: 'menu' } as const;
 
 interface Row {
   readonly record: QueryRecord;
@@ -58,12 +59,17 @@ interface Page {
   readonly next: string | null;
 }
 
-/** One collection to search, add to, and see as a list, a table or a board, all from its schema */
+/**
+ * One collection to search, add to, and see as a table, a board, cards or a list, all from its schema.
+ * How it is looked at is whoever draws it's to keep: on this device, or in a view everyone shares.
+ */
 export function CollectionView({
   space,
   name,
   collection,
   collections,
+  look,
+  onLook,
   onOpen,
 }: {
   space: SpaceSummary;
@@ -71,6 +77,8 @@ export function CollectionView({
   collection: NodeCollection | null;
   /** The space's collections: what a computed field reads, to know its type */
   collections: ReadonlyArray<NodeCollection>;
+  look: Look;
+  onLook: (look: Look) => void;
   onOpen: (record: NodeRecord) => void;
 }) {
   const node = useNode();
@@ -79,14 +87,15 @@ export function CollectionView({
   const computed = computedFieldsOf(collection, collections);
   const title = titleField(schema);
   const groups = groupFields(schema);
-  // Each collection remembers how you last looked at it, on this device.
-  const [groupName, setGroupName] = useRemembered(`minca.board:${space.id}:${name}`);
-  const group = groups.find((f) => f.name === groupName) ?? groups[0] ?? null;
-  const [saved, setLayout] = useRemembered(`minca.layout:${space.id}:${name}`);
-  const layout: Layout = isLayout(saved) ? saved : 'list';
+  const group = groups.find((f) => f.name === look.groupBy) ?? groups[0] ?? null;
+  const { layout } = look;
+  const clauses = look.filters ?? [];
+  const sort = look.sort ?? NEWEST_FIRST;
+  const everyField = [...fieldsOf(schema), ...computed];
+  const shownFields = look.fields
+    ? look.fields.flatMap((field) => everyField.filter((f) => f.name === field))
+    : [...columnsOf(schema), ...shortOf(computed)];
   const [search, setSearchText] = useState('');
-  const [clauses, setClauseList] = useState<ReadonlyArray<Clause>>([]);
-  const [sort, setSortOrder] = useState<Sort>(NEWEST_FIRST);
   const [pageSize, setPageSizeTo] = useState<number>(PAGE_SIZES[1]);
   // Where each page seen so far starts: the first at the beginning, each next one from the page before.
   const [cursors, setCursors] = useState<ReadonlyArray<string | null>>([null]);
@@ -98,9 +107,10 @@ export function CollectionView({
       setCursors([null]);
     };
   const setSearch = restarting(setSearchText);
-  const setClauses = restarting(setClauseList);
-  const setSort = restarting(setSortOrder);
+  const setClauses = restarting((filters: ReadonlyArray<Clause>) => onLook({ ...look, filters }));
+  const setSort = restarting((next: Sort) => onLook({ ...look, sort: next }));
   const setPageSize = restarting(setPageSizeTo);
+  const setLayout = (next: Layout) => onLook({ ...look, layout: next });
   const [adding, setAdding] = useState<Record<string, unknown> | null>(null);
   const people = peopleFrom(useProfiles(space.id));
   const { did } = useAccount();
@@ -111,7 +121,7 @@ export function CollectionView({
   const onOthers = Object.values(collection?.links ?? {}).some((l) => l.to === '*');
 
   // Choices that live in a linked record (a vote's poll) need that record to show their label.
-  const needsLinked = [...columnsOf(schema), ...metaFields(schema)].some((f) => choicesFrom(f.schema));
+  const needsLinked = shownFields.some((f) => choicesFrom(f.schema));
   const fields = clauseFields({ schema: withComputed(schema, computed), topics: [] }, { query: true });
   const picked = whereOf(clauses, did);
   const parts: Filter[] = [
@@ -165,7 +175,7 @@ export function CollectionView({
 
   const label = collection ? collectionLabel(collection) : name;
   const visible = (rows ?? []).filter((r) => r.record.body !== null);
-  const shown: Shown = { rows: visible, schema, computed, people, space, onOpen };
+  const shown: Shown = { rows: visible, schema, fields: shownFields, people, space, onOpen };
 
   if (defining && collection) {
     return <CollectionEditor space={space} collection={collection} onDone={() => setDefining(false)} />;
@@ -191,7 +201,7 @@ export function CollectionView({
           {layout === 'board' && groups.length > 1 && group && (
             <label className="row">
               Columns by
-              <select value={group.name} onChange={(e) => setGroupName(e.target.value)}>
+              <select value={group.name} onChange={(e) => onLook({ ...look, groupBy: e.target.value })}>
                 {groups.map((f) => (
                   <option key={f.name} value={f.name}>
                     {f.label}
@@ -209,10 +219,18 @@ export function CollectionView({
               Edit definition
             </button>
           )}
+          {everyField.length > 0 && (
+            <FieldPicker
+              fields={everyField}
+              shown={shownFields}
+              onShown={(fields) => onLook({ ...look, fields: fields.map((f) => f.name) })}
+            />
+          )}
           <div role="tablist" aria-label="Layout">
             {LAYOUTS.map((l) => (
               <button key={l} role="tab" aria-selected={layout === l} onClick={() => setLayout(l)}>
-                {l[0]!.toUpperCase() + l.slice(1)}
+                <Icon name={LAYOUT_ICONS[l]} size={14} />
+                {LAYOUT_LABELS[l]}
               </button>
             ))}
           </div>
@@ -258,6 +276,7 @@ export function CollectionView({
 
       {visible.length > 0 && layout === 'list' && <ListLayout {...shown} />}
       {visible.length > 0 && layout === 'table' && <TableLayout {...shown} />}
+      {visible.length > 0 && layout === 'cards' && <CardsLayout {...shown} />}
       {layout === 'board' && !group && (
         <p className="empty">
           A board makes a column for each option of a choice field — like a status of To do, Doing and Done.{' '}
@@ -355,17 +374,18 @@ function QuickAdd({
 interface Shown {
   readonly rows: Row[];
   readonly schema: NodeCollection['schema'];
-  readonly computed: ReadonlyArray<Field>;
+  /** The fields the look shows, in its order */
+  readonly fields: ReadonlyArray<Field>;
   readonly people: People;
   readonly space: SpaceSummary;
   readonly onOpen: (r: NodeRecord) => void;
 }
 
-function ListLayout({ rows, schema, computed, people, space, onOpen }: Shown) {
+function ListLayout({ rows, schema, fields, people, space, onOpen }: Shown) {
   const node = useNode();
   // Without a yes/no field to tick, a computed one shows as a box that ticks itself.
-  const check = checkField(schema) ?? computed.find((f) => f.kind === 'boolean') ?? null;
-  const meta = [...metaFields(schema), ...shortOf(computed).filter((f) => f !== check)];
+  const check = checkField(schema) ?? fields.find((f) => f.kind === 'boolean' && isComputed(f)) ?? null;
+  const meta = besideTitle(fields, schema).filter((f) => f.name !== check?.name);
   return (
     <ul role="list">
       {rows.map(({ record, linked }) => {
@@ -426,53 +446,240 @@ function Check({
   );
 }
 
-function TableLayout({ rows, schema, computed, onOpen }: Shown) {
-  const columns = [...columnsOf(schema), ...shortOf(computed)];
+/** A grid of the shown fields; a plain value is changed in its cell, the rest in the record opened from its row */
+function TableLayout({ rows, schema, fields, space, onOpen }: Shown) {
+  const node = useNode();
+  const { run, error } = useAction();
+  const save = (record: QueryRecord, field: Field, value: unknown) =>
+    run(() => node.records.update(space.id, record.key, withValue(bodyOf(record), field.name, value)));
   return (
-    <div className={table.table}>
-      <table>
-        <thead>
-          <tr>
-            {columns.length ? (
-              columns.map((c) => (
-                <th key={c.name} title={isComputed(c) ? COMPUTED_HINT : undefined}>
-                  {c.label}
-                  {isComputed(c) && ' ƒ'}
-                </th>
-              ))
-            ) : (
-              <th>Record</th>
-            )}
-            <th>By</th>
-            <th>Added</th>
-          </tr>
-        </thead>
-        <tbody className={table.opens}>
-          {rows.map(({ record, linked }) => (
-            <tr key={record.key} onClick={() => onOpen(record)} aria-label={recordLabel(record, schema)}>
-              {columns.length ? (
-                columns.map((c) => (
-                  <td key={c.name}>
-                    <Value field={c} value={valueOf(record, c)} linked={linked} compact />
-                  </td>
+    <div className="stack" data-gap="tight">
+      <div className={table.table}>
+        <table>
+          <thead>
+            <tr>
+              <th aria-label="Open" />
+              {fields.length ? (
+                fields.map((c) => (
+                  <th key={c.name} title={isComputed(c) ? COMPUTED_HINT : undefined}>
+                    {c.label}
+                    {isComputed(c) && ' ƒ'}
+                  </th>
                 ))
               ) : (
-                <td>{recordLabel(record, schema)}</td>
+                <th>Record</th>
               )}
-              <td>
-                <Person did={record.createdBy ?? record.root} />
-              </td>
-              <td>{ago(record.createdAt)}</td>
+              <th>By</th>
+              <th>Added</th>
             </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ record, linked }) => (
+              <tr key={record.key}>
+                <td>
+                  <button
+                    data-intent="ghost"
+                    data-icon
+                    onClick={() => onOpen(record)}
+                    aria-label={`Open ${recordLabel(record, schema)}`}
+                  >
+                    <Icon name="expand" size={14} />
+                  </button>
+                </td>
+                {fields.length ? (
+                  fields.map((c) => (
+                    <td key={c.name}>
+                      {space.writable && editableInCell(c) ? (
+                        <Cell
+                          field={c}
+                          value={valueOf(record, c)}
+                          onSave={(value) => save(record, c, value)}
+                        />
+                      ) : (
+                        <Value field={c} value={valueOf(record, c)} linked={linked} compact />
+                      )}
+                    </td>
+                  ))
+                ) : (
+                  <td>{recordLabel(record, schema)}</td>
+                )}
+                <td>
+                  <Person did={record.createdBy ?? record.root} />
+                </td>
+                <td>{ago(record.createdAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
+}
+
+/** A body with one field set, or taken out when it is emptied */
+function withValue(body: Record<string, unknown>, name: string, value: unknown): Record<string, unknown> {
+  const next = { ...body };
+  if (value === undefined) delete next[name];
+  else next[name] = value;
+  return next;
+}
+
+/** Kinds a cell can change in place: one plain value, typed or picked; anything richer opens the record */
+const editableInCell = (field: Field): boolean =>
+  !isComputed(field) &&
+  !valueKindOf(field.schema) &&
+  (['text', 'longText', 'number', 'integer', 'boolean'].includes(field.kind) ||
+    (field.kind === 'choice' && !choicesFrom(field.schema)));
+
+/** One cell of a table, changed where it is: a tick at once, anything else from a click until Enter or leaving it */
+function Cell({
+  field,
+  value,
+  onSave,
+}: {
+  field: Field;
+  value: unknown;
+  onSave: (value: unknown) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  if (field.kind === 'boolean') {
+    return (
+      <Check
+        checked={value === true}
+        disabled={false}
+        label={field.label}
+        onChange={async (checked) => {
+          if (!(await onSave(checked))) throw new Error('Not saved');
+        }}
+      />
+    );
+  }
+  if (!editing) {
+    return (
+      <button data-intent="inline" className={styles.cell} onClick={() => setEditing(true)}>
+        <Value field={field} value={value} compact />
+      </button>
+    );
+  }
+  const finish = (next: unknown) => {
+    setEditing(false);
+    if (next !== value) void onSave(next);
+  };
+  const choices = choicesOf(field);
+  if (choices) {
+    return (
+      <select
+        autoFocus
+        aria-label={field.label}
+        defaultValue={String(choices.findIndex((c) => c.value === value))}
+        onChange={(e) => finish(choices[Number(e.target.value)]?.value)}
+        onBlur={() => setEditing(false)}
+      >
+        <option value="-1">—</option>
+        {choices.map((c, i) => (
+          <option key={i} value={i}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  const numeric = field.kind === 'number' || field.kind === 'integer';
+  const typed = (text: string): unknown => {
+    if (text.trim() === '') return undefined;
+    return numeric ? Number(text) : text;
+  };
+  return (
+    <input
+      autoFocus
+      aria-label={field.label}
+      type={numeric ? 'number' : 'text'}
+      step={field.kind === 'integer' ? 1 : 'any'}
+      defaultValue={value === undefined || value === null ? '' : textOf(value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') finish(typed(e.currentTarget.value));
+        if (e.key === 'Escape') setEditing(false);
+      }}
+      onBlur={(e) => finish(typed(e.currentTarget.value))}
+    />
+  );
+}
+
+/** A card for each record: its title, then each shown field under its name */
+function CardsLayout({ rows, schema, fields, people, onOpen }: Shown) {
+  const rest = besideTitle(fields, schema);
+  return (
+    <div className={`grid ${styles.cards}`}>
+      {rows.map(({ record, linked }) => (
+        <button
+          key={record.key}
+          type="button"
+          data-intent="open"
+          className="stack"
+          data-gap="tight"
+          onClick={() => onOpen(record)}
+          aria-label={recordLabel(record, schema)}
+        >
+          <strong>{recordLabel(record, schema)}</strong>
+          {rest
+            .filter((f) => !isBlank(valueOf(record, f)))
+            .map((f) => (
+              <span key={f.name} className="row" data-gap="tight">
+                <small>{f.label}</small>
+                <Value field={f} value={valueOf(record, f)} linked={linked} compact />
+              </span>
+            ))}
+          <Signals record={record} people={people} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Which fields to show, ticked from all of them, in the order they are defined */
+function FieldPicker({
+  fields,
+  shown,
+  onShown,
+}: {
+  fields: ReadonlyArray<Field>;
+  shown: ReadonlyArray<Field>;
+  onShown: (fields: ReadonlyArray<Field>) => void;
+}) {
+  const { open, setOpen, root } = usePopover();
+  const isShown = (field: Field) => shown.some((f) => f.name === field.name);
+  return (
+    <div ref={root} className="anchor down">
+      <button onClick={() => setOpen((was) => !was)} aria-expanded={open} aria-haspopup="menu">
+        Fields
+        <small>{shown.length}</small>
+      </button>
+      {open && (
+        <menu role="menu" aria-label="Fields shown">
+          {fields.map((field) => (
+            <li key={field.name}>
+              <label className="row">
+                <input
+                  type="checkbox"
+                  checked={isShown(field)}
+                  onChange={(e) =>
+                    onShown(fields.filter((f) => (f.name === field.name ? e.target.checked : isShown(f))))
+                  }
+                />
+                {field.label}
+                {isComputed(field) && ' ƒ'}
+              </label>
+            </li>
           ))}
-        </tbody>
-      </table>
+        </menu>
+      )}
     </div>
   );
 }
 
 /** Columns by a fixed-choice field; drag a card to another column to change it */
-function BoardLayout({ rows, schema, computed, field, people, space, onOpen }: Shown & { field: Field }) {
+function BoardLayout({ rows, schema, fields, field, people, space, onOpen }: Shown & { field: Field }) {
   const node = useNode();
   const [over, setOver] = useState<string | null>(null);
   const choices = choicesOf(field) ?? [];
@@ -480,7 +687,7 @@ function BoardLayout({ rows, schema, computed, field, people, space, onOpen }: S
     ...choices.map((c, i) => ({ id: String(i), label: c.label, value: c.value })),
     { id: 'none', label: `No ${field.label.toLowerCase()}`, value: undefined },
   ];
-  const meta = [...metaFields(schema).filter((f) => f.name !== field.name), ...shortOf(computed)];
+  const meta = besideTitle(fields, schema).filter((f) => f.name !== field.name);
   const columnOf = (r: Row) => {
     const i = choices.findIndex((c) => c.value === bodyOf(r.record)[field.name]);
     return i < 0 ? 'none' : String(i);
@@ -488,11 +695,8 @@ function BoardLayout({ rows, schema, computed, field, people, space, onOpen }: S
   const move = (key: string, value: unknown) => {
     const row = rows.find((r) => r.record.key === key);
     if (!row) return;
-    const body = { ...bodyOf(row.record) };
-    if (value === undefined) delete body[field.name];
-    else body[field.name] = value;
     // Refused by the record's rules — it stays where it was.
-    void node.records.update(space.id, key, body).catch(() => {});
+    void node.records.update(space.id, key, withValue(bodyOf(row.record), field.name, value)).catch(() => {});
   };
 
   return (
@@ -547,6 +751,14 @@ function BoardLayout({ rows, schema, computed, field, people, space, onOpen }: S
 /** Said wherever a computed field shows: whose view it is */
 const COMPUTED_HINT = 'Worked out by this device from what it holds — no one wrote it';
 
+/** Whether a value has nothing to show */
+const isBlank = (value: unknown): boolean =>
+  value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+
+/** The shown fields that go beside a record's title, which it shows already */
+const besideTitle = (fields: ReadonlyArray<Field>, schema: NodeCollection['schema']): ReadonlyArray<Field> =>
+  fields.filter((f) => f.name !== titleField(schema));
+
 /** Computed fields short enough for a row or a cell, at most three */
 const shortOf = (computed: ReadonlyArray<Field>): ReadonlyArray<Field> =>
   computed
@@ -568,8 +780,7 @@ function Meta({
   const parts: ReactNode[] = [];
   for (const f of fields) {
     const value = valueOf(record, f);
-    if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0))
-      continue;
+    if (isBlank(value)) continue;
     const shown = labelOf(f, value, linked) ?? (Array.isArray(value) ? value.join(', ') : textOf(value));
     parts.push(
       <small key={f.name}>

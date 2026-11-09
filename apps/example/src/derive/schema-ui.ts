@@ -145,15 +145,18 @@ export function withComputed(schema: JsonSchema | null, computed: ReadonlyArray<
   };
 }
 
-/** What a table shows: short fields, at most four */
+/** What a table shows: the title, then short fields, at most five; never where a record sorts, which no one reads */
 export function columnsOf(schema: JsonSchema | null): ReadonlyArray<Field> {
   const title = titleField(schema);
-  const short = fieldsOf(schema).filter(
+  const fields = fieldsOf(schema);
+  const short = fields.filter(
     (f) =>
-      ['text', 'number', 'integer', 'boolean', 'choice', 'list'].includes(f.kind) ||
-      valueKindOf(f.schema) === 'money',
+      f.name !== title &&
+      valueKindOf(f.schema) !== 'position' &&
+      (['text', 'number', 'integer', 'boolean', 'choice', 'list'].includes(f.kind) ||
+        valueKindOf(f.schema) === 'money'),
   );
-  return [...short.filter((f) => f.name === title), ...short.filter((f) => f.name !== title)].slice(0, 4);
+  return [...fields.filter((f) => f.name === title), ...short].slice(0, 5);
 }
 
 /** A starting value for a new record's field */

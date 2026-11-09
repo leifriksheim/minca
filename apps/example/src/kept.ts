@@ -1,5 +1,6 @@
 /** What this browser keeps between visits, in local storage: lost with it, never synced. */
 import { useState } from 'react';
+import { readLook, type Look } from './derive/look';
 
 function load(key: string): string | null {
   try {
@@ -38,4 +39,15 @@ export function useRemembered(key: string): readonly [string | null, (value: str
     keep(key, next);
   };
   return [value, set];
+}
+
+/** How this device last looked at a collection of a space, and the way to change it */
+export function useKeptLook(spaceId: string, collection: string): readonly [Look, (look: Look) => void] {
+  const key = `minca.look:${spaceId}:${collection}`;
+  const [look, setLook] = useState(() => readLook(loadJson(key)));
+  const set = (next: Look) => {
+    setLook(next);
+    writeKept(key, next);
+  };
+  return [look, set];
 }
