@@ -3,7 +3,6 @@ import { Fragment, useState } from 'react';
 import { collectionLabel } from '../derive/schema-ui';
 import { namespaceOf } from '../derive/filters';
 import { CollectionView } from './CollectionView';
-import { useKeptLook } from '../kept';
 import { CollectionsOverview, namespaceLabel } from './CollectionsOverview';
 import { Library } from './Library';
 import { CollectionEditor } from './CollectionDesigner';
@@ -161,7 +160,7 @@ export function DataView({
             onOpen={(name) => onPlace({ collection: name, key: null })}
           />
         ) : selected ? (
-          <KeptCollectionView
+          <CollectionView
             key={selected}
             space={space}
             name={selected}
@@ -193,10 +192,4 @@ export function DataView({
       </div>
     </div>
   );
-}
-
-/** A collection looked at the way this device last looked at it */
-function KeptCollectionView(props: Omit<Parameters<typeof CollectionView>[0], 'look' | 'onLook'>) {
-  const [look, setLook] = useKeptLook(props.space.id, props.name);
-  return <CollectionView {...props} look={look} onLook={setLook} />;
 }

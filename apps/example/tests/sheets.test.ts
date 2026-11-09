@@ -6,7 +6,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FIRST_LOOK, readLook, type Look } from '../src/derive/look';
-import { newViewBody, sheetView, viewsOf } from '../src/components/apps/sheet-views';
+import { newViewBody, readViews, sheetView, tablesOf } from '../src/components/sheets/views';
 import { addTemplate, type Template } from '../src/components/apps/launcher';
 import { setup } from './helpers';
 
@@ -31,7 +31,7 @@ describe('Sheets', () => {
     );
   });
 
-  test('adding Sheets defines its views; a saved view is read back as it was saved, in order, for its collection only', async () => {
+  test('adding Sheets defines its views; saved views read back as saved, and the tables they make in the order they came', async () => {
     const { alice, space } = await setup();
     await addTemplate(alice.node, space, SHEETS, []);
     assert.ok((await alice.node.collections.list(space)).some((c) => c.name === sheetView.name));
@@ -43,22 +43,18 @@ describe('Sheets', () => {
       sort: { field: 'due', direction: 'asc' },
       filters: [{ field: 'status', op: 'isNot', value: 'done' }],
     };
-    const first = await alice.node.records.put(
-      space,
-      sheetView.name,
-      newViewBody('std.task', 'Open work', board, []),
-    );
-    const before = viewsOf([first], 'std.task');
-    await alice.node.records.put(
-      space,
-      sheetView.name,
-      newViewBody('std.task', 'Everything', { layout: 'table' }, before),
-    );
-    await alice.node.records.put(space, sheetView.name, newViewBody('std.event', 'Calendar', board, []));
+    const put = async (collection: string, title: string, look: Look) => {
+      const before = readViews(await alice.node.records.list(space, { collection: sheetView.name }));
+      await alice.node.records.put(space, sheetView.name, newViewBody(collection, title, look, before));
+    };
+    await put('std.task', 'Open work', board);
+    await put('std.event', 'Calendar', board);
+    await put('std.task', 'Everything', { layout: 'table' });
 
-    const views = viewsOf(await alice.node.records.list(space, { collection: sheetView.name }), 'std.task');
+    const views = readViews(await alice.node.records.list(space, { collection: sheetView.name }));
+    assert.deepEqual(tablesOf(views), ['std.task', 'std.event'], 'tables in the order they were added');
     assert.deepEqual(
-      views.map((v) => v.title),
+      views.filter((v) => v.collection === 'std.task').map((v) => v.title),
       ['Open work', 'Everything'],
     );
     assert.deepEqual(views[0]?.look, board);

@@ -22,16 +22,3 @@
     flex: 1 1 100%;
   }
 }
-
-/* A cell's value, pressed to change it: as wide as its cell, so an empty one can be pressed too */
-.cell {
-  width: 100%;
-  min-height: 1.5em;
-  justify-content: flex-start;
-  text-align: start;
-}
-
-.cards > button {
-  align-items: stretch;
-  text-align: start;
-}

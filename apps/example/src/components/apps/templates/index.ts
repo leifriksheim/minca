@@ -29,7 +29,7 @@ import {
   vote,
 } from '@minca/core/schemas';
 import { DIRECT, type Template } from '../launcher';
-import { SHEETS, sheetView } from '../sheet-views';
+import { SHEETS, sheetView } from '../../sheets/views';
 import bills from './bills.html?raw';
 import chat from './chat.html?raw';
 import events from './events.html?raw';

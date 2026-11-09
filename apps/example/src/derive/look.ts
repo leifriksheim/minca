@@ -3,13 +3,12 @@ import { isClause, type Clause } from './conditions';
 import type { Sort } from './filters';
 import { isObject } from './schema-ui';
 
-export const LAYOUTS = ['table', 'board', 'cards', 'list'] as const;
+export const LAYOUTS = ['table', 'board', 'cards'] as const;
 export type Layout = (typeof LAYOUTS)[number];
 export const LAYOUT_LABELS: Readonly<Record<Layout, string>> = {
   table: 'Table',
   board: 'Board',
   cards: 'Cards',
-  list: 'List',
 };
 const isLayout = (value: unknown): value is Layout => LAYOUTS.some((layout) => layout === value);
 

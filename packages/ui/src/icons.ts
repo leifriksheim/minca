@@ -35,6 +35,17 @@ export const ICONS = {
     ['path', { d: 'm21 21-4.34-4.34' }],
     ['circle', { cx: '11', cy: '11', r: '8' }],
   ],
+  filter: [
+    ['path', { d: 'M3 6h18' }],
+    ['path', { d: 'M7 12h10' }],
+    ['path', { d: 'M10 18h4' }],
+  ],
+  sort: [
+    ['path', { d: 'm21 16-4 4-4-4' }],
+    ['path', { d: 'M17 20V4' }],
+    ['path', { d: 'm3 8 4-4 4 4' }],
+    ['path', { d: 'M7 4v16' }],
+  ],
   info: [
     ['circle', { cx: '12', cy: '12', r: '10' }],
     ['path', { d: 'M12 16v-4' }],

@@ -234,15 +234,14 @@ poll shows a tally. The helpers are pure functions
 (`src/derive/schema-ui.ts`). An empty space offers a small "define a
 collection" form; an agent can do the same over WebMCP.
 
-**Sheets** is the same collection view as an app anyone can add, like a
-small Airtable (`src/components/apps/Sheets.tsx`). The app draws it itself
-rather than in a screen, since it shows every collection in the space and a
-screen sees only its app's. Each collection opens as a table whose plain
-cells change in place, a board, cards or a list, with the fields, filters and
-order picked for it. "Everything" is how this device last looked at it; a
-view saved with "+ View" is a `sheets.view` record (`sheet-views.ts`), so
-everyone in the space sees it, and whoever may edit that record may rename
-or change it. "New collection" defines one, as the Collections tab does.
+**Sheets** is a small Airtable for the space (`src/components/sheets/`).
+It starts empty: a table is a collection the space already keeps, or a new
+one made there with a name, notes and a status. Each table has views, a
+table, a board or cards, with their fields, filters and order, and plain
+cells change in place; "+" at the end of a table adds a column. A view is a
+`sheets.view` record (`views.ts`), so everyone in the space sees the same
+sheet, and a table is in it while it has a view. The app draws Sheets itself
+rather than in a screen, since a screen sees only its app's collections.
 
 ### Calls
 

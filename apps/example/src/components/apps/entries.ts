@@ -11,7 +11,7 @@ import {
   type LauncherApp,
 } from './launcher';
 import { TEMPLATES } from './templates';
-import { isSheets } from './sheet-views';
+import { isSheets } from '../sheets/views';
 
 /**
  * An app a space can open: a launcher record (`launcher.ts`), ready-made or
