@@ -6,9 +6,9 @@ The website is [apps/site](../site/README.md), at minca.social.
 
 A Vite + React app on top of [`@minca/core`](../../README.md). It imports the
 protocol straight from its source in the workspace (`packages/core/src`), so
-edits to the library hot-reload here. `public/_redirects` sends every path to
-`index.html` on Netlify, and `netlify.toml` builds it for a site whose base
-directory is `apps/example`.
+edits to the library hot-reload here. `.github/workflows/deploy.yml` builds it
+and puts `dist` on Cloudflare Pages, which serves `index.html` for every path
+that isn't a file.
 
 ## Routes
 

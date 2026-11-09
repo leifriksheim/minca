@@ -11,7 +11,8 @@
     "packages/core/tests/bench/**/*.ts",
     "packages/core/tests/webkit/*.{ts,mjs}",
     "apps/docs/examples/given.ts",
-    "apps/docs/scripts/catalogues.ts"
+    "apps/docs/scripts/catalogues.ts",
+    "apps/site/functions/**/*.ts"
   ],
   "usedClassMembers": ["connectedCallback", "disconnectedCallback", "attributeChangedCallback"],
   "ignoreUnresolvedImports": ["./offscreen.js", "./popup.js", "./welcome.js", "./minca.css"],

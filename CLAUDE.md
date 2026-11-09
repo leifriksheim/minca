@@ -298,7 +298,7 @@ mcp-server` (`packages/cli/src/remote-mcp/oauth.ts`):
   are a site generator's worth of work. Next has been released since 2016
   and Fumadocs since 2023, and both are very widely used for docs. They
   bring hundreds of packages, far over the bar, accepted because none of
-  it ships: the build runs on Netlify and serves plain HTML and a little
+  it ships: the build runs in GitHub Actions and serves plain HTML and a little
   React. Never imported outside `apps/docs`.
 - `electrobun` 1.18, a dev dependency of `apps/desktop`, which it builds and
   runs (`apps/desktop/src/bun/index.ts`): native windows, a menu bar icon and
