@@ -1,10 +1,12 @@
 name: Deploy
 
-# The services on Fly, each deployed when main changes something it is built
-# from, or by hand from the Actions tab. Main has passed Check as a PR already.
+# The services on Fly and the static sites on Cloudflare Pages, each deployed
+# when main changes something it is built from, or by hand from the Actions
+# tab. Main has passed Check as a PR already.
 #
-# FLY_API_TOKEN, a repository secret, deploys them all: an org token
-# (`fly tokens create org`), or make it from the dashboard's Tokens page.
+# Repository secrets: FLY_API_TOKEN, an org token (`fly tokens create org`);
+# CLOUDFLARE_API_TOKEN, with Cloudflare Pages: Edit, and CLOUDFLARE_ACCOUNT_ID.
+# The sites are built here, so Cloudflare only stores and serves the files.
 on:
   push:
     branches: [main]
@@ -13,7 +15,8 @@ on:
       app:
         description: The app to deploy, whether or not it changed
         type: choice
-        options: [all, minca, minca-host, minca-mcp, minca-names]
+        options:
+          [all, minca, minca-host, minca-mcp, minca-names, minca-site, minca-home, minca-app, minca-docs]
         default: all
 
 permissions:
@@ -31,7 +34,9 @@ jobs:
       cancel-in-progress: false
     strategy:
       fail-fast: false
-      # `dir` is the build context `config` is read from; `paths` what it is built from.
+      # A Fly row: `dir` is the build context `config` is read from. A Pages row:
+      # `dir` is the workspace that builds `out`, and `app` its Pages project.
+      # `paths` is what either is built from.
       matrix:
         include:
           # The relay
@@ -52,6 +57,24 @@ jobs:
             dir: .
             config: packages/cli/fly.mcp.toml
             paths: '^(packages/(core|relay|cli)/|apps/(home|example|extension)/package\.json$|package(-lock)?\.json$|\.github/workflows/deploy\.yml$)'
+          # minca.social, home.minca.social, app.minca.social and minca.dev.
+          - app: minca-site
+            dir: apps/site
+            out: dist
+            paths: '^(apps/(site|shared)/|packages/(core|ui)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
+          - app: minca-home
+            dir: apps/home
+            out: dist
+            paths: '^(apps/(home|shared)/|packages/(core|ui|react)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
+          - app: minca-app
+            dir: apps/example
+            out: dist
+            paths: '^(apps/(example|shared)/|packages/(core|ui|react|calls)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
+          # The docs come from every package's docs and API, and the spec.
+          - app: minca-docs
+            dir: apps/docs
+            out: out
+            paths: '^(apps/(docs|shared)/|apps/example/public/screen\.html$|packages/|spec/|package(-lock)?\.json$|\.github/workflows/deploy\.yml$)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,11 +96,38 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
           exit 0
-      - if: steps.changed.outputs.run == 'true'
+      - if: steps.changed.outputs.run == 'true' && matrix.config
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6
-      - if: steps.changed.outputs.run == 'true'
+      - if: steps.changed.outputs.run == 'true' && matrix.config
         working-directory: ${{ matrix.dir }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           CONFIG: ${{ matrix.config }}
         run: flyctl deploy . --config "$CONFIG" --remote-only
+      - if: steps.changed.outputs.run == 'true' && matrix.out
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # The same cache as check.yml, so main usually installs nothing.
+      - if: steps.changed.outputs.run == 'true' && matrix.out
+        id: modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.changed.outputs.run == 'true' && matrix.out && steps.modules.outputs.cache-hit != 'true'
+        run: npm ci
+      - if: steps.changed.outputs.run == 'true' && matrix.out
+        working-directory: ${{ matrix.dir }}
+        run: npm run build
+      # From the workspace's folder, so the site's functions/ goes up with it.
+      - if: steps.changed.outputs.run == 'true' && matrix.out
+        working-directory: ${{ matrix.dir }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          APP: ${{ matrix.app }}
+          OUT: ${{ matrix.out }}
+        run: npx --yes wrangler@4.152.0 pages deploy "$OUT" --project-name "$APP" --branch main --commit-hash "$GITHUB_SHA"

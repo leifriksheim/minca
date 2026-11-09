@@ -18,10 +18,11 @@ npm run dev         # at the repository root: this site on :5185, beside the app
 
 ## Deploying it
 
-`netlify.toml` at the repository root builds it. The downloads it offers,
-the Chrome extension among them, are on the latest GitHub Release.
-`public/_redirects` sends every path to `index.html`, and `public/_headers` sets
-the security headers.
+`.github/workflows/deploy.yml` builds it and puts `dist` on Cloudflare Pages,
+which serves `index.html` for every path that isn't a file. The downloads it
+offers, the Chrome extension among them, are on the latest GitHub Release.
+`public/_headers` sets the security headers, and `functions/` answers username
+lookups at minca.social by asking the name service.
 
 ## Layout
 

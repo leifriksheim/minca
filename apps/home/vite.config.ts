@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
 
 /**
- * Security headers for the deployed home (Netlify's `_headers`; vercel.json
- * sets the same).
+ * Security headers for the deployed home (`_headers`, which Netlify and
+ * Cloudflare Pages read; vercel.json sets the same).
  *
  * This page holds the account's seed while it signs, so a script that should
  * not be here is a stolen account. The policy allows only this site's own
@@ -61,8 +61,8 @@ function securityHeaders(mode: string): Plugin {
  * export condition points each entry at `packages/core/src`, so there is no
  * build step and edits there hot-reload here.
  */
-// The commit this is a build of, for debug mode's report: Netlify says which (COMMIT_REF).
-process.env.VITE_MINCA_BUILD ??= process.env.COMMIT_REF?.slice(0, 7) ?? 'dev';
+// The commit this is a build of, for debug mode's report: GitHub Actions says which.
+process.env.VITE_MINCA_BUILD ??= process.env.GITHUB_SHA?.slice(0, 7) ?? 'dev';
 
 export default defineConfig(({ mode }) => ({
   resolve: {
