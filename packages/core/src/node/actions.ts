@@ -385,20 +385,12 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     description:
       'Who holds what in a space: its roles, each with its grants (a command and a policy on its arguments), its ' +
       'members by identity (did) with the roles assigned to them and whether each is a founder, its invites, whether ' +
-      'you are a founder and which roles you hold, whether it is headless (no one can change roles), the spaces ' +
-      'named as its successors, in no order, and "names": the name each person gave, by did, for the dids in ' +
-      'records\' "root" and "createdBy" too. What you may do is what your roles grant; a founder may do anything.',
+      'you are a founder and which roles you hold, whether it is headless (no one can change roles), and the spaces ' +
+      'named as its successors, in no order. What you may do is what your roles grant; a founder may do anything.',
     input: { type: 'object', properties: { space }, required: ['space'] },
     readOnly: true,
     peerContent: true,
-    run: async (node, input) => {
-      const spaceId = str(input, 'space');
-      const [access, profiles] = await Promise.all([
-        node.spaces.access(spaceId),
-        node.spaces.profiles(spaceId),
-      ]);
-      return { ...access, names: Object.fromEntries(profiles.map((p) => [p.did, p.name])) };
-    },
+    run: (node, input) => node.spaces.access(str(input, 'space')),
   },
   {
     name: 'spaces_assign',
@@ -825,6 +817,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'Find records: filter, sort, page, and pull in what links to them. ' +
       'where: { done: false, "@root": "did:…", amount: { "$gt": 10 } } — bare names are body fields (dotted for nested) ' +
       "or the collection's computed fields, which each result carries as computed; " +
+      '"link:about": "<key>" finds the records whose about link points there, like the comments on a record; ' +
       '"@key", "@root" (who wrote this version), "@createdBy", "@createdAt", "@updatedAt", "@seq" are about the record; ' +
       'operators $eq $ne $gt $gte $lt $lte $in $nin $exists $contains, combined with $and $or $not. ' +
       'include: { reactions: { rel: "about", from: "std.reaction", count: true } } — records linking to each result ' +
@@ -915,47 +908,6 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         ...(typeof input.key === 'string' ? { key: input.key } : {}),
         ...linksOf(input),
       }),
-  },
-  {
-    name: 'records_linked',
-    title: 'Records linked to one',
-    description:
-      'The records pointing at a record: its reactions, comments, tags, votes… Optionally only one link role ' +
-      '(e.g. "about") or one collection (e.g. "std.comment").',
-    input: {
-      type: 'object',
-      properties: { space, key, rel: { type: 'string' }, collection: { type: 'string' } },
-      required: ['space', 'key'],
-    },
-    readOnly: true,
-    peerContent: true,
-    run: async (node, input) =>
-      (await node.records.linked(str(input, 'space'), str(input, 'key'), rest(input, 'space', 'key'))).map(
-        recordLine,
-      ),
-  },
-  {
-    name: 'records_can',
-    title: 'Check what I may do to a record',
-    description:
-      'Whether you may do something before trying: "create" in a collection (target = its name), or "edit" / "delete" a record ' +
-      "(target = its key). Follows the collection's rules and the space's.",
-    input: {
-      type: 'object',
-      properties: {
-        space,
-        action: { type: 'string', enum: ['create', 'edit', 'delete'] },
-        target: { type: 'string' },
-      },
-      required: ['space', 'action', 'target'],
-    },
-    readOnly: true,
-    run: (node, input) =>
-      node.records.can(
-        str(input, 'space'),
-        oneOf(input, 'action', ['create', 'edit', 'delete']),
-        str(input, 'target'),
-      ),
   },
   {
     name: 'records_update',
@@ -1125,9 +1077,25 @@ export const offeredActions = (as: { readonly agent?: boolean; readonly bot?: bo
       !(as.agent || as.bot) || (!PERSON_ONLY.has(name) && (as.bot === true || !ACCOUNT_ONLY.has(name))),
   );
 
+const DID = /did:key:z[1-9A-HJ-NP-Za-km-z]+/g;
+
+/**
+ * The names people gave themselves in the space, for the DIDs a result
+ * mentions, as a line to follow it. A model reading a DID it can't put a name
+ * to guesses; one that has to look each up spends a call on it.
+ */
+async function namesIn(node: P2PNode, input: unknown, json: string): Promise<string> {
+  const dids = new Set(json.match(DID));
+  if (dids.size === 0 || !isRecord(input) || typeof input.space !== 'string') return '';
+  const profiles = await node.spaces.profiles(input.space).catch(() => []);
+  const names = Object.fromEntries(profiles.filter((p) => dids.has(p.did)).map((p) => [p.did, p.name]));
+  return Object.keys(names).length ? `\n\nNames, as each person gave theirs: ${JSON.stringify(names)}` : '';
+}
+
 /**
  * Runs an action for a model: its result as JSON text, after PEER_CONTENT_NOTE
- * when others wrote it. A failure is text for the model to read and correct.
+ * when others wrote it, and followed by the names of the people it mentions.
+ * A failure is text for the model to read and correct.
  */
 export async function callAction(
   node: P2PNode,
@@ -1138,8 +1106,10 @@ export async function callAction(
     const value = await runAction(node, name, input);
     // Compact: indenting costs a model tokens and tells it nothing.
     const json = JSON.stringify(value ?? null);
-    const fromPeers = NODE_ACTIONS.find((action) => action.name === name)?.peerContent === true;
-    return { text: fromPeers ? `${PEER_CONTENT_NOTE}\n\n${json}` : json, isError: false, value };
+    const names = await namesIn(node, input, json);
+    const fromPeers =
+      names !== '' || NODE_ACTIONS.find((action) => action.name === name)?.peerContent === true;
+    return { text: `${fromPeers ? `${PEER_CONTENT_NOTE}\n\n` : ''}${json}${names}`, isError: false, value };
   } catch (error) {
     return { text: error instanceof Error ? error.message : String(error), isError: true };
   }

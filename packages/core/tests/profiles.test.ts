@@ -4,9 +4,8 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import * as z from 'zod';
 
-import { runAction } from '../src/node/actions.js';
+import { callAction, PEER_CONTENT_NOTE } from '../src/node/actions.js';
 import { profileKey } from '../src/node/space-profiles.js';
 import type { P2PNode } from '../src/node/types.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -162,7 +161,7 @@ describe('profiles', () => {
     assert.equal(await nameIn(carol.node, space, carol.node.did), undefined);
   });
 
-  test('agents read names through spaces_access', async () => {
+  test('an agent reads the names of the people a result mentions after it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub, 'Alice');
     const { id: space } = await alice.node.spaces.create({ name: 'Notes', visibility: 'private' });
@@ -172,9 +171,9 @@ describe('profiles', () => {
       4000,
       'own profile',
     );
-    const { names } = z
-      .object({ names: z.record(z.string(), z.string()) })
-      .parse(await runAction(alice.node, 'spaces_access', { space }));
-    assert.deepEqual(names, { [alice.node.did]: 'Alice' });
+    await alice.node.records.put(space, 'app.note', { text: 'hi' });
+    const { text } = await callAction(alice.node, 'records_query', { space, collection: 'app.note' });
+    assert.ok(text.endsWith(`Names, as each person gave theirs: {"${alice.node.did}":"Alice"}`), text);
+    assert.ok(text.startsWith(PEER_CONTENT_NOTE), 'names are what others wrote');
   });
 });

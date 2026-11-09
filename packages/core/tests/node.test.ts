@@ -578,7 +578,7 @@ describe('actions', () => {
     assert.deepEqual(seen.sort(), [1, 2, 3]);
   });
 
-  test('spaces_list leaves out the role this node last saw; spaces_access reads it, with names', async () => {
+  test('spaces_list leaves out the role this node last saw; spaces_access reads it', async () => {
     const node = await startNode();
     const { id: space } = await node.spaces.create({ name: 'Mine', visibility: 'private' });
     const listed = z.array(z.record(z.string(), z.unknown())).parse(await runAction(node, 'spaces_list', {}));
@@ -586,7 +586,7 @@ describe('actions', () => {
     assert.ok(mine);
     assert.equal('writable' in mine || 'role' in mine, false);
     const access = z
-      .object({ founder: z.boolean(), names: z.record(z.string(), z.string()) })
+      .object({ founder: z.boolean() })
       .parse(await runAction(node, 'spaces_access', { space }));
     assert.equal(access.founder, true);
   });

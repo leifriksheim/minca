@@ -510,7 +510,7 @@ describe('rules: arriving in any order', () => {
     await assert.rejects(bob.node.records.update(space, old.key, { text: 'Changed' }), /is final/);
   });
 
-  test('agents see the rules, and can ask before acting', async () => {
+  test('agents see the rules, and a refused write says why', async () => {
     const { alice, bob, space } = await pollSpace();
     const listed = z
       .array(z.object({ name: z.string(), rules: z.object({ fixed: z.array(z.string()) }) }))
@@ -518,9 +518,9 @@ describe('rules: arriving in any order', () => {
     assert.deepEqual(listed.find((c) => c.name === 'app.poll')?.rules.fixed, ['options']);
     const poll = await alice.node.records.put(space, 'app.poll', { question: 'Where?' });
     await until(async () => (await bob.node.records.get(space, poll.key)) !== null, 4000, 'the poll');
-    assert.equal(
-      await runAction(bob.node, 'records_can', { space, action: 'edit', target: poll.key }),
-      false,
+    await assert.rejects(
+      runAction(bob.node, 'records_update', { space, key: poll.key, body: { question: 'Here?' } }),
+      /holds no grant to write this app\.poll record/,
     );
   });
 });
