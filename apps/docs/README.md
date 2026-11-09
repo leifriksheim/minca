@@ -2,7 +2,7 @@
 
 The docs for building on Minca: `packages/core/docs` and `spec/` as a site,
 with Markdown for agents. Built with Fumadocs on Next, exported as static
-pages, and deployed by Netlify from `netlify.toml` here.
+pages, and deployed to Cloudflare Pages by `.github/workflows/deploy.yml`.
 
 ```bash
 npm run dev -w apps/docs     # http://localhost:5187

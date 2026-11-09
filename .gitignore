@@ -15,3 +15,4 @@ packages/core/README.md
 
 # Names the dev name service keeps (scripts/dev.mjs)
 packages/names/.data
+.wrangler/

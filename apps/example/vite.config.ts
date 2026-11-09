@@ -64,8 +64,8 @@ function mincaUi(): Plugin {
  * export condition points each entry at `packages/core/src`, so there is no
  * build step and edits there hot-reload here.
  */
-// The commit this is a build of, for debug mode's report: Netlify says which (COMMIT_REF).
-process.env.VITE_MINCA_BUILD ??= process.env.COMMIT_REF?.slice(0, 7) ?? 'dev';
+// The commit this is a build of, for debug mode's report: GitHub Actions says which.
+process.env.VITE_MINCA_BUILD ??= process.env.GITHUB_SHA?.slice(0, 7) ?? 'dev';
 
 export default defineConfig({
   resolve: {

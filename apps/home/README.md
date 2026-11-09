@@ -33,7 +33,8 @@ npm run build -w apps/home      # → apps/home/dist, a static site
 ```
 
 Serve `dist` from anywhere that falls back to `index.html` for unknown paths
-(`public/_redirects` does it on Netlify; `vercel.json` on Vercel).
+(`public/_redirects` does it on Netlify; `vercel.json` on Vercel; Cloudflare
+Pages does it by itself).
 
 Settings, as build-time environment variables:
 

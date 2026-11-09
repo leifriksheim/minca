@@ -327,10 +327,11 @@ write(
   json({ pages: specSources.map((s) => (s === 'spec/README.md' ? 'index' : slugOf(s))) }),
 );
 
-// Each module is one entry; its members are reached from it, and from search.
+// Each module is one entry in the sidebar (app/(docs)/layout.tsx); its members
+// are reached from it, and from search.
 write(join(content, 'api', 'meta.json'), json({ pages: modules.map((m) => m.slug) }));
 for (const mod of modules) {
-  write(join(content, 'api', mod.slug, 'meta.json'), json({ title: mod.title, icon: 'Braces', pages: [] }));
+  write(join(content, 'api', mod.slug, 'meta.json'), json({ title: mod.title, icon: 'Braces' }));
 }
 
 /** One line of llms.txt. */
