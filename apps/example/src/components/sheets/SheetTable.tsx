@@ -20,6 +20,7 @@ import { Grid } from './Grid';
 import { groupableFields, shownFields, tableFields } from './fields';
 import type { LayoutProps } from './layout';
 import { Toolbar } from './Toolbar';
+import { Panel } from './Popover';
 import { newViewBody, sheetView, type SheetView } from './views';
 import styles from './Sheets.module.css';
 
@@ -253,7 +254,7 @@ function ViewTab({
         {view.title}
       </button>
       {open && (
-        <div className={`${styles.popover} ${styles.choices}`} data-align="start">
+        <Panel anchor={root} align="start" className={styles.choices}>
           <button
             onClick={() => {
               close();
@@ -274,7 +275,7 @@ function ViewTab({
               Delete view
             </button>
           )}
-        </div>
+        </Panel>
       )}
     </div>
   );
@@ -294,7 +295,7 @@ function AddView({ onAdd }: { onAdd: (layout: Layout) => Promise<unknown> }) {
         <Icon name="plus" size={14} />
       </button>
       {open && (
-        <div className={`${styles.popover} ${styles.choices}`} data-align="start">
+        <Panel anchor={root} align="start" className={styles.choices}>
           {LAYOUTS.map((layout) => (
             <button
               key={layout}
@@ -307,7 +308,7 @@ function AddView({ onAdd }: { onAdd: (layout: Layout) => Promise<unknown> }) {
               {LAYOUT_LABELS[layout]}
             </button>
           ))}
-        </div>
+        </Panel>
       )}
     </div>
   );

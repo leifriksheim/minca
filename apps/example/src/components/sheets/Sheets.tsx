@@ -10,6 +10,7 @@ import { FIRST_LOOK } from '../../derive/look';
 import { useRemembered } from '../../kept';
 import { usePopover } from '../usePopover';
 import { SheetTable } from './SheetTable';
+import { Panel } from './Popover';
 import { addableCollections, defineTable } from './tables';
 import { newViewBody, readViews, sheetView, tablesOf, type SheetView } from './views';
 import styles from './Sheets.module.css';
@@ -183,7 +184,7 @@ function TableTab({
         {selected && onRemove && <Icon name="down" size={12} />}
       </button>
       {open && onRemove && (
-        <div className={`${styles.popover} ${styles.choices}`} data-align="start">
+        <Panel anchor={root} align="start" className={styles.choices}>
           <button
             onClick={() => {
               close();
@@ -194,7 +195,7 @@ function TableTab({
             Take out of the sheet
           </button>
           <small className={styles.note}>Its rows stay in the space.</small>
-        </div>
+        </Panel>
       )}
     </div>
   );
@@ -225,7 +226,7 @@ function AddTable({
         <Icon name="plus" size={14} />
       </button>
       {open && (
-        <div className={styles.popover} data-align="start">
+        <Panel anchor={root} align="start">
           {mayMake && <NewTableForm onMake={(title) => onMake(title).then(close)} />}
           {addable.length > 0 && (
             <div className={styles.choices}>
@@ -245,7 +246,7 @@ function AddTable({
               ))}
             </div>
           )}
-        </div>
+        </Panel>
       )}
     </div>
   );

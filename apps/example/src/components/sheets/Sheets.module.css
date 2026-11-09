@@ -52,28 +52,24 @@
   display: inline-flex;
 }
 
-/* A small panel under what opened it */
+/* A small panel under what opened it, floating over the page where `Panel` places it */
 .popover {
-  position: absolute;
-  top: calc(100% + 4px);
-  z-index: 20;
+  position: fixed;
+  top: var(--panel-top, 0);
+  left: var(--panel-left, 0);
+  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: var(--space-tight);
   min-width: 240px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - var(--panel-top, 0px) - 16px);
   padding: 8px;
+  overflow-y: auto;
   border: 1px solid var(--color-divider);
   border-radius: var(--radius);
   background: var(--color-surface);
   box-shadow: var(--shadow-float);
-
-  &[data-align='start'] {
-    left: 0;
-  }
-
-  &[data-align='end'] {
-    right: 0;
-  }
 }
 
 /* A column of things to pick or tick, each a row */
