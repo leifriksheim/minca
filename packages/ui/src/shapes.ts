@@ -174,6 +174,10 @@ export const PATHS = {
       Array.from({ length: cards }, (_, i) => roundRect(x, 10 + i * 28, 26, 22, 7)),
     )
     .join(''),
+  /** Sheets: a table, its header row whole and its cells below */
+  cells:
+    roundRect(6, 8, 88, 22, 8) +
+    [42, 68].flatMap((y) => [6, 36, 66].map((x) => roundRect(x, y, 28, 22, 6))).join(''),
   /** Marketplace: a price tag, its hole for the string */
   tag: 'M42 10H84A12 12 0 0 1 96 22V78A12 12 0 0 1 84 90H42L6 50Z' + circle(38, 50, 8),
   /** Files: a folder and its tab */
@@ -202,6 +206,7 @@ export const APP_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: Shap
   files: { kind: 'folder', colour: 'sage' },
   lists: { kind: 'tick', colour: 'peach' },
   bills: { kind: 'receipt', colour: 'lilac' },
+  sheets: { kind: 'cells', colour: 'sage' },
 };
 
 const CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];

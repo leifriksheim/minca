@@ -12,7 +12,14 @@ import {
   type AutomationWhen,
 } from '@minca/core/schemas';
 import { attachable, isObject, quickAddBody } from './derive/schema-ui';
-import { clausesWords, clauseFields, whereOf, type Clause, type ClauseField } from './derive/conditions';
+import {
+  clausesWords,
+  clauseFields,
+  isClause,
+  whereOf,
+  type Clause,
+  type ClauseField,
+} from './derive/conditions';
 import { collectionLabel } from './derive/schema-ui';
 
 /** "…has more than 10 votes": how many records point at it, of one collection, perhaps only some of them */
@@ -49,10 +56,6 @@ export interface PickedRule {
 
 /** The include a counted automation reads, which `{count}` in its text fills in */
 const COUNTED = 'count';
-
-function isClause(value: unknown): value is Clause {
-  return isObject(value) && typeof value.field === 'string' && typeof value.op === 'string';
-}
 
 function isWithin(value: unknown): value is Within {
   return (
