@@ -266,10 +266,6 @@ const CSS =
   'li{display:flex;gap:10px;align-items:flex-start}li svg{flex:none;margin-top:3px}' +
   'li.yes svg{color:var(--yes)}li.no svg{color:var(--no)}' +
   '.next{margin:0 0 18px;padding:12px 14px;border-radius:12px;background:var(--paper);font-size:14px}' +
-  'fieldset{border:0;margin:0 0 18px;padding:0;display:grid;gap:8px}legend{padding:0;margin:0 0 8px;font-weight:600;color:var(--strong);font-size:14px}' +
-  '.pick{display:flex;gap:10px;align-items:flex-start;margin:0;padding:12px 14px;border:1px solid var(--line);border-radius:12px;cursor:pointer;font-weight:400;color:var(--ink)}' +
-  '.pick:has(input:checked){border-color:var(--focus);background:var(--paper)}' +
-  '.pick input{width:auto;margin:3px 0 0;accent-color:var(--focus)}.pick strong{display:block;color:var(--strong);font-weight:600}.pick small{display:block;color:var(--muted);font-size:13px;margin-top:2px}' +
   '.home{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 16px;font-size:14px;color:var(--muted)}' +
   '.home strong{color:var(--strong);font-weight:600;word-break:break-all}' +
   '.link{background:none;border:0;padding:0;color:var(--focus);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}' +
@@ -316,11 +312,7 @@ ${no('Can’t add collections, change roles, or add or remove members. It propos
 ${no('Never sees your password or passkeys')}
 </ul>
 <form id="connect" novalidate>
-<fieldset><legend>Which spaces</legend>
-<label class="pick"><input type="radio" name="scope" value="spaces" checked><span><strong>The ones I pick</strong><small>Up to 8, chosen at your account home. To add one later, connect again.</small></span></label>
-<label class="pick"><input type="radio" name="scope" value="account"><span><strong>Every space, including ones I make later</strong><small>It also reads your contacts and your apps’ settings, and disconnecting can’t take reading back.</small></span></label>
-</fieldset>
-<p class="next">Next, your account home opens in a new window, where you allow it.</p>
+<p class="next">Next, your account home opens in a new window. There you give it up to 8 spaces you pick, or every space: then it also reads your contacts and your apps’ settings, and disconnecting can’t take reading back.</p>
 <div class="home" id="home-shown"><span>Account home: <strong id="home-name">${homeHost}</strong></span><button type="button" class="link" id="change-home">Change</button></div>
 <div id="home-field" hidden><label for="home">Your account home</label><input id="home" name="home" autocomplete="url" inputmode="url" spellcheck="false" autocapitalize="off" value="${home}"></div>
 <div class="row"><button type="submit" class="go" id="go">Continue</button><button type="button" class="stop" id="cancel">Don’t connect</button></div>

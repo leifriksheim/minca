@@ -1351,13 +1351,16 @@ describe('a program connected by code, through the account home', () => {
     assert.equal(kept.note.payload.sub, `space:${club.id}`);
     assert.equal(auth.connections()[0]?.scope, 'spaces');
 
+    // Ticks left from an earlier connection, for a space this device doesn't hold, are no reason to refuse.
+    const unheldSpace = 'bus6zczrmku2bpqvvysvxeyxgez7gl6wozdpno4ht56iqsqh57ekq';
     const every = await auth.grant({
       origin: 'https://other.test',
       request: await request('did:key:zEvery'),
-      spaceIds: [],
+      spaceIds: [club.id, unheldSpace],
     });
     assert.ok(every.accountKey, 'every space, as asked, follows the account');
     assert.equal(every.note.payload.sub, every.did);
+    assert.deepEqual(every.spaces, [], 'the spaces picked mean nothing given every one');
 
     // An app that needs the account key gets it or nothing, and keeping it to no space is no answer.
     await assert.rejects(

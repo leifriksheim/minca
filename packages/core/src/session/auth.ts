@@ -1923,9 +1923,10 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       for (const params of request.create ?? []) created.push(await node.spaces.create(params));
       // With the whole account the app derives the contacts space itself; otherwise it is one more space it is given.
       const contactsSpace = request.contacts && !whole ? await node.contacts.space() : null;
+      // Given every space, the spaces picked mean nothing: the account key reaches them all.
       const ids = [
         ...new Set([
-          ...choice.spaceIds,
+          ...(whole ? [] : choice.spaceIds),
           ...created.map((space) => space.id),
           ...(contactsSpace ? [contactsSpace] : []),
         ]),
