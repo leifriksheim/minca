@@ -1072,8 +1072,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     long as the token lasts, used or not: its operator, or whoever breaks in
     and also gets a token, reads for good all of that whose ciphertext they
     can get, where some spaces lose only those. The page and the home both say
-    so (06 §2.5); a home that offers no way to narrow it gives every space or
-    nothing, and says which. Either way its records-only note covers `/record/read`, so
+    so (06 §2.5). The page asks for every space and the home offers only the
+    spaces picked first; a home that offers no way to narrow it (narrowing is a
+    MAY) gives the service every space or nothing. Either way its records-only note covers `/record/read`, so
     whoever holds the key and note can share a space it has to view
     (03 §7.4), though the service offers no tool that does; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects

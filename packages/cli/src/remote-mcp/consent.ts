@@ -312,7 +312,7 @@ ${no('Can’t add collections, change roles, or add or remove members. It propos
 ${no('Never sees your password or passkeys')}
 </ul>
 <form id="connect" novalidate>
-<p class="next">Next, your account home opens in a new window. There you give it every space, or up to 8 you pick.</p>
+<p class="next">Next, your account home opens in a new window. There you give it up to 8 spaces you pick, or every space: then it also reads your contacts and your apps’ settings, and disconnecting can’t take reading back.</p>
 <div class="home" id="home-shown"><span>Account home: <strong id="home-name">${homeHost}</strong></span><button type="button" class="link" id="change-home">Change</button></div>
 <div id="home-field" hidden><label for="home">Your account home</label><input id="home" name="home" autocomplete="url" inputmode="url" spellcheck="false" autocapitalize="off" value="${home}"></div>
 <div class="row"><button type="submit" class="go" id="go">Continue</button><button type="button" class="stop" id="cancel">Don’t connect</button></div>

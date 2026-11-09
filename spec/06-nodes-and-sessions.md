@@ -322,7 +322,7 @@ When the person approves, the home:
    spaces, as if asked so, and carries no account key. A records-only key
    needs nothing only the account key opens (§2.8). The app reads what it got
    from the grant's `scope`.
-3. For each granted space — the ones the person picked, the ones made, and the
+3. For each granted space — the ones the person picked (under `scope: spaces`), the ones made, and the
    contacts space — makes a **view-only invite** (for a private space it
    carries the key; it never carries a role secret) and, for a private space
    under `scope: spaces`, the account's **member key** for that space

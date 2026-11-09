@@ -295,19 +295,20 @@ function Approve({
   const asksWhole = request.scope === 'account';
   // A key given records only needs nothing only the account key opens, so the person may keep it to some spaces.
   const narrowable = asksWhole && recordsOnly && writes;
-  // Every space, as asked, unless the person kept the last connection to some.
+  // Only some spaces unless the person gave the last connection every one: every space is the reach no disconnect takes back.
   const [reach, setReach] = useState<'every' | 'some'>(() =>
-    previous?.scope === 'spaces' ? 'some' : 'every',
+    previous?.scope === 'account' ? 'every' : 'some',
   );
   const whole = asksWhole && (!narrowable || reach === 'every');
   const choosing = (!asksWhole && request.chooseSpaces !== false) || (narrowable && reach === 'some');
   // Spaces the app can use as asked: to change one, the account must be able to.
   const offered = spaces.filter((space) => !writes || space.writable);
-  const privateChosen = offered.some((space) => chosen.has(space.id) && space.visibility === 'private');
+  const chosenOffered = offered.filter((space) => chosen.has(space.id));
+  const privateChosen = chosenOffered.some((space) => space.visibility === 'private');
   const creating = request.create ?? [];
   // A whole-account app gets the contacts anyway; the box below is for one that asks for them alone.
   const contacts = request.contacts === true && !recordsOnly && !whole;
-  const nothing = !whole && !contacts && chosen.size === 0 && creating.length === 0;
+  const nothing = !whole && !contacts && chosenOffered.length === 0 && creating.length === 0;
 
   // A program keeps its note only once the person gives it the check code: this page then waits for that.
   const [sent, setSent] = useState(false);
@@ -317,7 +318,7 @@ function Approve({
       const answer = await auth.grant({
         origin,
         request,
-        spaceIds: offered.filter((space) => chosen.has(space.id)).map((space) => space.id),
+        spaceIds: chosenOffered.map((space) => space.id),
         ...(narrowable ? { everySpace: reach === 'every' } : {}),
       });
       // Only an app that reads the contacts reads the inbox: the whole account, or the contacts alone.
