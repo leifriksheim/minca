@@ -103,8 +103,14 @@ export interface SyncEngine {
   off<K extends SyncEvent>(event: K, callback: SyncEvents[K]): void;
 }
 
-/** At most this many records wait for what they depend on; the oldest give way */
+/**
+ * Records waiting for what they depend on, past which nothing more is asked
+ * for but what they wait on: a long history fills in from below instead of
+ * being dropped and asked for again.
+ */
 const MAX_WAITING = 1000;
+/** Records held while what they wait on is fetched; past this the oldest is let go and asked for again later */
+const MAX_HELD = 20 * MAX_WAITING;
 /** Refusals remembered, so reconciling doesn't ask a peer for the same bad version every round */
 const MAX_REFUSED = 10_000;
 /** Records asked for, or sent, in one message */
@@ -194,7 +200,7 @@ interface PeerState {
    * Ids to ask for once fewer wants are in flight, front first. An entry
    * counts only while its id is in `queuedIds`; the rest are passed over.
    */
-  readonly queued: Array<{ readonly id: string; readonly collection: string }>;
+  readonly queued: Array<{ readonly id: string; readonly collection: string; readonly first: boolean }>;
   readonly queuedIds: Set<string>;
   /** What the peer said it holds, in its last hello */
   holds: Holds;
@@ -259,12 +265,20 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   const holdBack = async (peerId: string, version: Version, intake: Intake) => {
     waiting.set(version.id, { peerId, version });
-    dropOldest(waiting, MAX_WAITING);
+    if (waiting.size > MAX_HELD) letGoOldest();
     const dependsOn = version.seq > 0 ? [version.genesis, version.prev] : [];
     for (const needed of dependsOn) {
       if (typeof needed === 'string' && !(await storage.getVersion(needed)))
         intake.firsts.set(needed, version.collection);
     }
+  };
+
+  /** Lets the longest-waiting record go, still to be asked for: dropped and forgotten, a peer would look level without it */
+  const letGoOldest = () => {
+    const [id, held] = waiting.entries().next().value ?? [];
+    if (!id || !held) return;
+    waiting.delete(id);
+    if (peers.has(held.peerId)) want(held.peerId, held.version.collection, [id]);
   };
 
   const refuse = (peerId: string, version: Version, reason: string | undefined) => {
@@ -296,7 +310,9 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const want = (peerId: string, collection: string, ids: ReadonlyArray<string>, ahead = false) => {
     const first = ahead || collection.startsWith('sys.');
     const state = stateOf(peerId);
-    const entries = ids.filter((id) => first || !state.queuedIds.has(id)).map((id) => ({ id, collection }));
+    const entries = ids
+      .filter((id) => first || !state.queuedIds.has(id))
+      .map((id) => ({ id, collection, first }));
     for (const { id } of entries) state.queuedIds.add(id);
     if (first) state.queued.unshift(...entries);
     else state.queued.push(...entries);
@@ -308,6 +324,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const state = states.get(peerId);
     if (!state) return;
     while (state.wants.size < MAX_WANTS_IN_FLIGHT && state.queuedIds.size > 0) {
+      if (waiting.size >= MAX_WAITING && !nextIsFirst(state)) break;
       const batch = takeBatch(state);
       if (!batch) break;
       const id = nextId++;
@@ -409,7 +426,10 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   const busy = (peerId: string) => {
     const state = states.get(peerId);
-    return !!state && (state.sessions.size > 0 || state.wants.size > 0 || state.queuedIds.size > 0);
+    if (state && (state.sessions.size > 0 || state.wants.size > 0 || state.queuedIds.size > 0)) return true;
+    // What it sent that waits for its chain isn't taken in yet.
+    for (const held of waiting.values()) if (held.peerId === peerId) return true;
+    return false;
   };
 
   const settleIfDone = (peerId: string) => {
@@ -688,6 +708,12 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 }
 
 /** Takes up to one want's worth of queued ids, all of one collection, off the front of the queue */
+/** Whether the next id to ask for is one held records wait on */
+function nextIsFirst(state: PeerState): boolean {
+  const next = state.queued.find((entry) => state.queuedIds.has(entry.id));
+  return next?.first ?? false;
+}
+
 function takeBatch(state: PeerState): { collection: string; ids: string[] } | null {
   const ids: string[] = [];
   let collection: string | null = null;

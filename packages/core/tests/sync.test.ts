@@ -257,4 +257,55 @@ describe('sync engine', () => {
     assert.equal(await b.storage.getVersion(note.id), null);
     assert.match(rejected[0] ?? '', /key is missing or malformed/);
   });
+
+  test('a new peer takes in a record edited more times than it can hold back at once', async () => {
+    // Each edit waits for the one before it, as a space holds back a version until its
+    // chain is here: a long history arrives mostly ahead of its parents.
+    const EDITS = 2500;
+    const holderStorage = createStorageProvider(createMemoryAdapter());
+    const newcomerStorage = createStorageProvider(createMemoryAdapter());
+    const chainIsHere = async (version: Version) =>
+      version.seq === 0 ||
+      (!!(await newcomerStorage.getVersion(version.prev!)) &&
+        !!(await newcomerStorage.getVersion(version.genesis!)));
+    const holder: ReturnType<typeof createSyncEngine> = createSyncEngine({
+      storageProvider: holderStorage,
+      sendToPeer: (_peer, message) => void newcomer.handleMessage('a', message),
+      self: 'a',
+    });
+    const newcomer: ReturnType<typeof createSyncEngine> = createSyncEngine({
+      storageProvider: newcomerStorage,
+      sendToPeer: (_peer, message) => void holder.handleMessage('b', message),
+      self: 'b',
+      validate: async (version) =>
+        (await chainIsHere(version)) ? { valid: true } : { valid: false, later: true },
+    });
+
+    const author = await makeKey();
+    let previous = await signer.sign(
+      createVersion({ author: author.did, collection: COLLECTION, body: { edit: 0 } }),
+      author.privateKey,
+    );
+    await holderStorage.addVersion(previous);
+    const genesis = previous.id;
+    for (let edit = 1; edit < EDITS; edit++) {
+      previous = await signer.sign(
+        createVersion({
+          author: author.did,
+          collection: COLLECTION,
+          body: { edit },
+          version: { key: previous.key, seq: edit, prev: previous.id, genesis },
+        }),
+        author.privateKey,
+      );
+      await holderStorage.addVersion(previous);
+    }
+
+    holder.addPeer('b');
+    newcomer.addPeer('a');
+    newcomer.notifyPeers(['a']);
+    await until(() => newcomer.levelWith('a'), 60_000, 'the newcomer to be level with the holder');
+    assert.equal((await newcomerStorage.sums()).get(COLLECTION)?.count, EDITS);
+    assert.equal(await newcomerStorage.fingerprint(), await holderStorage.fingerprint());
+  });
 });
