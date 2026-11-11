@@ -333,8 +333,9 @@ What it does then:
 - **`hello`**: `from` is in the room. If `from` is the greater DID (compared
   as strings) the receiver offers to it (§7.3); otherwise it says hello
   back, so the lesser one hears of it and offers: at most once every 10
-  seconds in that room, a hello back due sooner being said, once for all,
-  when the 10 seconds are up.
+  seconds in that room, together with the hello after a failed attempt
+  (§7.3), a hello back due sooner being said, once for all, when the 10
+  seconds are up.
 - **`offer`, `answer`**: handed to the mesh as a signal from `from` (§7.3).
 
 A receiver remembers, per room, each peer it heard and the `box` of the

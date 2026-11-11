@@ -1191,11 +1191,13 @@ does whoever controls that domain's DNS or certificates, or hosts it.
     Anyone who knows the room can still say hello and be offered to (§2).
   - Under made-up names it can have a peer dialling at most 64 peers a room
     at a time, and it can't get a peer cut off from a relay by making it say
-    hello back: a node says hello back once a room every 10 s, and paces what
-    it sends below a Minca relay's budget (04 §2, §2.1; "hellos under 90
-    made-up names start no more than 64 connections", "a node in 60 rooms
-    keeps its relay…", "a node in 16 rooms of 12 members each keeps its
-    relay").
+    hello back, or by failing every offer it makes so that it says hello
+    again: both share one hello every 10 s a room, and a node paces what it
+    sends below a Minca relay's budget (04 §2, §2.1, §7.3; "hellos under 90
+    made-up names start no more than 64 connections", "a peer that fails
+    every offer can't make a node say hello faster than a hello back", "a
+    node in 60 rooms keeps its relay…", "a node in 16 rooms of 12 members
+    each keeps its relay").
   - It can't say anything through relays in a peer's name, nor can anyone
     who knows the room: every hello, offer and answer is signed by the
     session key its `from` names, sealed description included, so nobody can

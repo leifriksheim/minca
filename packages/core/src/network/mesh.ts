@@ -246,9 +246,10 @@ export function createMesh(config: MeshConfig): Mesh {
 
   /** Forgets a connection, closed by either side. */
   const lost = (peer: string): void => {
-    const ourOfferFailed = shouldInitiate(did, peer) && attempted.has(peer) && !links.has(peer);
+    const failedBeforeOpening = attempted.has(peer) && !links.has(peer);
+    const isOursToOfferAgain = failedBeforeOpening && shouldInitiate(did, peer);
     const roomsMetIn = expected.get(peer) ?? new Set<string>();
-    if (ourOfferFailed) setNewest(tries, peer, (tries.get(peer) ?? 0) + 1, MAX_TRIED);
+    if (isOursToOfferAgain) setNewest(tries, peer, (tries.get(peer) ?? 0) + 1, MAX_TRIED);
     clearTimeout(idle.get(peer));
     idle.delete(peer);
     unwatch(peer);
@@ -258,7 +259,7 @@ export function createMesh(config: MeshConfig): Mesh {
     for (const room of rooms.values()) drop(room, peer);
     // The peer's hello back (spec 04 §2) brings the next offer, rather than its hello two minutes on.
     // Paced with our own hello back, so a peer that fails every offer can't make us say hello faster.
-    if (ourOfferFailed) for (const name of roomsMetIn) signaling.helloPaced(name);
+    if (isOursToOfferAgain) for (const name of roomsMetIn) signaling.helloPaced(name);
   };
 
   const closeIfIdle = (peer: string): void => {

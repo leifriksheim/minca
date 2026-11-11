@@ -461,7 +461,8 @@ describe('the mesh, through real relays', () => {
   test('a peer that fails every offer can’t make a node say hello faster than a hello back', async () => {
     // A offers to C, the greater, and C makes every connection fail after its answer, as it can make DTLS
     // fail, then says hello again at once to be offered to again. B hears what A says in the room.
-    const victim = mesh(A, [relay], 'fails-every-offer', { failsEveryConnectionTo: C.did }).join('room');
+    const victimMesh = mesh(A, [relay], 'fails-every-offer', { failsEveryConnectionTo: C.did });
+    const victim = victimMesh.join('room');
     const bystander = createRendezvous([relay], B);
     const attacker = createRendezvous([relay], C);
     let victimHellosHeard = 0;
@@ -488,6 +489,10 @@ describe('the mesh, through real relays', () => {
       await new Promise((resolve) => setTimeout(resolve, 6000));
       // Its hello on joining, and one hello back; the retries share the hello back's 10 s. Unpaced, it was 39.
       assert.ok(victimHellosHeard <= 3, `the bystander heard ${victimHellosHeard} hellos from the victim`);
+      // Each failure counts as a try, so the next attempt waits longer before it is given up.
+      const triesWithAttacker = () =>
+        victimMesh.status().connecting.find((one) => one.peer === C.did)?.tries ?? 0;
+      await until(() => triesWithAttacker() >= 1, 15_000, 'a failure to count as a try');
     } finally {
       victim.disconnect();
       bystander.disconnect();
