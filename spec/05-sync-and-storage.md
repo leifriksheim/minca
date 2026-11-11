@@ -431,8 +431,11 @@ it holds nothing of yet, until level with a keeper by shallow sets and then
 whole (a new device: usable at once, the history after), or always (a node
 that lives for a session). A node that chooses it:
 
-- MUST hold only `sys.*` until it has been level with a node holding the
-  whole space (§6.5), and so knows whether the space names keepers (§9);
+- holds only `sys.*` until it has finished an exchange with any peer, and
+  so knows whether the space names keepers (§9). Any peer will do: two new
+  devices waiting for a node that holds the whole space would wait for each
+  other. From a peer behind on the access history it learns the keepers as
+  that peer has them, until the rest arrives;
 - asks a peer for shallow sets only while one of the space's **keepers**
   (§9) is connected: that keeper, and any other peer, since the keeper
   vouches for what they skip. With no keeper connected, it syncs whole, and
@@ -446,9 +449,12 @@ that lives for a session). A node that chooses it:
   never leaves it behind a peer it syncs with;
 - does not chase gaps in writers' lines (§9): it lacks the versions below
   what it holds by design;
-- MUST say `lacksHistory` in every hello, from the time it holds the space
-  shallow until it **holds the history**: until it has been level on whole
-  sets with a peer whose hello didn't say so, and has then checked the chain
+- MUST say `lacksHistory` in every hello until it **holds the history**. A
+  node shallow always never does. One shallow at first lacks it from the
+  time it opens a space it holds no records of. Once it has finished that
+  first exchange, and for as long as the space names no keeper for it to ask,
+  it lacks nothing it was to wait for: it syncs whole, as any new node.
+  Otherwise it holds the history once it has been level on whole sets with a peer whose hello didn't say so, in an exchange where it held more than `sys.*`, and has then checked the chain
   under every version it took on a keeper's word, down to its first
   (02 §4.7). A version whose chain breaks, or lacks a version, goes with
   every version that follows it, as a node holding the space whole never

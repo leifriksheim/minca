@@ -15,7 +15,7 @@ import type { StorageProvider } from '../src/storage/storage-provider.js';
 import type { Version } from '../src/types.js';
 import { forge, makeKey } from './helpers/person.js';
 import { createNode } from '../src/node/node.js';
-import type { P2PNode, ShallowMode } from '../src/node/types.js';
+import type { CacheConfig, P2PNode, ShallowMode } from '../src/node/types.js';
 import type { StoreFactory } from '../src/node/stores.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -145,7 +145,10 @@ describe('a node that syncs shallow', () => {
     await Promise.all(nodes.splice(0).map((node) => node.close().catch(() => {})));
   });
 
-  async function personOn(hub: FakeHub, options: { shallow?: ShallowMode; seed?: Uint8Array } = {}) {
+  async function personOn(
+    hub: FakeHub,
+    options: { shallow?: ShallowMode; seed?: Uint8Array; cache?: CacheConfig } = {},
+  ) {
     const manager = createIdentityManager();
     const seed = options.seed ?? generateSeed();
     const me = await manager.fromSeed(seed);
@@ -162,7 +165,11 @@ describe('a node that syncs shallow', () => {
         },
       },
     };
-    const node = await createNode({ ...config, ...(options.shallow ? { shallow: options.shallow } : {}) });
+    const node = await createNode({
+      ...config,
+      ...(options.cache ? { cache: options.cache } : {}),
+      ...(options.shallow ? { shallow: options.shallow } : {}),
+    });
     nodes.push(node);
     return { node, me, manager, stores, config, seed, session: () => session };
   }
@@ -419,6 +426,74 @@ describe('a node that syncs shallow', () => {
       20_000,
       'the latest edit, from Alice',
     );
+  });
+
+  /** As an app connected to an account home starts its node (`startConnectedNode`) */
+  const APP_DEVICE = { shallow: 'first', cache: { collections: ['app.card'] } } as const;
+
+  /** Alice's new space with Mallory in it and one card of hers, both on devices started with `options`, and no keeper */
+  async function spaceOfTwoDevices(hub: FakeHub, options: Parameters<typeof personOn>[1]) {
+    const alice = await personOn(hub, options);
+    const mallory = await personOn(hub, options);
+    const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'public' });
+    await hold(alice.node, space);
+    await alice.node.collections.define(space, { name: 'app.card', schema: { type: 'object' } });
+    await mallory.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(mallory.node, space);
+    await joined(mallory.node, space);
+    const card = await mallory.node.records.put(space, 'app.card', { n: 1 });
+    return { alice, mallory, space, card };
+  }
+
+  for (const [devices, options] of [
+    ['two app devices', APP_DEVICE],
+    ['two devices shallow at first', { shallow: 'first' }],
+  ] as const) {
+    test(`${devices} in a space with no keeper sync its records: neither waits for a node holding it whole`, async () => {
+      const hub = createFakeHub({ latencyMs: 1 });
+      const { alice, space, card } = await spaceOfTwoDevices(hub, options);
+      await until(async () => (await alice.node.records.get(space, card.key)) !== null, 10_000, 'the card');
+    });
+
+    test(`${devices}, no keeper: whoever made the space removes a member at once, alone`, async () => {
+      const hub = createFakeHub({ latencyMs: 1 });
+      const { alice, mallory, space, card } = await spaceOfTwoDevices(hub, options);
+      await until(async () => (await alice.node.records.get(space, card.key)) !== null, 10_000, 'the card');
+      await mallory.node.close();
+
+      const started = Date.now();
+      await alice.node.spaces.removeMember(space, mallory.node.did);
+      assert.ok(Date.now() - started < 5_000, 'no keeper to ask for shallow sets, so no history to wait for');
+    });
+  }
+
+  test('a new device whose keeper is away removes someone only once it holds what they wrote: it stands', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, bob, space, key } = await editedSpace(hub, 5, { keepers: false });
+    for (let n = 6; n <= 10; n++) await bob.node.records.update(space, key, { n });
+    const latest = async (node: P2PNode) => (await node.records.get<{ n: number }>(space, key))?.body?.n;
+    await until(async () => (await latest(alice.node)) === 10, 10_000, 'Alice to have Bob’s edits');
+    const hostAway = await personOn(createFakeHub({ latencyMs: 1 }));
+    await alice.node.spaces.setKeepers(space, [{ did: hostAway.node.did, name: 'A host, away' }]);
+    await until(async () => (await bob.node.spaces.access(space)).keepers.length === 1, 10_000, 'the keeper');
+
+    const aliceAgain = await personOn(hub, { shallow: 'first', seed: alice.seed });
+    await aliceAgain.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(aliceAgain.node, space);
+    await until(
+      async () => (await aliceAgain.node.spaces.access(space)).members.some((m) => m.did === bob.node.did),
+      10_000,
+      'the new device to know Bob',
+    );
+    await aliceAgain.node.spaces.removeMember(space, bob.node.did);
+
+    await until(
+      async () =>
+        !(await alice.node.spaces.access(space)).members.some((member) => member.did === bob.node.did),
+      10_000,
+      'Bob removed',
+    );
+    assert.equal(await latest(alice.node), 10, 'Bob’s edits before he was removed stand');
   });
 
   test('a device holding a space whole removes a member at once, a gap in their log or not', async () => {

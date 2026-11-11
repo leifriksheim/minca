@@ -442,8 +442,9 @@ no keeper connected it syncs whole, so a keeper that is away only slows it.
   remote MCP session's.
 
 A space that names no keepers, or this node among them, syncs whole. Until
-the node has caught up with a whole-space peer it holds only `sys.*`, so it
-knows which. A change taking power from someone (`unassign`, `removeMember`,
+the node has caught up with any peer it holds only `sys.*`, so it knows
+which. Where the space names none, the node syncs whole and waits for no
+history, as any new device. A change taking power from someone (`unassign`, `removeMember`,
 `stepDown`) waits, up to 30 seconds, until a node that held the space shallow
 holds the history: level on whole sets with a peer that holds it, every
 chain checked. A node lacking it says so in its hello, so no other takes it

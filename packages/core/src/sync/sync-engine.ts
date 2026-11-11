@@ -76,7 +76,8 @@ export interface SyncEngineConfig {
 /**
  * - `synced` (peer, full, levelShallow, wholeHistory): nothing left in flight with the peer; `full` when
  *   it holds every collection, `levelShallow` when it just answered this node's ask with shallow sums
- *   that all match, `wholeHistory` when the two compared whole sets and the peer said it lacks no history
+ *   that all match, `wholeHistory` when the two compared whole sets of more than the space's own
+ *   collections and the peer said it lacks no history
  * - `level` (peer, collection, full): this node holds what the peer holds of a collection
  * - `stored` (peer, ids): the peer says it now has these versions
  * - `version-received` (version): each version taken in
@@ -224,6 +225,8 @@ interface PeerState {
   askedShallow: boolean;
   /** Whether its last hello said it lacks the space's history */
   lacksHistory: boolean;
+  /** Whether this node held only the space's own collections when it compared with the peer's last hello */
+  comparedOnlySpaceOwn: boolean;
 }
 
 /** What one message brought in: the versions stored, and the versions they wait for */
@@ -468,6 +471,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     state.shallow = theirShallow;
     state.lacksHistory = theirHistoryLacking;
     const holds = ourHolds();
+    state.comparedOnlySpaceOwn = holds !== 'all' && holds.size === 0;
     const ours = await ourSums(holds, shallowWith(peerId));
     // Every collection this node holds counts, even one it has nothing of yet.
     const named = new Set([...names, ...Object.keys(ours), ...(holds === 'all' ? [] : holds)]);
@@ -504,7 +508,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     if (busy(peerId)) return;
     level.add(peerId);
     const state = states.get(peerId);
-    const wholeHistory = !shallowWith(peerId) && !state?.lacksHistory;
+    const wholeHistory = !shallowWith(peerId) && !state?.lacksHistory && !state?.comparedOnlySpaceOwn;
     emit('synced', peerId, state?.holds === 'all', levelShallow, wholeHistory);
   };
 
@@ -827,6 +831,7 @@ const newPeerState = (): PeerState => ({
   shallow: false,
   askedShallow: false,
   lacksHistory: false,
+  comparedOnlySpaceOwn: false,
 });
 
 const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;
