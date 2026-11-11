@@ -1,8 +1,8 @@
 /**
- * The cost of churn: Alice creates 100 records and edits each E times; Bob
+ * The cost of churn: Alice creates R records (100) and edits each E times; Bob
  * joins, and the time until his list matches hers is measured.
  *
- *   npx tsx --conditions=@minca/source tests/bench/churn.ts [E]
+ *   npx tsx --conditions=@minca/source tests/bench/churn.ts [E] [R]
  */
 import { team } from '../../src/space/presets.js';
 import { createFakeHub } from '../helpers/fake-transport.js';
@@ -11,7 +11,7 @@ import { joined } from '../helpers/joined.js';
 import { person, ms } from './common.js';
 
 const E = Number(process.argv[2] ?? 10);
-const RECORDS = 100;
+const RECORDS = Number(process.argv[3] ?? 100);
 const hub = createFakeHub({ latencyMs: 1 });
 const alice = await person(hub);
 const { id: space } = await alice.spaces.create({ name: 'Board', ...team, visibility: 'private' });
