@@ -453,7 +453,7 @@ export async function startGrantedAgent(params: {
     stores: params.stores,
     ...keys,
     network: params.network,
-    ...(params.shallow ? { shallow: true } : {}),
+    ...(params.shallow ? { shallow: 'always' as const } : {}),
   });
   // Spaces granted by name, when the grant wasn't for the whole account.
   await joinGranted(base, grant, () => {});

@@ -72,7 +72,8 @@ export interface SyncEngineConfig {
 }
 
 /**
- * - `synced` (peer, full): nothing left in flight with the peer; `full` when it holds every collection
+ * - `synced` (peer, full, levelShallow): nothing left in flight with the peer; `full` when it holds every
+ *   collection, `levelShallow` when it just answered this node's ask with shallow sums that all match
  * - `level` (peer, collection, full): this node holds what the peer holds of a collection
  * - `stored` (peer, ids): the peer says it now has these versions
  * - `version-received` (version): each version taken in
@@ -80,7 +81,7 @@ export interface SyncEngineConfig {
  * - `rejected` (peer, version, reason), `error` (error)
  */
 interface SyncEvents {
-  synced: (peer: string, full: boolean) => void;
+  synced: (peer: string, full: boolean, levelShallow: boolean) => void;
   level: (peer: string, collection: string, full: boolean) => void;
   stored: (peer: string, ids: string[]) => void;
   'version-received': (version: Version) => void;
@@ -214,8 +215,10 @@ interface PeerState {
   readonly queuedIds: Set<string>;
   /** What the peer said it holds, in its last hello */
   holds: Holds;
-  /** Whether its last hello said it syncs with this node by shallow sets */
+  /** Whether its last hello asked to sync with this node by shallow sets */
   shallow: boolean;
+  /** Whether this node's last hello to it asked to sync by shallow sets */
+  askedShallow: boolean;
 }
 
 /** What one message brought in: the versions stored, and the versions they wait for */
@@ -288,7 +291,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       if (typeof needed !== 'string' || (await storage.getVersion(needed))) continue;
       lacking.push(needed);
       // Syncing shallow, the version before is not fetched: a keeper's copy of this one comes without it.
-      if (needed === version.prev && shallowWith(peerId)) continue;
+      if (needed === version.prev && config.shallowWith?.(peerId)) continue;
       intake.firsts.set(needed, version.collection);
     }
     if (lacking.length === 0) waitingOther.add(version.id);
@@ -428,13 +431,15 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   const hello = async (peerId: string, reply = false) => {
     const holds = ourHolds();
-    const shallow = shallowWith(peerId);
+    // Only this node's own wish: a peer that asked has its answer in kind, not the same ask back.
+    const askShallow = config.shallowWith?.(peerId) ?? false;
+    stateOf(peerId).askedShallow = askShallow;
     send(peerId, {
       type: 'hello',
       holds: holds === 'all' ? 'all' : [...holds],
-      sums: await ourSums(holds, shallow),
+      sums: await ourSums(holds, shallowWith(peerId)),
       ...(reply ? { reply } : {}),
-      ...(shallow ? { shallow: true } : {}),
+      ...(askShallow ? { shallow: true } : {}),
     });
   };
 
@@ -460,7 +465,11 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const shared = [...named].filter((c) => holdsCollection(holds, c) && holdsCollection(state.holds, c));
     const differing = shared.filter((c) => theirs[c] !== ours[c]);
     for (const c of shared) if (theirs[c] === ours[c]) emit('level', peerId, c, state.holds === 'all');
-    if (differing.length === 0) return settleIfDone(peerId);
+    if (differing.length === 0) {
+      // A shallow ask hears that it is level: what it skipped, it may now take.
+      if (theirShallow && !reply) await hello(peerId, true);
+      return settleIfDone(peerId, reply && state.askedShallow);
+    }
     if (self !== undefined && self > peerId) {
       // The other side starts. It may not have heard from us yet.
       if (!reply) await hello(peerId, true);
@@ -482,10 +491,10 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     return false;
   };
 
-  const settleIfDone = (peerId: string) => {
+  const settleIfDone = (peerId: string, levelShallow = false) => {
     if (busy(peerId)) return;
     level.add(peerId);
-    emit('synced', peerId, states.get(peerId)?.holds === 'all');
+    emit('synced', peerId, states.get(peerId)?.holds === 'all', levelShallow);
   };
 
   const sendRound = (peerId: string, session: Session, message: Uint8Array) =>
@@ -798,6 +807,7 @@ const newPeerState = (): PeerState => ({
   queuedIds: new Set(),
   holds: 'all',
   shallow: false,
+  askedShallow: false,
 });
 
 const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;

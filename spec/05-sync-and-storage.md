@@ -274,7 +274,7 @@ Ids below are version ids (strings, §2). Byte strings are `base64url`.
 | `holds`   | `"all"` \| `string[]`      | Optional. `"all"`, or the collections held besides `sys.*` (§5). Absent means `"all"`.                                                                      |
 | `sums`    | `{ [collection]: string }` | For each held collection the sender keeps at least one version of: the collection's fingerprint (§3.3) over all its items, as 32 lower-case hex characters. |
 | `reply`   | `true`                     | Optional. Marks a hello sent in answer to one; it is never answered by another hello.                                                                       |
-| `shallow` | `true`                     | Optional. The sender syncs with this peer by shallow sets (§5.1): `sums` are over its shallow sets, and the receiver answers and compares in kind.          |
+| `shallow` | `true`                     | Optional. The sender asks to sync with this peer by shallow sets (§5.1). Only the sender's own ask: a node answering one does not repeat it.                |
 
 Example (fingerprint values illustrative):
 
@@ -409,14 +409,23 @@ is decided by the version alone, so nodes keeping the same versions keep the
 same shallow sets. Every `sys.*` version is retained, so a space's access
 history is always in its shallow sets whole.
 
-Two peers **sync by shallow sets** when either says `shallow` in its hello:
-both compute `sums` over their shallow sets, every `reconcile` between them
-says `shallow`, and each side compares its own shallow set. A peer that does
-not know the field compares all its items; the exchange is then a whole one,
-so nothing is ever missed, only fetched in full.
+Two peers **sync by shallow sets** while either's last hello asked to: both
+compute `sums` over their shallow sets, every `reconcile` between them says
+`shallow`, and each side compares its own shallow set. A node that stops
+asking sends a hello without the field, and the next exchange is whole. A
+peer that does not know the field compares all its items; the exchange is
+then a whole one, so nothing is ever missed, only fetched in full.
 
-Syncing by shallow sets is a node's own choice, never required. A node that
-chooses it:
+A node that receives a hello asking for shallow sets, not itself a reply,
+whose `sums` all match its own, MUST answer with a hello (`reply: true`). It
+is how the asker learns it is level by shallow sets: a node answering a
+`reconcile` can't tell when the other side has sent everything it found
+missing.
+
+Syncing by shallow sets is a node's own choice, never required: for a space
+it holds nothing of yet, until level with a keeper by shallow sets and then
+whole (a new device: usable at once, the history after), or always (a node
+that lives for a session). A node that chooses it:
 
 - MUST hold only `sys.*` until it has been level with a node holding the
   whole space (§6.5), and so knows whether the space names keepers (§9);

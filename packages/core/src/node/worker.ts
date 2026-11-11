@@ -40,7 +40,7 @@ import { markStep } from '../utils/step.js';
  */
 export interface WorkerNodeConfig extends Pick<
   NodeConfig,
-  'accountKey' | 'contactKey' | 'contactsSpace' | 'sessionTtlSeconds' | 'cache'
+  'accountKey' | 'contactKey' | 'contactsSpace' | 'sessionTtlSeconds' | 'cache' | 'shallow'
 > {
   readonly stores: WorkerStores;
   readonly network?: Pick<NodeNetworkConfig, 'relays' | 'nodes' | 'hosts' | 'iceServers'>;

@@ -525,6 +525,7 @@ async function startDesktopNode(params: StartParams): Promise<P2PNode> {
     sessionKey: params.key.keys,
     stores: directoryStores(await openFsDirectory(params.stores), { localKey: params.seal }),
     cache: {},
+    shallow: 'first',
     network: {
       relays,
       ...(params.network.nodes.length ? { nodes: params.network.nodes } : {}),

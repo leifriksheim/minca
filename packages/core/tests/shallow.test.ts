@@ -15,7 +15,7 @@ import type { StorageProvider } from '../src/storage/storage-provider.js';
 import type { Version } from '../src/types.js';
 import { makeKey } from './helpers/person.js';
 import { createNode } from '../src/node/node.js';
-import type { P2PNode } from '../src/node/types.js';
+import type { P2PNode, ShallowMode } from '../src/node/types.js';
 import type { StoreFactory } from '../src/node/stores.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -137,24 +137,24 @@ describe('a node that syncs shallow', () => {
     await Promise.all(nodes.splice(0).map((node) => node.close().catch(() => {})));
   });
 
-  async function personOn(hub: FakeHub, options: { shallow?: boolean } = {}) {
+  async function personOn(hub: FakeHub, options: { shallow?: ShallowMode } = {}) {
     const manager = createIdentityManager();
     const stores = memoryStores();
     let session = '';
-    const node = await createNode({
+    const config = {
       signer: createLocalRootSigner(await manager.fromSeed(generateSeed()), manager.getProvider()),
       stores,
       watchIntervalMs: 0,
-      ...(options.shallow ? { shallow: true } : {}),
       network: {
         transports: (spaceId: string, sessionDid: string) => {
           session = sessionDid;
           return [hub.transport(sessionDid, spaceId)];
         },
       },
-    });
+    };
+    const node = await createNode({ ...config, ...(options.shallow ? { shallow: options.shallow } : {}) });
     nodes.push(node);
-    return { node, stores, session: () => session };
+    return { node, stores, config, session: () => session };
   }
 
   /** Alice's space with one card edited `edits` times, kept whole by Bob, who it names its keeper */
@@ -185,8 +185,8 @@ describe('a node that syncs shallow', () => {
   }
 
   /** A new node of someone Alice invites, with the card's latest edit once it reads it */
-  async function newcomer(hub: FakeHub, alice: P2PNode, space: string, key: string, shallow: boolean) {
-    const dave = await personOn(hub, { shallow });
+  async function newcomer(hub: FakeHub, alice: P2PNode, space: string, key: string, shallow?: ShallowMode) {
+    const dave = await personOn(hub, shallow ? { shallow } : {});
     await dave.node.spaces.join(await alice.spaces.invite(space));
     await hold(dave.node, space);
     await joined(dave.node, space);
@@ -201,21 +201,40 @@ describe('a node that syncs shallow', () => {
   test('takes a record edited 200 times as its first and current version, from its keeper', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, space, key, versionsAt } = await editedSpace(hub, 200);
-    const dave = await newcomer(hub, alice.node, space, key, true);
+    const dave = await newcomer(hub, alice.node, space, key, 'always');
     assert.equal(await versionsAt(dave), 2);
   });
 
   test('where the space names no keepers, nobody vouches for what it skips: it takes every edit', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, space, key, versionsAt } = await editedSpace(hub, 200, { keepers: false });
-    const dave = await newcomer(hub, alice.node, space, key, true);
+    const dave = await newcomer(hub, alice.node, space, key, 'always');
+    await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
+  });
+
+  test('shallow at first, it reads the latest edit, then takes the rest of the history', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, space, key, versionsAt } = await editedSpace(hub, 200);
+    const dave = await newcomer(hub, alice.node, space, key, 'first');
+    await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
+  });
+
+  test('shallow at first, a space it already holds records of syncs whole from the start', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, space, key, versionsAt } = await editedSpace(hub, 200);
+    const dave = await newcomer(hub, alice.node, space, key, 'always');
+    assert.equal(await versionsAt(dave), 2);
+    await dave.node.close();
+    const daveAgain = await createNode({ ...dave.config, shallow: 'first' });
+    nodes.push(daveAgain);
+    await hold(daveAgain, space);
     await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
   });
 
   test('a node that does not sync shallow takes every edit, as before', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, space, key, versionsAt } = await editedSpace(hub, 200);
-    const dave = await newcomer(hub, alice.node, space, key, false);
+    const dave = await newcomer(hub, alice.node, space, key);
     await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
   });
 });

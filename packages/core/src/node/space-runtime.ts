@@ -76,7 +76,14 @@ import { createWarrants } from './space-warrants.js';
 import { openMirrors } from './space-mirrors.js';
 import { createMeeting, openPeers } from './space-peers.js';
 import { createMembership } from './space-membership.js';
-import type { CacheConfig, DefineCollection, NodeCollection, NodeEvent, NodeNetworkConfig } from './types.js';
+import type {
+  CacheConfig,
+  DefineCollection,
+  NodeCollection,
+  NodeEvent,
+  NodeNetworkConfig,
+  ShallowMode,
+} from './types.js';
 
 export interface SpaceRuntimeDeps {
   readonly record: SpaceRecord;
@@ -119,7 +126,7 @@ export interface SpaceRuntimeDeps {
   /** Hold only the collections used, once the space names a keeper (`NodeConfig.cache`). Absent: hold it whole. */
   readonly cache?: CacheConfig;
   /** Sync by shallow sets with the space's keepers (`NodeConfig.shallow`) */
-  readonly shallow?: boolean;
+  readonly shallow?: ShallowMode;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
   /** The limits on others' files as they are now; null fetches and keeps every file named, as a keeper does (spec 05 §16.6). Absent: a device's. */
@@ -155,7 +162,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // What this node holds (`node/space-holding.ts`): settled here, since sync asks on every hello.
   const holding = await openSpaceHolding({
     cache: deps.cache ?? null,
-    shallow: deps.shallow ?? false,
+    shallow: deps.shallow ?? null,
     adapter,
     storage,
     spaceId: space.id,
