@@ -620,6 +620,72 @@ describe('an account using a host, end to end over sockets', () => {
     assert.equal(offline.name, 'Test Hosting');
   });
 
+  test('a host that dropped the subscription is no longer a carrier, nor a keeper of any space', async () => {
+    const billing = createStripeBilling({
+      secretKey: 'sk_test_x',
+      webhookSecret: 'whsec_test',
+      fetch: async () => Response.json({ url: 'https://checkout.stripe.test/c/3' }),
+    });
+    const key = await provider.generateKeyPair();
+    const served = await startHost({ key, stores: memoryStores(), port: 0, billing, name: 'Test Hosting' });
+    open.push(served);
+    const url = `http://127.0.0.1:${served.port}`;
+    const me = await account();
+    const laptop = await onSockets(me, served.port);
+    const notes = await laptop.spaces.create({ name: 'Notes', visibility: 'private' });
+    const registry = (await laptop.account.space())!;
+    const keeperDids = async (spaceId: string) =>
+      (await laptop.spaces.access(spaceId)).keepers.map((k) => k.did);
+
+    const { subscription } = await laptop.hosting.use(url);
+    const body = JSON.stringify({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_3',
+          mode: 'payment',
+          payment_status: 'paid',
+          amount_total: 500,
+          metadata: { minca_fund: subscription },
+        },
+      },
+    });
+    const t = nowSeconds();
+    const v1 = createHmac('sha256', 'whsec_test').update(`${t}.${body}`).digest('hex');
+    await fetch(`${url}/host/billing/webhook`, {
+      method: 'POST',
+      headers: { 'stripe-signature': `t=${t},v1=${v1}` },
+      body,
+    });
+    const host = (await laptop.hosting.use(url)).host;
+    await until(
+      async () => (await keeperDids(registry)).includes(host) && (await keeperDids(notes.id)).includes(host),
+      10_000,
+      'the host to keep the personal space and Notes',
+    );
+
+    // The same host, having lost the subscription: it signs "none", and won't carry until paid again.
+    await served.close();
+    open.splice(open.indexOf(served), 1);
+    const again = await startHost({
+      key,
+      stores: memoryStores(),
+      port: served.port,
+      billing,
+      name: 'Test Hosting',
+    });
+    open.push(again);
+    const seen = await laptop.hosting.use(url);
+    assert.equal(seen.status?.state, 'none');
+    await until(
+      async () =>
+        !(await keeperDids(registry)).includes(host) && !(await keeperDids(notes.id)).includes(host),
+      10_000,
+      'the host to keep neither any more',
+    );
+    assert.deepEqual(await laptop.carriers.list(), []);
+  });
+
   test('one call on the laptop; with the laptop gone, a new phone gets everything from the host', async () => {
     const served = await startHost({
       key: await provider.generateKeyPair(),
