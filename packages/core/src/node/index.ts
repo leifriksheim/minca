@@ -11,7 +11,7 @@ export { indexedDBStores, folderStores, directoryStores, workerStores } from './
 export { browserWriterKeys } from './writer-keys.js';
 export type { ClaimedWriter, HeadStore, WriterKeySource } from './writer-keys.js';
 export { copyAccountData } from './copy.js';
-export { createCarrierNode } from './carrier.js';
+export { createCarrierNode, createCarryCore } from './carrier.js';
 export { watchNotifications } from './watch-notifications.js';
 export type { ActivityMatch, NotifyMatch, WatchNotificationsOptions } from './watch-notifications.js';
 export type {
@@ -23,8 +23,6 @@ export type {
   WakeView,
 } from './carrier.js';
 export type { AutomationProposal, AppAutomation, Wake } from '../space/own-automations.js';
-export { createHostNode, NotAllowedError, spaceSubscription } from './host.js';
-export type { HostConfig, HostNode, Invoice, Subscription, SubscriptionState } from './host.js';
 export type { CopyAccountParams, CopyResult } from './copy.js';
 export type { StoreFactory, StoreOptions, WorkerStores } from './stores.js';
 export type { Keeper } from '../space/roles.js';

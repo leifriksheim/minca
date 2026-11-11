@@ -1,7 +1,7 @@
 /**
  * `minca host`: a hosting service in one process.
  *
- * A host node (`packages/core/src/node/host.ts`) carrying every subscription's spaces, served
+ * A host node (`packages/cli/src/host-node.ts`) carrying every subscription's spaces, served
  * the way `minca run` serves: sockets at `/peer?space=`, the relay on every
  * other path. Plus what a home and a person need (spec/06-nodes-and-sessions.md, Hosts):
  *
@@ -39,10 +39,8 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
-  createHostNode,
   createP256Provider,
   HOST_DESCRIPTION_PATH,
-  NotAllowedError,
   parseSpaceInvite,
   signStatus,
   utf8Decode,
@@ -51,12 +49,11 @@ import {
   type BlobStore,
   type HostDescription,
   type HostLimits,
-  type HostNode,
   type HostStatus,
   type PayAnswer,
   type StoreFactory,
-  type Subscription,
 } from '@minca/core';
+import { createHostNode, NotAllowedError, type HostNode, type Subscription } from './host-node.js';
 import { isRecord, messageOf } from './json.js';
 import { queue } from './queue.js';
 import { createInboundPeers, serve, type Served } from './serve.js';

@@ -1140,7 +1140,7 @@ duplicates, which are harmless.
 `<space id>/` and under `files/<space id>/`.
 
 _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirror.ts`,
-`packages/core/src/node/space-mirrors.ts` (`openMirrors`), `packages/core/src/node/host.ts`. Tests:
+`packages/core/src/node/space-mirrors.ts` (`openMirrors`), `packages/cli/src/host-node.ts`. Tests:
 `packages/core/tests/mirror.test.ts`._
 
 ### 16.5 Planned: mirrors in your own storage

@@ -605,7 +605,7 @@ A node MAY bound the size of a frame on `/peer`; the reference node closes
 the socket (`1009`) on a frame over **16 MiB**. A client MUST tolerate being
 cut off there.
 
-_Source: `packages/cli/src/serve.ts` (`onPeer`, `parseHello`, `createSpacePeers`), `packages/core/src/node/node.ts` (`authenticator`), `packages/core/src/node/host.ts`. Tests: `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("two devices that are never online together converge through it"), `packages/core/tests/key-change.test.ts`._
+_Source: `packages/cli/src/serve.ts` (`onPeer`, `parseHello`, `createSpacePeers`), `packages/core/src/node/node.ts` (`authenticator`), `packages/cli/src/host-node.ts`. Tests: `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("two devices that are never online together converge through it"), `packages/core/tests/key-change.test.ts`._
 
 ### 5.4 In-process links
 

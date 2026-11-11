@@ -5,9 +5,9 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createUsageMeter } from '../src/node/usage.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
-import { utf8Decode } from '../src/utils/encoding.js';
+import { createUsageMeter } from '../src/host-usage.js';
+import { createMemoryAdapter } from '../../core/tests/helpers/memory-adapter.js';
+import { utf8Decode } from '../../core/src/utils/encoding.js';
 
 const DAY = 86_400;
 const alice = 'did:key:zDnaeAlice111111111111111111111111111111111111';

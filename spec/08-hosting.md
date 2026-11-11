@@ -250,7 +250,7 @@ it. The reference reaches those hosts for the registry; its account home also
 keeps each new account online with the first of them, when it keeps accounts
 with nothing paid (`packages/core/docs/sign-in.md`).
 
-_Source: `packages/core/src/session/hosting.ts` (`hostPeerAddress`), `packages/core/src/session/auth.ts` (`keepOnline`), `packages/core/src/node/host.ts`, `packages/core/src/node/node-hosting.ts` (`hosting`, `reachHosts`), `packages/core/src/node/space-peers.ts` (`useNodes`), `packages/cli/src/host.ts` (`startFund`, `watch`), `packages/cli/src/fund.ts`, `packages/cli/src/wallet.ts` (`request`, `scan`), `packages/cli/src/reminders.ts`. Tests: `packages/cli/tests/host.test.ts` ("the host API": all; "pay answers": all; "reaching a host at the address it names": all; "a host’s room": all; "wallet payments": all), `packages/cli/tests/reminders.test.ts`, `packages/core/tests/reach.test.ts` ("follows no host’s redirect…")._
+_Source: `packages/core/src/session/hosting.ts` (`hostPeerAddress`), `packages/core/src/session/auth.ts` (`keepOnline`), `packages/cli/src/host-node.ts`, `packages/core/src/node/node-hosting.ts` (`hosting`, `reachHosts`), `packages/core/src/node/space-peers.ts` (`useNodes`), `packages/cli/src/host.ts` (`startFund`, `watch`), `packages/cli/src/fund.ts`, `packages/cli/src/wallet.ts` (`request`, `scan`), `packages/cli/src/reminders.ts`. Tests: `packages/cli/tests/host.test.ts` ("the host API": all; "pay answers": all; "reaching a host at the address it names": all; "a host’s room": all; "wallet payments": all), `packages/cli/tests/reminders.test.ts`, `packages/core/tests/reach.test.ts` ("follows no host’s redirect…")._
 
 ### 1.1 Limits: free hosting, paid room, and the free line
 
@@ -468,7 +468,7 @@ to anyone who knows the space id, as its status is, so it tells them
 roughly how busy the space is, and, asked again and again, when its members
 are online.
 
-_Source: `packages/core/src/session/hosting.ts` (`HostLimits`, `hostLimits`, `OverSpace`, `SpaceUsage`, `describeHost`), `packages/core/src/node/usage.ts` (`createUsageMeter`), `packages/core/src/node/host.ts` (`plan`, `evaluate`, `sweep`, `setFull`, `holdForRoom`, `refuse`, `fullUntil`), `packages/cli/src/fund.ts` (`settle`, `daily`), `packages/core/src/node/carrier.ts` (`skip`, `onArrived`), `packages/cli/src/host.ts` (`usageOf`, `quotaFor`, `statusOf`), `packages/cli/src/serve.ts` (`onPeer`), `packages/cli/src/host-setup.ts` (`limitsFromEnv`). Tests: `packages/core/tests/usage.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts` ("a host with limits": all)._
+_Source: `packages/core/src/session/hosting.ts` (`HostLimits`, `hostLimits`, `OverSpace`, `SpaceUsage`, `describeHost`), `packages/cli/src/host-usage.ts` (`createUsageMeter`), `packages/cli/src/host-node.ts` (`plan`, `evaluate`, `sweep`, `setFull`, `holdForRoom`, `refuse`, `fullUntil`), `packages/cli/src/fund.ts` (`settle`, `daily`), `packages/core/src/node/carrier.ts` (`skip`, `onArrived`), `packages/cli/src/host.ts` (`usageOf`, `quotaFor`, `statusOf`), `packages/cli/src/serve.ts` (`onPeer`), `packages/cli/src/host-setup.ts` (`limitsFromEnv`). Tests: `packages/cli/tests/host-usage.test.ts`, `packages/cli/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts` ("a host with limits": all)._
 
 ## 2. A space paying for itself: its fund
 
@@ -621,7 +621,7 @@ its fund and until when, as its status is open. A pass lets its holder
 download the space's records sealed, as a carrier does; any member could hand
 one over already.
 
-_Source: `packages/core/src/node/host.ts` (`carrySpace`, `spaceSubscription`, `setPaidUntil`), `packages/core/src/node/carrier.ts` (`addPass`, `removePass`), `packages/core/src/session/hosting.ts` (`createSpaceHostClient`, `readPayAnswer`, `FundOffer`, `fundLines`, `describeHost`), `packages/cli/src/host.ts` (`answerSpace`, `startFund`, `refreshFund`), `packages/cli/src/hosted-bots.ts` (`botFundWords`), `packages/cli/src/fund.ts`, `packages/cli/src/stripe.ts` (`fund`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself": all; "bots a host runs": "a bot runs from its community’s fund"), `packages/cli/tests/fund.test.ts`, `packages/core/tests/fund-lines.test.ts`._
+_Source: `packages/cli/src/host-node.ts` (`carrySpace`, `spaceSubscription`, `setPaidUntil`), `packages/core/src/node/carrier.ts` (`addPass`, `removePass`), `packages/core/src/session/hosting.ts` (`createSpaceHostClient`, `readPayAnswer`, `FundOffer`, `fundLines`, `describeHost`), `packages/cli/src/host.ts` (`answerSpace`, `startFund`, `refreshFund`), `packages/cli/src/hosted-bots.ts` (`botFundWords`), `packages/cli/src/fund.ts`, `packages/cli/src/stripe.ts` (`fund`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself": all; "bots a host runs": "a bot runs from its community’s fund"), `packages/cli/tests/fund.test.ts`, `packages/core/tests/fund-lines.test.ts`._
 
 ## 3. Bots a host runs
 

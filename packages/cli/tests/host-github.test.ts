@@ -12,7 +12,7 @@ import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { createP256Provider } from '../../core/src/identity/crypto-p256.js';
 import { generateSeed } from '../../core/src/identity/recovery-code.js';
 import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
-import type { HostNode } from '../../core/src/node/host.js';
+import type { HostNode } from '../src/host-node.js';
 import { describeHost } from '../../core/src/session/hosting.js';
 import { startHost } from '../src/host.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';

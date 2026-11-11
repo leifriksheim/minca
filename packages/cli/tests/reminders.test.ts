@@ -7,7 +7,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import type { Subscription, SubscriptionState } from '../../core/src/node/host.js';
+import type { Subscription, SubscriptionState } from '../src/host-node.js';
 import { createP256Provider } from '../../core/src/identity/crypto-p256.js';
 import {
   createHostClient,

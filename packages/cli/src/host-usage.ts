@@ -1,5 +1,5 @@
 /**
- * @module node/usage
+ * @module host-usage
  * How much each space a host carries is used: how many accounts wrote there
  * and how many devices read, over a rolling window (spec 08 §1.1).
  *
@@ -8,10 +8,8 @@
  * Readers stay in memory: they only hint, and forgetting some counts fewer.
  * Not mirrored: a lost disk counts from nothing again.
  */
-import { queue } from '../utils/serial.js';
-import type { StorageAdapter } from '../types.js';
-import { bytesToHex, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
-import { sha256 } from '../utils/hash.js';
+import { bytesToHex, concatBytes, sha256, utf8Decode, utf8Encode, type StorageAdapter } from '@minca/core';
+import { queue } from './queue.js';
 
 const DAY = 86_400;
 const PREFIX = 'usage:';

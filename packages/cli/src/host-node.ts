@@ -1,5 +1,5 @@
 /**
- * @module node/host
+ * @module host-node
  * A carrier that never sleeps, for many accounts: what a hosting service runs.
  *
  * It is the extension's carrier (`node/carrier.ts`) with more than one carry
@@ -21,21 +21,29 @@
  * a line, and past it, after a grace period, only its own subscription carries
  * it (spec 08 §1.1).
  */
-import type { CryptoProvider, StorageAdapter, Version } from '../types.js';
-import type { HostLimits, OverSpace, SpaceUsage } from '../session/hosting.js';
-import { createUsageMeter } from './usage.js';
-import { createP256Provider } from '../identity/crypto-p256.js';
-import { createServerAuth } from '../network/peer-auth.js';
-import { utf8Decode, utf8Encode } from '../utils/encoding.js';
-import { isRecord } from '../utils/guards.js';
-import { createCarryCore, type CarrierEvent } from './carrier.js';
-import type { StoreFactory } from './stores.js';
-import type { NodeNetworkConfig } from './types.js';
-import type { BlobStore } from '../storage/blob-store.js';
-import { deleteMirrored } from '../storage/mirror.js';
-import { openPass } from '../space/pass.js';
-import { parseSpaceInvite } from '../space/space-manager.js';
-import { createListeners } from '../utils/events.js';
+import {
+  createCarryCore,
+  createListeners,
+  createP256Provider,
+  createServerAuth,
+  deleteMirrored,
+  openPass,
+  parseSpaceInvite,
+  utf8Decode,
+  utf8Encode,
+  type BlobStore,
+  type CarrierEvent,
+  type CryptoProvider,
+  type HostLimits,
+  type NodeNetworkConfig,
+  type OverSpace,
+  type SpaceUsage,
+  type StorageAdapter,
+  type StoreFactory,
+  type Version,
+} from '@minca/core';
+import { createUsageMeter } from './host-usage.js';
+import { isRecord } from './json.js';
 
 /** What names a space's own subscription at a host */
 const SPACE_SUBSCRIPTION_PREFIX = 'space:';

@@ -1,6 +1,6 @@
 /**
  * @module session/hosting
- * Talking to a host (`node/host.ts`): a subscription key, requests signed with
+ * Talking to a host (`packages/cli/src/host-node.ts`): a subscription key, requests signed with
  * it, and the few calls a device makes.
  *
  * A **subscription key** is a key pair made from a random seed when someone
