@@ -333,8 +333,9 @@ What it does then:
 - **`hello`**: `from` is in the room. If `from` is the greater DID (compared
   as strings) the receiver offers to it (§7.3); otherwise it says hello
   back, so the lesser one hears of it and offers: at most once every 10
-  seconds in that room, a hello back due sooner being said, once for all,
-  when the 10 seconds are up.
+  seconds in that room, together with the hello after a failed attempt
+  (§7.3), a hello back due sooner being said, once for all, when the 10
+  seconds are up.
 - **`offer`, `answer`**: handed to the mesh as a signal from `from` (§7.3).
 
 A receiver remembers, per room, each peer it heard and the `box` of the
@@ -905,9 +906,14 @@ _Source: `packages/core/src/network/mesh.ts` (`greet`, `onHandshake`, `admit`, `
   is not offered to again, so without a deadline the two stay apart until one
   restarts. A connection started by offering or answering that has not opened
   within an attempt timeout of the node's choosing is closed and forgotten,
-  and the next hello from that peer starts again.
+  and the next hello from that peer starts again. One that fails before it
+  opens is forgotten too, counts as a failed try, and the node that is the one
+  to offer to that peer says hello in the rooms it met the peer in, paced as a
+  hello back (§2: at most once per 10 s in a room, however often it is asked),
+  so the peer's hello back brings the next offer. A peer that fails every
+  offer on purpose can't make a node say hello any faster than a hello back.
 
-_Source: `packages/core/src/network/mesh.ts` (`meet`, `offerTo`, `onSignal`, `watch`, `meetAgain`). Tests: `packages/core/tests/network-manager.test.ts`, `packages/core/tests/relay-socket.test.ts` ("the mesh offers again")._
+_Source: `packages/core/src/network/mesh.ts` (`meet`, `offerTo`, `onSignal`, `watch`, `lost`). Tests: `packages/core/tests/network-manager.test.ts`, `packages/core/tests/relay-socket.test.ts` ("the mesh offers again")._
 
 ### 7.4 Limits
 

@@ -13,7 +13,8 @@ import { createEmitter } from '../src/utils/events.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createNetworkManager, type NetworkManager } from '../src/network/network-manager.js';
 import { createMesh } from '../src/network/mesh.js';
-import type { PeerTransport, PeerTransportEvents } from '../src/network/transport.js';
+import { createRendezvous } from '../src/network/rendezvous.js';
+import type { PeerTransport, PeerTransportEvents, SignalledTransport } from '../src/network/transport.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, didToPublicKey, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
@@ -198,6 +199,38 @@ describe('sync through a transport', () => {
   });
 });
 
+/** Says yes the first time it is asked, and no after */
+function firstOnly(): (peerId: string) => boolean {
+  let asked = false;
+  return () => !asked && (asked = true);
+}
+
+/**
+ * A transport whose connections the predicate picks fail after the answer,
+ * before they open, as a WebRTC connection does when its DTLS handshake fails.
+ */
+function failingConnections(
+  transport: SignalledTransport,
+  failsConnectionTo: (peerId: string) => boolean,
+): SignalledTransport {
+  const told = createEmitter<PeerTransportEvents>();
+  return {
+    ...transport,
+    on: (event, callback) => {
+      told.on(event, callback);
+      transport.on(event, callback);
+    },
+    off: (event, callback) => {
+      told.off(event, callback);
+      transport.off(event, callback);
+    },
+    handleAnswer: async (peerId, answer) => {
+      if (!failsConnectionTo(peerId)) return transport.handleAnswer(peerId, answer);
+      told.emit('disconnected', peerId);
+    },
+  };
+}
+
 describe('the mesh, through real relays', () => {
   const randomPort = () => 20_000 + Math.floor(Math.random() * 20_000);
   const ports = [randomPort(), randomPort()] as const;
@@ -232,7 +265,11 @@ describe('the mesh, through real relays', () => {
     who: Session,
     relays: string[],
     namespace: string,
-    options: { authTimeoutMs?: number } = {},
+    {
+      failsFirstConnection = false,
+      failsEveryConnectionTo,
+      ...options
+    }: { authTimeoutMs?: number; failsFirstConnection?: boolean; failsEveryConnectionTo?: string } = {},
   ) => {
     const opened: string[] = [];
     const created = createMesh({
@@ -242,7 +279,9 @@ describe('the mesh, through real relays', () => {
       createTransport: () => {
         const transport = hub.signalled(who.did, namespace);
         transport.on('connected', (peer) => opened.push(peer));
-        return transport;
+        if (failsEveryConnectionTo)
+          return failingConnections(transport, (peer) => peer === failsEveryConnectionTo);
+        return failsFirstConnection ? failingConnections(transport, firstOnly()) : transport;
       },
       ...options,
     });
@@ -399,6 +438,66 @@ describe('the mesh, through real relays', () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.equal(seenPlain.connected.includes(C.did), false);
     for (const room of [a, c, plainA, plainC]) room.disconnect();
+  });
+
+  test('a connection that fails before it opens is offered again, without waiting for the next hello', async () => {
+    const meshA = mesh(A, [relay], 'retry', { failsFirstConnection: true });
+    const meshB = mesh(B, [relay], 'retry', { failsFirstConnection: true });
+    const [a, b] = [meshA.join('room'), meshB.join('room')];
+    const [seenA, seenB] = [collect(a), collect(b)];
+    try {
+      for (const room of [a, b]) await room.connect();
+      // The hello back is paced at one per 10 s; the next periodic hello is two minutes away.
+      await until(
+        () => seenA.connected.length === 1 && seenB.connected.length === 1,
+        15_000,
+        'the second offer to connect them',
+      );
+    } finally {
+      for (const room of [a, b]) room.disconnect();
+    }
+  });
+
+  test('a peer that fails every offer can’t make a node say hello faster than a hello back', async () => {
+    // A offers to C, the greater, and C makes every connection fail after its answer, as it can make DTLS
+    // fail, then says hello again at once to be offered to again. B hears what A says in the room.
+    const victimMesh = mesh(A, [relay], 'fails-every-offer', { failsEveryConnectionTo: C.did });
+    const victim = victimMesh.join('room');
+    const bystander = createRendezvous([relay], B);
+    const attacker = createRendezvous([relay], C);
+    let victimHellosHeard = 0;
+    bystander.on('peer-joined', (from) => from === A.did && victimHellosHeard++);
+    attacker.on('peer-joined', (from) => {
+      if (from !== A.did) return;
+      attacker.leave('room');
+      attacker.join('room');
+    });
+    attacker.on('signal', (signal) => {
+      if (signal.type === 'offer')
+        attacker.signal(
+          'answer',
+          A.did,
+          { type: 'answer', sdp: `answer:${C.did}->${A.did}` },
+          'room',
+          signal.box,
+        );
+    });
+    try {
+      for (const peer of [bystander, attacker]) await peer.connect();
+      for (const peer of [bystander, attacker]) peer.join('room');
+      await victim.connect();
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+      // Its hello on joining, and one hello back; the retries share the hello back's 10 s. Unpaced, it was 39.
+      assert.ok(victimHellosHeard <= 3, `the bystander heard ${victimHellosHeard} hellos from the victim`);
+      // Each failure counts as a try, so the next attempt waits longer before it is given up.
+      const triesWithAttacker = () =>
+        victimMesh.status().connecting.find((one) => one.peer === C.did)?.tries ?? 0;
+      await until(() => triesWithAttacker() >= 1, 15_000, 'a failure to count as a try');
+    } finally {
+      victim.disconnect();
+      bystander.disconnect();
+      attacker.disconnect();
+    }
   });
 
   test('two spaces shared by two devices use one connection', async () => {
