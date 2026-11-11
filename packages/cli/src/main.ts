@@ -953,7 +953,11 @@ async function runNodeAction(command: string, args: string[], globals: Globals):
     const since = Date.now();
     const result = await runAction(node, action.name, input);
     if (space !== undefined && !action.readOnly) {
-      const said = await keptAfter(node, space, since);
+      // Unconfirmed, what was written is still printed, so it is read back, not written twice.
+      const said = await keptAfter(node, space, since).catch((error: unknown) => {
+        print(result);
+        throw error;
+      });
       if (said) stderr(said);
     }
     // What others wrote, going to a model: data, never instructions, as the MCP tools say.

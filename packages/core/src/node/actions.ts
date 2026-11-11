@@ -233,6 +233,7 @@ function standardInFull(name: string) {
 
 /** Records one records_put writes at most, so a call ends while a chat app still waits for it */
 const MAX_RECORDS_PUT = 100;
+const RECORD_TO_PUT_FIELDS = ['collection', 'body', 'key', 'links'];
 const RECORD_TO_PUT_SHAPE = '{ collection, body, key?, links? }';
 interface RecordToPut {
   readonly collection: string;
@@ -242,6 +243,7 @@ interface RecordToPut {
 }
 const isRecordToPut = (value: unknown): value is RecordToPut =>
   isRecord(value) &&
+  Object.keys(value).every((field) => RECORD_TO_PUT_FIELDS.includes(field)) &&
   typeof value.collection === 'string' &&
   isRecord(value.body) &&
   (value.key === undefined || typeof value.key === 'string') &&
@@ -915,7 +917,8 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'JSON object. Each gets a fresh key of this account’s unless a name is given, which is put in this account’s namespace. ' +
       'They are written in order. A link needs the key of a record already written, so put what others link to in an ' +
       'earlier call. Each is signed by this node and synced to the space. Gives one result ' +
-      'per record, in order: { key } of the record written, or { error } saying why that one was refused; the others still count.',
+      'per record, in order: { key } of the record written, or { error } saying why that one was refused; the others ' +
+      'still count. When none is written, the call fails, saying why for each.',
     input: {
       type: 'object',
       properties: {
@@ -956,6 +959,11 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
           );
         results.push(result);
       }
+      const nothingWritten = results.every((result) => 'error' in result);
+      if (nothingWritten)
+        throw new Error(
+          `Nothing was written: ${results.map((result, i) => ('error' in result ? `records[${i}]: ${result.error}` : '')).join('; ')}`,
+        );
       return results;
     },
   },

@@ -557,6 +557,14 @@ describe('actions', () => {
       runAction(node, 'records_put', { space, records: [{ collection: 'app.note' }] }),
       /records\[0\] must be/,
     );
+    await assert.rejects(
+      runAction(node, 'records_put', {
+        space,
+        records: [{ collection: 'app.note', body: { text: 'linked?' }, link: [{ rel: 'about', to: 'x' }] }],
+      }),
+      /records\[0\] must be/,
+      'a misspelt field is refused, not dropped',
+    );
   });
 
   test('a record reads without the bookkeeping every sound version shares', async () => {
