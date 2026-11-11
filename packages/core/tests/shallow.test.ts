@@ -444,17 +444,23 @@ describe('a node that syncs shallow', () => {
     assert.ok(Date.now() - started < 5_000, 'no wait for a gap that never fills');
   });
 
-  test('a version a keeper vouched for goes once the one before shows it breaks the chain', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
+  /** Alice's card edited 10 times, kept by Bob; Bob, keeper and editor, slips in what `skipAhead` signs, past his gatekeeper */
+  async function frozenOnNewDevice(
+    hub: FakeHub,
+    skipAhead: (
+      bob: Awaited<ReturnType<typeof personOn>>,
+      space: string,
+      card: { key: string; first: string; second: string },
+    ) => Promise<Version>,
+  ) {
     const alice = await personOn(hub);
     const bob = await personOn(hub);
     const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'public' });
     await hold(alice.node, space);
     await alice.node.collections.define(space, { name: 'app.card', schema: { type: 'object' } });
     const first = await alice.node.records.put(space, 'app.card', { n: 0 });
-    const { key } = first;
-    const next = await alice.node.records.update(space, key, { n: 1 });
-    for (let n = 2; n <= 10; n++) await alice.node.records.update(space, key, { n });
+    const second = await alice.node.records.update(space, first.key, { n: 1 });
+    for (let n = 2; n <= 10; n++) await alice.node.records.update(space, first.key, { n });
     await bob.node.spaces.join(await alice.node.spaces.invite(space));
     await hold(bob.node, space);
     await joined(bob.node, space);
@@ -468,12 +474,11 @@ describe('a node that syncs shallow', () => {
       (await createStorageProvider(await who.stores(`spaces/${space}`)).sums()).get('app.card')?.count ?? 0;
     await until(async () => (await versionsAt(bob)) === 11, 10_000, 'Bob to keep every edit');
 
-    // Bob, keeper and editor, skips ahead to a `seq` nobody can outrank, past his own gatekeeper.
     await letGo(bob.node, space);
-    const frozen = await forge(bob, space, {
-      collection: 'app.card',
-      body: { n: 'frozen' },
-      version: { key, seq: Number.MAX_SAFE_INTEGER, prev: next.version, genesis: first.version },
+    const frozen = await skipAhead(bob, space, {
+      key: first.key,
+      first: first.version,
+      second: second.version,
     });
     await hold(bob.node, space);
 
@@ -482,9 +487,9 @@ describe('a node that syncs shallow', () => {
     await hold(dave.node, space);
     await joined(dave.node, space);
     await until(async () => (await versionsAt(dave)) >= 11, 20_000, 'the whole history');
-    await alice.node.records.update(space, key, { n: 11 });
+    await alice.node.records.update(space, first.key, { n: 11 });
     await until(
-      async () => (await dave.node.records.get<{ n: unknown }>(space, key))?.body?.n === 11,
+      async () => (await dave.node.records.get<{ n: unknown }>(space, first.key))?.body?.n === 11,
       15_000,
       'the latest honest edit',
     );
@@ -492,5 +497,54 @@ describe('a node that syncs shallow', () => {
       await createStorageProvider(await dave.stores(`spaces/${space}`)).getVersion(frozen.id),
       null,
     );
+  }
+
+  const frozenAt = (prev: string, card: { key: string; first: string }, seq = Number.MAX_SAFE_INTEGER) => ({
+    collection: 'app.card',
+    body: { n: 'frozen' },
+    version: { key: card.key, seq, prev, genesis: card.first },
+  });
+
+  test('a version a keeper vouched for goes once the history shows it breaks the chain', async () => {
+    await frozenOnNewDevice(createFakeHub({ latencyMs: 1 }), (bob, space, card) =>
+      forge(bob, space, frozenAt(card.second, card)),
+    );
+  });
+
+  test('a version a keeper vouched for goes once the history shows nobody has the one before', async () => {
+    await frozenOnNewDevice(createFakeHub({ latencyMs: 1 }), (bob, space, card) =>
+      forge(bob, space, frozenAt('bafkreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', card)),
+    );
+  });
+
+  test('a version a keeper vouched for goes when what it follows breaks the chain, and so does that', async () => {
+    await frozenOnNewDevice(createFakeHub({ latencyMs: 1 }), async (bob, space, card) => {
+      const broken = await forge(bob, space, frozenAt(card.second, card, Number.MAX_SAFE_INTEGER - 1));
+      return forge(bob, space, frozenAt(broken.id, card));
+    });
+  });
+
+  test('shallow at first, with a keeper that never says it is level, it takes the history anyway', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, bob, space, versionsAt } = await editedSpace(hub, 20);
+    // One version every other node refuses, in the keeper's store: their shallow sets never match.
+    const other = await alice.node.records.put(space, 'app.card', { other: 0 });
+    await until(
+      async () => (await bob.node.records.get(space, other.key)) !== null,
+      10_000,
+      'Bob to keep it',
+    );
+    await letGo(bob.node, space);
+    await forge(bob, space, {
+      collection: 'app.card',
+      body: { other: 'refused' },
+      version: { key: other.key, seq: 1000, prev: other.version, genesis: other.version },
+    });
+    await hold(bob.node, space);
+    const dave = await personOn(hub, { shallow: 'first' });
+    await dave.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(dave.node, space);
+    await joined(dave.node, space);
+    await until(async () => (await versionsAt(dave)) === 22, 45_000, 'every edit, after a while');
   });
 });

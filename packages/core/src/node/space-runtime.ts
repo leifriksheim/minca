@@ -37,7 +37,7 @@ import type { SpaceRecord } from '../space/space-manager.js';
 import type { Delegation } from '../identity/ucan.js';
 import { actsForAccount } from '../identity/abilities.js';
 import { contactKeyPair } from '../identity/contact-key.js';
-import { ownedKey } from '../records/key.js';
+import { hasLineKeyForm, ownedKey } from '../records/key.js';
 import { chainProblem, supersedes } from '../records/version.js';
 import { cidOfDigest } from '../utils/hash.js';
 import { topicTag } from '../records/topics.js';
@@ -175,6 +175,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     access: () => history.access(),
     sync: () => peers.sync,
     connectedPeers: () => peers.connectedPeers(),
+    dropBrokenChains: () => dropBrokenChains(),
     recordsChanged: () => recordsChanged(),
   });
 
@@ -286,60 +287,49 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // Whatever its key signed takes a place in that key's log, allowed or not: a second at one place is a fork.
     if ((await versions.judge(version)).verified) await lines.placeInLog(version);
     // From a keeper this node syncs shallow with: the chain below it is the keeper's to have checked.
-    const vouched = from !== undefined && holding.vouches(from);
-    const verdict = await standing.admission(version, vouched);
-    if (vouched && verdict.ok) await awaitVersionBefore(version);
-    return verdict;
+    // Not in a line, which is held whole: its chain is here to check.
+    const vouched = from !== undefined && holding.vouches(from) && !hasLineKeyForm(version.key);
+    return standing.admission(version, vouched);
   }
 
   /**
-   * Versions a keeper vouched for without the one before (05 §5.1), by that
-   * one's id: kept across runs, and checked against it once it arrives.
+   * Before a node that held the space shallow says it holds the history: the
+   * chain under each record's current version, down to its first, as a node
+   * holding the space whole checked each version on arrival (02 §4.7). What a
+   * keeper vouched for and breaks it, or names a version nobody has, goes,
+   * with what follows it.
    */
-  const VOUCHED_PREFIX = 'vouched/';
-  const vouchedAwaiting = new Set(
-    (await adapter.list(VOUCHED_PREFIX)).map((name) => name.slice(VOUCHED_PREFIX.length).split('/')[0]!),
-  );
-
-  async function awaitVersionBefore(version: Version): Promise<void> {
-    if (version.seq === 0 || typeof version.prev !== 'string' || (await storage.getVersion(version.prev)))
-      return;
-    vouchedAwaiting.add(version.prev);
-    await adapter.put(`${VOUCHED_PREFIX}${version.prev}/${version.id}`, new Uint8Array());
-  }
-
-  /**
-   * Checks what a keeper vouched for against the versions before them that
-   * just arrived, as any node checks a chain (02 §4.7). One that breaks it
-   * goes, as a node holding the space whole refused it; the best version left
-   * of its record is current again, its body asked of the peers.
-   */
-  async function checkVouchedChains(placed: ReadonlyArray<Version>): Promise<void> {
-    for (const before of placed) {
-      if (!vouchedAwaiting.delete(before.id)) continue;
-      for (const name of await adapter.list(`${VOUCHED_PREFIX}${before.id}/`)) {
-        await adapter.delete(name);
-        const vouched = await storage.getVersion(name.slice(name.lastIndexOf('/') + 1));
-        if (!vouched || !chainProblem(vouched, before)) continue;
-        await storage.removeVersion(vouched.id);
-        const best = await findBestHeldVersion(vouched.collection, vouched.key);
-        if (best) {
-          await storage.addVersion(best);
-          peers.sync.ask(best.collection, [best.id]);
-        }
-        recordsChanged();
-      }
+  async function dropBrokenChains(): Promise<void> {
+    let dropped = false;
+    for (const current of await index.everyCurrent()) {
+      if (await chainHoldsUnder(current)) continue;
+      await dropBrokenVersionsOf(current.collection, current.key);
+      dropped = true;
     }
+    if (dropped) recordsChanged();
   }
 
-  /** The version of a record that supersedes every other held, stubs included: a whole collection's read, so only when one went */
-  async function findBestHeldVersion(collection: string, key: string): Promise<Version | null> {
+  async function chainHoldsUnder(version: Version): Promise<boolean> {
+    for (let at = version; at.seq > 0;) {
+      const before = typeof at.prev === 'string' ? await storage.getVersion(at.prev) : null;
+      if (!before || chainProblem(at, before)) return false;
+      at = before;
+    }
+    return true;
+  }
+
+  /** Drops a record's versions whose chain breaks; the best left is current, its body asked of the peers */
+  async function dropBrokenVersionsOf(collection: string, key: string): Promise<void> {
     let best: Version | null = null;
     for (const item of (await storage.items(collection)).items) {
       const version = await storage.getVersion(cidOfDigest(item.id));
-      if (version?.key === key && (!best || supersedes(version, best))) best = version;
+      if (version?.key !== key) continue;
+      if (!(await chainHoldsUnder(version))) await storage.removeVersion(version.id);
+      else if (!best || supersedes(version, best)) best = version;
     }
-    return best;
+    if (!best) return;
+    await storage.addVersion(best);
+    peers.sync.ask(best.collection, [best.id]);
   }
 
   // ─── Mirrors and files ─────────────────────────────────────────────
@@ -418,7 +408,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   function recordsChanged(placed?: ReadonlyArray<Version>): void {
     filesChanged();
     if (placed) holding.noteArrived(placed);
-    if (placed && vouchedAwaiting.size > 0) void checkVouchedChains(placed).catch(() => {});
     index.linksChanged();
     emit({ type: 'records', space: space.id });
     mirrors.changed();
@@ -449,6 +438,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     keys,
     holds: holding.holds,
     shallowWith: holding.shallowWith,
+    lacksHistory: holding.lacksHistory,
     files,
     emit,
     statusChanged,

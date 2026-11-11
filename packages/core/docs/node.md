@@ -429,12 +429,14 @@ device doesn't need them to show the record. With `config.shallow`, a node
 syncs a space with its keepers by **shallow sets**: each record's current and
 first versions, what its writer retained, and every version in a line, not
 every superseded stub. A keeper's version comes without the chain below it,
-as the keeper's to have checked, and is checked here once the version before
-arrives; signatures, standing and first versions are checked at once. With
+as the keeper's to have checked, and checked here before the node counts as
+holding the history; signatures, standing and first versions are checked at
+once. With
 no keeper connected it syncs whole, so a keeper that is away only slows it.
 
 - `'first'`: a space this node holds no records of syncs shallow until it is
-  level with a keeper, or with any peer on whole sets, then whole. Usable at once; the history follows. Apps
+  level with a keeper, or with a peer holding the history on whole sets, or
+  for 30 seconds at most, then whole. Usable at once; the history follows. Apps
   connected to an account home do this by default.
 - `'always'`: it never takes more. For a node that lives for a session, as a
   remote MCP session's.
@@ -443,8 +445,9 @@ A space that names no keepers, or this node among them, syncs whole. Until
 the node has caught up with a whole-space peer it holds only `sys.*`, so it
 knows which. A change taking power from someone (`unassign`, `removeMember`,
 `stepDown`) waits, up to 30 seconds, until a node that held the space shallow
-has been level with a peer on whole sets, so its cutoff covers everything
-they wrote; `'always'` refuses at once. `revoke` never waits.
+holds the history: level on whole sets with a peer that holds it, every
+chain checked. A node lacking it says so in its hello, so no other takes it
+from there. Its cutoff then covers everything they wrote; `'always'` refuses at once. `revoke` never waits.
 [Spec 05 §5.1](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
 ### Planned: caches that widen and trim

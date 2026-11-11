@@ -67,14 +67,16 @@ export interface SyncEngineConfig {
    * afresh for every hello. A peer that asks is answered in kind anyway.
    */
   readonly shallowWith?: (peerId: string) => boolean;
+  /** Whether this node lacks the space's history (05 §5.1), asked afresh for every hello */
+  readonly lacksHistory?: () => boolean;
   /** Where a files message from a peer goes (spec 05 §16.6); without it, they are dropped */
   readonly files?: (peerId: string, message: unknown) => Promise<void>;
 }
 
 /**
- * - `synced` (peer, full, levelShallow, wholeSets): nothing left in flight with the peer; `full` when it
- *   holds every collection, `levelShallow` when it just answered this node's ask with shallow sums that
- *   all match, `wholeSets` when the two compared whole sets
+ * - `synced` (peer, full, levelShallow, wholeHistory): nothing left in flight with the peer; `full` when
+ *   it holds every collection, `levelShallow` when it just answered this node's ask with shallow sums
+ *   that all match, `wholeHistory` when the two compared whole sets and the peer said it lacks no history
  * - `level` (peer, collection, full): this node holds what the peer holds of a collection
  * - `stored` (peer, ids): the peer says it now has these versions
  * - `version-received` (version): each version taken in
@@ -82,7 +84,7 @@ export interface SyncEngineConfig {
  * - `rejected` (peer, version, reason), `error` (error)
  */
 interface SyncEvents {
-  synced: (peer: string, full: boolean, levelShallow: boolean, wholeSets: boolean) => void;
+  synced: (peer: string, full: boolean, levelShallow: boolean, wholeHistory: boolean) => void;
   level: (peer: string, collection: string, full: boolean) => void;
   stored: (peer: string, ids: string[]) => void;
   'version-received': (version: Version) => void;
@@ -220,6 +222,8 @@ interface PeerState {
   shallow: boolean;
   /** Whether this node's last hello to it asked to sync by shallow sets */
   askedShallow: boolean;
+  /** Whether its last hello said it lacks the space's history */
+  lacksHistory: boolean;
 }
 
 /** What one message brought in: the versions stored, and the versions they wait for */
@@ -442,6 +446,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       sums: await ourSums(holds, shallowWith(peerId)),
       ...(reply ? { reply } : {}),
       ...(askShallow ? { shallow: true } : {}),
+      ...(config.lacksHistory?.() ? { lacksHistory: true } : {}),
     });
   };
 
@@ -453,6 +458,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     theirHolds: unknown,
     reply: boolean,
     theirShallow: boolean,
+    theirHistoryLacking: boolean,
   ) => {
     if (typeof theirs !== 'object' || theirs === null) return;
     const names = Object.keys(theirs);
@@ -460,6 +466,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const state = stateOf(peerId);
     state.holds = readHolds(theirHolds);
     state.shallow = theirShallow;
+    state.lacksHistory = theirHistoryLacking;
     const holds = ourHolds();
     const ours = await ourSums(holds, shallowWith(peerId));
     // Every collection this node holds counts, even one it has nothing of yet.
@@ -496,7 +503,9 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const settleIfDone = (peerId: string, levelShallow = false) => {
     if (busy(peerId)) return;
     level.add(peerId);
-    emit('synced', peerId, states.get(peerId)?.holds === 'all', levelShallow, !shallowWith(peerId));
+    const state = states.get(peerId);
+    const wholeHistory = !shallowWith(peerId) && !state?.lacksHistory;
+    emit('synced', peerId, state?.holds === 'all', levelShallow, wholeHistory);
   };
 
   const sendRound = (peerId: string, session: Session, message: Uint8Array) =>
@@ -682,7 +691,14 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       if (!msg || !peers.has(peerId)) return;
       switch (msg.type) {
         case 'hello':
-          return await onHello(peerId, msg.sums, msg.holds, msg.reply === true, msg.shallow === true);
+          return await onHello(
+            peerId,
+            msg.sums,
+            msg.holds,
+            msg.reply === true,
+            msg.shallow === true,
+            msg.lacksHistory === true,
+          );
         case 'reconcile':
           return await onReconcile(peerId, msg.id, msg.collection, msg.message, msg.shallow === true);
         case 'reconciled':
@@ -810,6 +826,7 @@ const newPeerState = (): PeerState => ({
   holds: 'all',
   shallow: false,
   askedShallow: false,
+  lacksHistory: false,
 });
 
 const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;

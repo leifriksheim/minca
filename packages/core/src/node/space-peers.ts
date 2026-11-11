@@ -173,6 +173,8 @@ export interface PeersDeps extends SpaceBase {
   readonly admit: (version: Version, from?: string) => Promise<Standing>;
   /** Whether to sync with a peer by shallow sets (`space-holding.ts`) */
   readonly shallowWith: (peer: string) => boolean;
+  /** Whether this node lacks the space's history, holding it shallow or taking the rest (05 §5.1) */
+  readonly lacksHistory: () => boolean;
   readonly recordsChanged: (placed?: ReadonlyArray<Version>) => void;
   readonly filesChanged: () => void;
   readonly onArrived: ((version: Version) => void) | undefined;
@@ -231,6 +233,7 @@ export async function openPeers(deps: PeersDeps) {
     self: session.did,
     holds: deps.holds,
     shallowWith: deps.shallowWith,
+    lacksHistory: deps.lacksHistory,
     files: (peer, message) => files.onMessage(peer, message),
     sendToPeer: (peerId, message) => {
       routes.get(peerId)?.send(peerId, { type: 'sync', from: session.did, payload: message });

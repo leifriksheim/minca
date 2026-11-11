@@ -27,6 +27,8 @@ const DAY = 24 * HOUR;
 const CACHE_KEY = 'cache';
 /** There while this node takes the history of a space it held shallow */
 const TAKING_HISTORY_KEY = 'taking-history';
+/** How long a node shallow at first waits for a keeper to say it is level before it takes the history anyway */
+const DEEPEN_AFTER_MS = 30_000;
 /** One entry per write of this node's still waiting for keepers: `pending/<id>` */
 const PENDING_PREFIX = 'pending/';
 /** How many pending writes a node holding a whole space keeps track of */
@@ -109,6 +111,8 @@ export interface HoldingContext {
   /** Read when used: sync is made after what this node holds is known */
   readonly sync: () => SyncEngine;
   readonly connectedPeers: () => string[];
+  /** Drops what a keeper vouched for and the space's history shows breaks a chain: before the history counts as held */
+  readonly dropBrokenChains: () => Promise<void>;
   readonly recordsChanged: () => void;
 }
 
@@ -126,6 +130,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     access,
     sync,
     connectedPeers,
+    dropBrokenChains,
     recordsChanged,
   } = ctx;
   const cacheState = await loadCacheState(adapter);
@@ -172,11 +177,30 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     statusChanged();
   }
 
-  /** Level with a peer on whole sets after holding the space shallow: it holds the history the peer does */
-  function noteHistoryHeld(): void {
-    if (!takingHistory || shallowNow) return;
-    takingHistory = false;
-    void adapter.delete(TAKING_HISTORY_KEY).catch(() => {});
+  /**
+   * Level on whole sets with a peer holding the history, after holding the
+   * space shallow: it holds what the peer does, once the chains it took on a
+   * keeper's word are checked.
+   */
+  let checkingChains = false;
+  async function noteHistoryHeld(): Promise<void> {
+    if (!takingHistory || shallowNow || checkingChains) return;
+    checkingChains = true;
+    try {
+      await dropBrokenChains();
+      takingHistory = false;
+      await adapter.delete(TAKING_HISTORY_KEY);
+    } finally {
+      checkingChains = false;
+    }
+  }
+
+  /** A keeper that never says this node is level, or stalls, doesn't keep it shallow: it deepens after a while anyway */
+  let deepenTimer: ReturnType<typeof setTimeout> | null = null;
+  function deepenInAWhile(): void {
+    if (shallow !== 'first' || !shallowNow || deepenTimer) return;
+    deepenTimer = setTimeout(deepen, DEEPEN_AFTER_MS);
+    unref(deepenTimer);
   }
   const holds = (): Holds => {
     // Syncing shallow: only the space's own until it knows whether keepers name themselves to vouch.
@@ -423,18 +447,20 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   /** Starts holding: saves what was settled, follows sync, and drops what goes unused */
   function start(): void {
     saveCache();
-    sync().on('synced', (peer: string, full: boolean, levelShallow: boolean, wholeSets: boolean) => {
+    if (cacheState.settled) deepenInAWhile();
+    sync().on('synced', (peer: string, full: boolean, levelShallow: boolean, wholeHistory: boolean) => {
       // Level with a keeper on what it holds shallow: usable now, so the rest comes next.
       if (full && levelShallow && vouches(peer)) return deepen();
-      // Level on whole sets with a peer holding the space whole: so is this node now.
-      if (full && wholeSets && cacheState.settled) {
+      // Level on whole sets with a peer holding the space's history: so does this node now.
+      if (full && wholeHistory && cacheState.settled) {
         deepen();
-        noteHistoryHeld();
+        void noteHistoryHeld().catch(() => {});
       }
       if ((!cache && !shallowNow) || !full || cacheState.settled) return;
       // Caught up with a node holding everything: the access history here is the space's now.
       cacheState.settled = true;
       saveCache();
+      deepenInAWhile();
       void refreshHolds()
         // Syncing shallow, what it holds just grew past the space's own.
         .then(() => shallowNow && sync().notifyPeers(connectedPeers()))
@@ -473,6 +499,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     start,
     /** Whether this node holds the space's history, as one that never held it shallow does */
     holdsHistory: () => !takingHistory,
+    lacksHistory: () => takingHistory,
     /** What this node holds now, for its status */
     held: () => (partial ? Object.keys(cacheState.used).sort() : ('all' as const)),
     /** How many of this node's writes still wait for keepers */
@@ -480,6 +507,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     kept,
     async close(): Promise<void> {
       if (dropTimer) clearInterval(dropTimer);
+      if (deepenTimer) clearTimeout(deepenTimer);
       await tidying;
       await flushCache();
     },

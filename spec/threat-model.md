@@ -1346,19 +1346,24 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     collections 03 §8.2 keeps in the clear, without the space key.
   - It cannot alter or forge what it serves (02 §3).
   - A node syncing a space it keeps by shallow sets (05 §5.1) takes its word
-    for the chain below each version it sends, until the versions below
-    arrive: it can show such a node a version that skipped a `seq`, which a
-    node holding the space whole refuses (02 §4.7), freezing or reordering a
-    record there. Once the version before arrives the node checks the chain
-    and drops what breaks it; a node shallow always never sees it. Its
+    for the chain below each version it sends, outside lines: it can show
+    such a node a version that skipped a `seq`, or follows one nobody has,
+    which a node holding the space whole refuses (02 §4.7), freezing or
+    reordering a record there. Before the node counts as holding the
+    history it checks every record's chain down to its first version and
+    drops what breaks it; a node shallow always never does. Keepers include
+    an account's carriers, of its registry and contacts space too (06 §4), so
+    this reaches every space the account manages. Its
     signature, its author's standing and its first version are still checked,
     so it can't forge a record or let in someone who may not write. While no
     keeper is connected the node syncs whole, so a keeper away leaves it no
     further behind than its other peers; a keeper connected and withholding
-    holds it back until it deepens, or for good if it stays shallow. A line
+    holds a node shallow at first back for half a minute at most, a node
+    shallow always for good. A node lacking the history says so, so another
+    can't take it from there. A line
     is held whole, so a
     double spend fails there as on any node (09 §7.3).
-    _Tests: `packages/core/tests/shallow.test.ts` ("a version a keeper vouched for goes once the one before shows it breaks the chain", "a new device with its keeper away takes the latest edits whole from any other peer", "a double spend counts on no shallow node: a line is held whole, losing twins too")._
+    _Tests: `packages/core/tests/shallow.test.ts` ("a version a keeper vouched for goes once the history shows it breaks the chain", "… shows nobody has the one before", "… when what it follows breaks the chain, and so does that", "shallow at first, with a keeper that never says it is level, it takes the history anyway", "a new device with its keeper away takes the latest edits whole from any other peer", "a double spend counts on no shallow node: a line is held whole, losing twins too"); `packages/core/tests/sync.test.ts` ("level on whole sets with a peer lacking the history is not holding it")._
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).

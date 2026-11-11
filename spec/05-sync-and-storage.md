@@ -268,13 +268,14 @@ Ids below are version ids (strings, §2). Byte strings are `base64url`.
 
 "Here is what I hold, and a fingerprint of each collection I keep."
 
-| Field     | Type                       | Meaning                                                                                                                                                     |
-| --------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `type`    | `"hello"`                  |                                                                                                                                                             |
-| `holds`   | `"all"` \| `string[]`      | Optional. `"all"`, or the collections held besides `sys.*` (§5). Absent means `"all"`.                                                                      |
-| `sums`    | `{ [collection]: string }` | For each held collection the sender keeps at least one version of: the collection's fingerprint (§3.3) over all its items, as 32 lower-case hex characters. |
-| `reply`   | `true`                     | Optional. Marks a hello sent in answer to one; it is never answered by another hello.                                                                       |
-| `shallow` | `true`                     | Optional. The sender asks to sync with this peer by shallow sets (§5.1). Only the sender's own ask: a node answering one does not repeat it.                |
+| Field          | Type                       | Meaning                                                                                                                                                     |
+| -------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`         | `"hello"`                  |                                                                                                                                                             |
+| `holds`        | `"all"` \| `string[]`      | Optional. `"all"`, or the collections held besides `sys.*` (§5). Absent means `"all"`.                                                                      |
+| `sums`         | `{ [collection]: string }` | For each held collection the sender keeps at least one version of: the collection's fingerprint (§3.3) over all its items, as 32 lower-case hex characters. |
+| `reply`        | `true`                     | Optional. Marks a hello sent in answer to one; it is never answered by another hello.                                                                       |
+| `shallow`      | `true`                     | Optional. The sender asks to sync with this peer by shallow sets (§5.1). Only the sender's own ask: a node answering one does not repeat it.                |
+| `lacksHistory` | `true`                     | Optional. The sender lacks the space's history: it holds the space shallow, or is still taking the rest (§5.1).                                             |
 
 Example (fingerprint values illustrative):
 
@@ -438,33 +439,38 @@ that lives for a session). A node that chooses it:
   with every peer when the space names no keeper or names this node;
 - takes a version from a keeper it syncs shallow with without the version
   its `prev` names, as the keeper's to have checked (§8), and does not ask
-  that keeper for the version before. A version from any other peer waits
+  that keeper for the version before; not in a line, which it holds whole
+  and checks as any node does. A version from any other peer waits
   for a keeper's copy, and with no keeper connected for the version before,
   as on any node (02 §4.7), so a keeper that is away slows such a node but
   never leaves it behind a peer it syncs with;
-- once the version before such a version arrives, MUST check the chain
-  between them (02 §4.7), and drop the later one if it breaks it, as a node
-  holding the space whole refused it;
 - does not chase gaps in writers' lines (§9): it lacks the versions below
   what it holds by design;
-- takes the space's history from the moment it is level with a peer
-  holding the whole space, on shallow sets with a keeper or on whole sets
-  with anyone, if it chose to only at first;
+- MUST say `lacksHistory` in every hello, from the time it holds the space
+  shallow until it **holds the history**: until it has been level on whole
+  sets with a peer whose hello didn't say so, and has then checked the chain
+  under every record's current version down to its first (02 §4.7),
+  dropping each version whose chain breaks or names a version it lacks, and
+  every version that follows one;
+- if it chose to only at first, takes the history (syncs whole) once a
+  keeper answers that it is level by shallow sets, once it is level on whole
+  sets with a peer that holds the history, or a while after it first caught
+  up, whichever comes first: a keeper decides how fast it is usable, never
+  whether it gets the rest;
 - MUST NOT write a change that takes power from an account (an `assign`
-  taking a role, a `remove`, a `stepdown`) from the time it holds the space
-  shallow until it has been level with a peer holding the whole space on
-  whole sets: the cutoff ([03](03-spaces.md) §6.3) would leave out writes
-  that should stand. It waits, or refuses. A `revoke` is written at once:
-  what it leaves out of a lost key's writes is taken away, the safe side.
+  taking a role, a `remove`, a `stepdown`) until it holds the history: the
+  cutoff ([03](03-spaces.md) §6.3) would leave out writes that should stand.
+  It waits, or refuses. A `revoke` is written at once: what it leaves out of
+  a lost key's writes is taken away, the safe side.
 
 A node holding a space shallow takes its keepers' word for one check only:
-that the chain below what it holds skips no `seq` (02 §4.7), until the
-versions below arrive, which for a node shallow always is never. It still
+that the chain below what it holds skips no `seq` (02 §4.7), until it holds
+the history, which for a node shallow always is never. It still
 checks every signature, the author's standing and the first version, so a
 keeper can withhold, reorder or freeze a record for such a node, never forge
 one.
 
-_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-runtime.ts` (`checkVouchedChains`), `packages/core/src/node/space-lines.ts` (`cutoffFromWholeLinesFor`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
+_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-runtime.ts` (`dropBrokenChains`), `packages/core/src/node/space-lines.ts` (`cutoffFromWholeLinesFor`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
 
 ---
 
