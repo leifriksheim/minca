@@ -382,6 +382,10 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     accounts that may not each change it, and a contested collection takes
     no writes until someone granted `/collection/define` for it settles it (02 §6.3).
 - **Does not hold yet.**
+  - A member who may name keepers (`/space/keepers`) can name its own
+    session one, and stands as a host does toward a node syncing shallow
+    (§3.8): it can freeze, reorder or hold back records there, never forge
+    one or change who holds a role.
   - A bot connected to GitHub works like a chat app a workspace installs:
     any member whose record sets off an automation can ask it what is in the
     connected repositories, private ones included, and what they write steers
@@ -1349,9 +1353,13 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     for the chain below each version it sends, outside lines: it can show
     such a node a version that skipped a `seq`, or follows one nobody has,
     which a node holding the space whole refuses (02 §4.7), freezing or
-    reordering a record there. Before the node counts as holding the
-    history it checks every record's chain down to its first version and
-    drops what breaks it; a node shallow always never does. Keepers include
+    reordering a record there. Never in a line or the access history, which
+    such a node holds whole: a keeper can't change who holds a role there.
+    Before the node counts as holding the history it checks the chain under
+    every version it took on a keeper's word and drops what breaks it; a
+    node shallow always never does. A contract's verdict that cites a
+    superseded stub reads pending there while it fails on a whole node:
+    neither counts it. Keepers include
     an account's carriers, of its registry and contacts space too (06 §4), so
     this reaches every space the account manages. Its
     signature, its author's standing and its first version are still checked,
@@ -1359,11 +1367,15 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     keeper is connected the node syncs whole, so a keeper away leaves it no
     further behind than its other peers; a keeper connected and withholding
     holds a node shallow at first back for half a minute at most, a node
-    shallow always for good. A node lacking the history says so, so another
-    can't take it from there. A line
+    shallow always for good. An honest node lacking the history says so, so
+    another can't take it from there; a peer that lies, or is behind, can
+    make a node think it holds the history, as it can a new whole node
+    (#166). A version whose chain is incomplete then goes, as on a whole
+    node that never took it: a peer that is behind can leave such a node
+    showing an older edit until one that has the rest returns. A line
     is held whole, so a
     double spend fails there as on any node (09 §7.3).
-    _Tests: `packages/core/tests/shallow.test.ts` ("a version a keeper vouched for goes once the history shows it breaks the chain", "… shows nobody has the one before", "… when what it follows breaks the chain, and so does that", "shallow at first, with a keeper that never says it is level, it takes the history anyway", "a new device with its keeper away takes the latest edits whole from any other peer", "a double spend counts on no shallow node: a line is held whole, losing twins too"); `packages/core/tests/sync.test.ts` ("level on whole sets with a peer lacking the history is not holding it")._
+    _Tests: `packages/core/tests/shallow.test.ts` ("a version a keeper vouched for goes once the history shows it breaks the chain", "… shows nobody has the one before", "… when what it follows breaks the chain, and so does that", "shallow at first, with a keeper that never says it is level, it takes the history anyway", "a keeper vouches for nothing in the access history: a role it slips in counts nowhere", "a node that restarts while taking the history holds it once it is level again", "a new device with its keeper away takes the latest edits whole from any other peer", "a double spend counts on no shallow node: a line is held whole, losing twins too"); `packages/core/tests/sync.test.ts` ("level on whole sets with a peer lacking the history is not holding it")._
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).

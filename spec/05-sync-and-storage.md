@@ -439,8 +439,8 @@ that lives for a session). A node that chooses it:
   with every peer when the space names no keeper or names this node;
 - takes a version from a keeper it syncs shallow with without the version
   its `prev` names, as the keeper's to have checked (§8), and does not ask
-  that keeper for the version before; not in a line, which it holds whole
-  and checks as any node does. A version from any other peer waits
+  that keeper for the version before; not in a line, nor in the access
+  history (02 §4.5), which it holds whole and checks as any node does. A version from any other peer waits
   for a keeper's copy, and with no keeper connected for the version before,
   as on any node (02 §4.7), so a keeper that is away slows such a node but
   never leaves it behind a peer it syncs with;
@@ -449,9 +449,10 @@ that lives for a session). A node that chooses it:
 - MUST say `lacksHistory` in every hello, from the time it holds the space
   shallow until it **holds the history**: until it has been level on whole
   sets with a peer whose hello didn't say so, and has then checked the chain
-  under every record's current version down to its first (02 §4.7),
-  dropping each version whose chain breaks or names a version it lacks, and
-  every version that follows one;
+  under every version it took on a keeper's word, down to its first
+  (02 §4.7). A version whose chain breaks, or lacks a version, goes with
+  every version that follows it, as a node holding the space whole never
+  took it;
 - if it chose to only at first, takes the history (syncs whole) once a
   keeper answers that it is level by shallow sets, once it is level on whole
   sets with a peer that holds the history, or a while after it first caught
@@ -470,7 +471,7 @@ checks every signature, the author's standing and the first version, so a
 keeper can withhold, reorder or freeze a record for such a node, never forge
 one.
 
-_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-runtime.ts` (`dropBrokenChains`), `packages/core/src/node/space-lines.ts` (`cutoffFromWholeLinesFor`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
+_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-runtime.ts` (`checkVouchedChains`), `packages/core/src/node/space-lines.ts` (`cutoffFromWholeLinesFor`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
 
 ---
 

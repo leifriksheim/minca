@@ -27,6 +27,7 @@ import { hold, letGo } from './helpers/hold.js';
 import { joined } from './helpers/joined.js';
 import { until } from './helpers/until.js';
 import { lineKey } from '../src/records/key.js';
+import { assignKey } from '../src/space/space-access.js';
 
 const signer = createSigner(createP256Provider());
 const COLLECTION = 'app.note';
@@ -522,6 +523,85 @@ describe('a node that syncs shallow', () => {
       const broken = await forge(bob, space, frozenAt(card.second, card, Number.MAX_SAFE_INTEGER - 1));
       return forge(bob, space, frozenAt(broken.id, card));
     });
+  });
+
+  test('a keeper vouches for nothing in the access history: a role it slips in counts nowhere', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await personOn(hub);
+    const bob = await personOn(hub);
+    const erin = await personOn(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'public' });
+    await hold(alice.node, space);
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(bob.node, space);
+    await joined(bob.node, space);
+    await alice.node.spaces.assign(space, bob.node.did, 'editor');
+    await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+    await alice.node.spaces.assign(space, erin.node.did, 'editor');
+    await alice.node.spaces.unassign(space, erin.node.did, 'editor');
+    const erinRoles = async (node: P2PNode) =>
+      (await node.spaces.access(space)).members.find((member) => member.did === erin.node.did)?.roles ?? [];
+    await until(
+      async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+      10_000,
+      'Bob keeps it',
+    );
+    await until(async () => (await erinRoles(bob.node)).length === 0, 10_000, 'Bob to see Erin unassigned');
+
+    // Bob gives the role back at seq 1, after a version nobody has, with an id that leaves Alice's seq 1 current.
+    const key = await assignKey(erin.node.did, 'editor');
+    const assigned = await createStorageProvider(await alice.stores(`spaces/${space}`)).history(key);
+    const [first, unassigned] = [assigned.find((v) => v.seq === 0)!, assigned.find((v) => v.seq === 1)!];
+    const giveBack = () =>
+      forge(
+        bob,
+        space,
+        {
+          collection: 'sys.assign',
+          body: { did: erin.node.did, role: 'editor', assigned: true },
+          retain: true,
+          version: {
+            key,
+            seq: 1,
+            prev: 'bafkreigh2akiscaildcqabsyg3dfr6chu3fgpregiymsck7e7aqa4s52zy',
+            genesis: first.id,
+          },
+        },
+        { keep: false },
+      );
+    let slipped = await giveBack();
+    while (slipped.id < unassigned.id) slipped = await giveBack();
+    await letGo(bob.node, space);
+    await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(slipped);
+    await hold(bob.node, space);
+
+    const dave = await personOn(hub, { shallow: 'first' });
+    await dave.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(dave.node, space);
+    await joined(dave.node, space);
+    await until(
+      async () => (await dave.node.spaces.access(space)).keepers.length === 1,
+      10_000,
+      'Dave to know',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    assert.equal(
+      await createStorageProvider(await dave.stores(`spaces/${space}`)).getVersion(slipped.id),
+      null,
+    );
+    assert.deepEqual(await erinRoles(dave.node), []);
+  });
+
+  test('a node that restarts while taking the history holds it once it is level again', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, bob, space } = await editedSpace(hub, 5);
+    await alice.node.close();
+    // As if it closed between deepening and being level on whole sets.
+    await (await alice.stores(`spaces/${space}`)).put('taking-history', new Uint8Array());
+    const aliceAgain = await createNode({ ...alice.config, shallow: 'first' });
+    nodes.push(aliceAgain);
+    await hold(aliceAgain, space);
+    await aliceAgain.spaces.removeMember(space, bob.node.did);
   });
 
   test('shallow at first, with a keeper that never says it is level, it takes the history anyway', async () => {

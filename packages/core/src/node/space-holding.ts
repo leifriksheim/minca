@@ -111,8 +111,8 @@ export interface HoldingContext {
   /** Read when used: sync is made after what this node holds is known */
   readonly sync: () => SyncEngine;
   readonly connectedPeers: () => string[];
-  /** Drops what a keeper vouched for and the space's history shows breaks a chain: before the history counts as held */
-  readonly dropBrokenChains: () => Promise<void>;
+  /** Checks the chains a keeper vouched for, dropping what breaks them */
+  readonly checkVouchedChains: () => Promise<void>;
   readonly recordsChanged: () => void;
 }
 
@@ -130,7 +130,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     access,
     sync,
     connectedPeers,
-    dropBrokenChains,
+    checkVouchedChains,
     recordsChanged,
   } = ctx;
   const cacheState = await loadCacheState(adapter);
@@ -187,7 +187,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     if (!takingHistory || shallowNow || checkingChains) return;
     checkingChains = true;
     try {
-      await dropBrokenChains();
+      await checkVouchedChains();
       takingHistory = false;
       await adapter.delete(TAKING_HISTORY_KEY);
     } finally {
@@ -452,7 +452,8 @@ export async function openSpaceHolding(ctx: HoldingContext) {
       // Level with a keeper on what it holds shallow: usable now, so the rest comes next.
       if (full && levelShallow && vouches(peer)) return deepen();
       // Level on whole sets with a peer holding the space's history: so does this node now.
-      if (full && wholeHistory && cacheState.settled) {
+      // Not the first catch-up of a node shallow at first, which compares only the space's own.
+      if (full && wholeHistory && (cacheState.settled || !shallowNow)) {
         deepen();
         void noteHistoryHeld().catch(() => {});
       }

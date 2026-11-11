@@ -175,7 +175,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     access: () => history.access(),
     sync: () => peers.sync,
     connectedPeers: () => peers.connectedPeers(),
-    dropBrokenChains: () => dropBrokenChains(),
+    checkVouchedChains: () => checkVouchedChains(),
     recordsChanged: () => recordsChanged(),
   });
 
@@ -287,28 +287,42 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // Whatever its key signed takes a place in that key's log, allowed or not: a second at one place is a fork.
     if ((await versions.judge(version)).verified) await lines.placeInLog(version);
     // From a keeper this node syncs shallow with: the chain below it is the keeper's to have checked.
-    // Not in a line, which is held whole: its chain is here to check.
-    const vouched = from !== undefined && holding.vouches(from) && !hasLineKeyForm(version.key);
-    return standing.admission(version, vouched);
+    // Not in a line or the access history, which are held whole: their chains are here to check.
+    const vouched =
+      from !== undefined &&
+      holding.vouches(from) &&
+      !hasLineKeyForm(version.key) &&
+      !ACCESS_COLLECTIONS.has(version.collection);
+    const verdict = await standing.admission(version, vouched);
+    if (vouched && verdict.ok && !(await previousHeld(version)))
+      await adapter.put(`${VOUCHED_PREFIX}${version.id}`, new Uint8Array());
+    return verdict;
   }
 
+  const previousHeld = async (version: Version) =>
+    version.seq === 0 || typeof version.prev !== 'string' || !!(await storage.getVersion(version.prev));
+
+  /** Versions taken on a keeper's word without the one before (05 §5.1), by id, until their chains are checked */
+  const VOUCHED_PREFIX = 'vouched/';
   /**
-   * Before a node that held the space shallow says it holds the history: the
-   * chain under each record's current version, down to its first, as a node
-   * holding the space whole checked each version on arrival (02 §4.7). What a
-   * keeper vouched for and breaks it, or names a version nobody has, goes,
-   * with what follows it.
+   * Checks the chain under each version a keeper vouched for, down to its
+   * first, as a node holding the space whole checked it on arrival (02 §4.7).
+   * What breaks it, or lacks a version, goes with what follows, as such a
+   * node never took it.
    */
-  async function dropBrokenChains(): Promise<void> {
+  async function checkVouchedChains(): Promise<void> {
     let dropped = false;
-    for (const current of await index.everyCurrent()) {
-      if (await chainHoldsUnder(current)) continue;
-      await dropBrokenVersionsOf(current.collection, current.key);
+    for (const name of await adapter.list(VOUCHED_PREFIX)) {
+      await adapter.delete(name);
+      const version = await storage.getVersion(name.slice(VOUCHED_PREFIX.length));
+      if (!version || (await chainHoldsUnder(version))) continue;
+      await dropBrokenVersionsOf(version.collection, version.key);
       dropped = true;
     }
     if (dropped) recordsChanged();
   }
 
+  /** Whether a version's chain holds down to its first, every version of it here */
   async function chainHoldsUnder(version: Version): Promise<boolean> {
     for (let at = version; at.seq > 0;) {
       const before = typeof at.prev === 'string' ? await storage.getVersion(at.prev) : null;
@@ -318,7 +332,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     return true;
   }
 
-  /** Drops a record's versions whose chain breaks; the best left is current, its body asked of the peers */
+  /** Drops a record's versions whose chain breaks or lacks a version; the best left is current, its body asked of the peers */
   async function dropBrokenVersionsOf(collection: string, key: string): Promise<void> {
     let best: Version | null = null;
     for (const item of (await storage.items(collection)).items) {
