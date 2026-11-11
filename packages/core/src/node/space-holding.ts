@@ -153,7 +153,8 @@ export async function openSpaceHolding(ctx: HoldingContext) {
    * Kept across runs, so a restart mid-way doesn't pass for holding it all.
    */
   let takingHistory = shallowNow || (await adapter.get(TAKING_HISTORY_KEY)) !== null;
-  if (takingHistory) await adapter.put(TAKING_HISTORY_KEY, new Uint8Array());
+  // A node shallow always never takes it, and knows so on every open.
+  if (takingHistory && shallow === 'first') await adapter.put(TAKING_HISTORY_KEY, new Uint8Array());
   /**
    * Whether to sync by shallow sets: once this node knows the space names
    * keepers, and is not one itself. A space that names none syncs whole.

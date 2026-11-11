@@ -294,7 +294,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       !hasLineKeyForm(version.key) &&
       !ACCESS_COLLECTIONS.has(version.collection);
     const verdict = await standing.admission(version, vouched);
-    if (vouched && verdict.ok && !(await previousHeld(version)))
+    // Checked once the node holds the history, which one shallow always never does.
+    if (vouched && verdict.ok && deps.shallow === 'first' && !(await previousHeld(version)))
       await adapter.put(`${VOUCHED_PREFIX}${version.id}`, new Uint8Array());
     return verdict;
   }
