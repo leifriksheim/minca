@@ -106,11 +106,13 @@ export interface SyncEngine {
 /**
  * Records waiting for what they depend on, past which nothing more is asked
  * for but what they wait on: a long history fills in from below instead of
- * being dropped and asked for again.
+ * being dropped and asked for again. High, since below it histories arrive
+ * as fast as the peer sends them: pausing at 1,000 made 100 records of 50
+ * edits each settle in 30 s instead of 2.
  */
-const MAX_WAITING = 1000;
+const MAX_WAITING = 20_000;
 /** Records held while what they wait on is fetched; past this the oldest is let go and asked for again later */
-const MAX_HELD = 20 * MAX_WAITING;
+const MAX_HELD = 2 * MAX_WAITING;
 /** Refusals remembered, so reconciling doesn't ask a peer for the same bad version every round */
 const MAX_REFUSED = 10_000;
 /** Records asked for, or sent, in one message */
@@ -224,8 +226,12 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const states = new Map<string, PeerState>();
   /** Peers found level with this node, until it takes in or writes anything more */
   const level = new Set<string>();
-  /** Records that could not be judged yet, tried again whenever something new is admitted */
+  /** Records that could not be judged yet, until what they wait for is admitted */
   const waiting = new Map<string, { peerId: string; version: Version }>();
+  /** Waiting records by a version of their own chain they lack (`prev` or first): tried again once it is stored */
+  const waitingOn = new Map<string, Set<string>>();
+  /** Waiting records that lack nothing of their own chain, so wait for something else: tried after every intake */
+  const waitingOther = new Set<string>();
   /**
    * Refused versions, by peer and id, oldest first. An id doesn't cover the
    * signature, so a stranger's mangled copy must not stop us fetching the real one.
@@ -267,10 +273,14 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     waiting.set(version.id, { peerId, version });
     if (waiting.size > MAX_HELD) letGoOldest();
     const dependsOn = version.seq > 0 ? [version.genesis, version.prev] : [];
+    const lacking: string[] = [];
     for (const needed of dependsOn) {
-      if (typeof needed === 'string' && !(await storage.getVersion(needed)))
-        intake.firsts.set(needed, version.collection);
+      if (typeof needed !== 'string' || (await storage.getVersion(needed))) continue;
+      lacking.push(needed);
+      intake.firsts.set(needed, version.collection);
     }
+    if (lacking.length === 0) waitingOther.add(version.id);
+    for (const needed of lacking) getOrAdd(waitingOn, needed, () => new Set()).add(version.id);
   };
 
   /** Lets the longest-waiting record go, still to be asked for: dropped and forgotten, a peer would look level without it */
@@ -278,6 +288,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const [id, held] = waiting.entries().next().value ?? [];
     if (!id || !held) return;
     waiting.delete(id);
+    waitingOther.delete(id);
     if (peers.has(held.peerId)) want(held.peerId, held.version.collection, [id]);
   };
 
@@ -287,18 +298,33 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     emit('rejected', peerId, version, reason);
   };
 
-  /** Tries every waiting version again until nothing more goes in; each sender hears what was stored */
+  /**
+   * Tries again what waited for the versions just stored, and what those let
+   * in in turn, then what waits for anything else; each sender hears what was
+   * stored. Each waiting record is tried once per version it lacked: trying
+   * every one on every arrival took a 1,000-edit history quadratic time.
+   */
   const retryWaiting = async (intake: Intake) => {
     const stored = new Map<string, string[]>();
-    let progressed = true;
-    while (progressed && waiting.size > 0) {
-      progressed = false;
-      for (const [id, held] of [...waiting]) {
-        waiting.delete(id);
-        if (!(await admit(held.peerId, held.version, intake))) continue;
-        progressed = true;
-        getOrAdd(stored, held.peerId, () => []).push(id);
+    const tryAgain = async (id: string) => {
+      const held = waiting.get(id);
+      if (!held) return;
+      waiting.delete(id);
+      waitingOther.delete(id);
+      if (await admit(held.peerId, held.version, intake)) getOrAdd(stored, held.peerId, () => []).push(id);
+    };
+    let next = 0;
+    for (;;) {
+      // Stored versions are appended to `placed` as they go in, so this follows a chain to its end.
+      for (; next < intake.placed.length; next++) {
+        const placedId = intake.placed[next]!.id;
+        const dependents = waitingOn.get(placedId);
+        waitingOn.delete(placedId);
+        for (const id of dependents ?? []) await tryAgain(id);
       }
+      const placedBefore = intake.placed.length;
+      for (const id of [...waitingOther]) await tryAgain(id);
+      if (intake.placed.length === placedBefore) break;
     }
     for (const [peerId, ids] of stored) if (peers.has(peerId)) send(peerId, { type: 'stored', ids });
   };
@@ -357,9 +383,13 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   /** Asks at once for the versions still waited on, unless asked, refused or already here */
   const askFirsts = async (peerId: string, firsts: ReadonlyMap<string, string>) => {
     const inFlight = askedOf(peerId);
+    const state = states.get(peerId);
+    // Coming anyway, a batch at a time: asking for each one alone walks a chain a link per round trip.
+    const coming = (id: string, collection: string) =>
+      inFlight.has(id) || !!state?.queuedIds.has(id) || !!state?.sessions.has(collection);
     const byCollection = new Map<string, string[]>();
     for (const [id, collection] of firsts) {
-      if (inFlight.has(id) || isRefused(peerId, id) || (await storage.getVersion(id))) continue;
+      if (coming(id, collection) || isRefused(peerId, id) || (await storage.getVersion(id))) continue;
       getOrAdd(byCollection, collection, () => []).push(id);
     }
     for (const [collection, ids] of byCollection) want(peerId, collection, ids, true);
