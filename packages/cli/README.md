@@ -60,7 +60,7 @@ minca init --name Leif --passphrase          # prints your recovery code once
 export MINCA_PASSPHRASE='…'                  # so later commands don't ask
 
 minca spaces create --name Groceries --visibility private --roles team   # or solo, community, coop
-minca records put --space <id> --collection app.todo.item --body '{"text":"milk","completed":false,"order":1}'
+minca records put --space <id> --records '[{"collection":"app.todo.item","body":{"text":"milk","completed":false,"order":1}}]'
 minca records query --space <id> --collection app.todo.item
 minca spaces invite --space <id>             # a secret: it carries the space key and the invite's own secret
 minca spaces invite --space <id> --view-only # they can read it, not change it

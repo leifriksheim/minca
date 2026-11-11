@@ -156,8 +156,7 @@ describe('Chat Completions', () => {
                     name: 'records_put',
                     arguments: JSON.stringify({
                       space: space.id,
-                      collection: 'app.club.idea',
-                      body: { idea: 'polls' },
+                      records: [{ collection: 'app.club.idea', body: { idea: 'polls' } }],
                     }),
                   },
                 },

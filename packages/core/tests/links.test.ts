@@ -282,16 +282,21 @@ describe('for agents', () => {
       /no collection app\.nothing/,
     );
 
-    const todo = z
-      .object({ key: z.string() })
-      .parse(
-        await runAction(me, 'records_put', { space, collection: 'app.todo.item', body: { text: 'pack' } }),
-      );
+    const [todo] = z.tuple([z.object({ key: z.string() })]).parse(
+      await runAction(me, 'records_put', {
+        space,
+        records: [{ collection: 'app.todo.item', body: { text: 'pack' } }],
+      }),
+    );
     await runAction(me, 'records_put', {
       space,
-      collection: 'std.comment',
-      body: { text: 'bring the adapter' },
-      links: [{ rel: 'about', to: todo.key }],
+      records: [
+        {
+          collection: 'std.comment',
+          body: { text: 'bring the adapter' },
+          links: [{ rel: 'about', to: todo.key }],
+        },
+      ],
     });
     const onIt = z.object({ records: z.array(z.object({ body: z.object({ text: z.string() }) })) }).parse(
       await runAction(me, 'records_query', {

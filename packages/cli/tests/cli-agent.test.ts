@@ -88,7 +88,14 @@ describe('the minca command, as the connected agent', () => {
     });
 
   test('writes as the agent, "via agent", and the write reaches the always-on node before it exits', async () => {
-    await minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"milk"}');
+    await minca(
+      'records',
+      'put',
+      '--space',
+      space,
+      '--records',
+      '[{"collection":"app.note","body":{"text":"milk"}}]',
+    );
     const kept = await daemon.node.records.query(space, { collection: 'app.note' });
     const [note] = kept.records;
     assert.equal(
@@ -115,7 +122,14 @@ describe('the minca command, as the connected agent', () => {
     await daemon.close();
     closed = true;
     await assert.rejects(
-      minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"late"}'),
+      minca(
+        'records',
+        'put',
+        '--space',
+        space,
+        '--records',
+        '[{"collection":"app.note","body":{"text":"late"}}]',
+      ),
       /Nobody who keeps this space is online right now/,
     );
   });

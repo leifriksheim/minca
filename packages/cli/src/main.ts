@@ -953,7 +953,11 @@ async function runNodeAction(command: string, args: string[], globals: Globals):
     const since = Date.now();
     const result = await runAction(node, action.name, input);
     if (space !== undefined && !action.readOnly) {
-      const said = await keptAfter(node, space, since);
+      // Unconfirmed, what was written is still printed, so it is read back, not written twice.
+      const said = await keptAfter(node, space, since).catch((error: unknown) => {
+        print(result);
+        throw error;
+      });
       if (said) stderr(said);
     }
     // What others wrote, going to a model: data, never instructions, as the MCP tools say.
@@ -1024,7 +1028,7 @@ function inputFromFlags(action: NodeAction, args: ReadonlyArray<string>): Record
 
 function flagValue(type: string | undefined, value: string): unknown {
   if (type === 'integer' || type === 'number') return Number(value);
-  if (type === 'object') return JSON.parse(value);
+  if (type === 'object' || type === 'array') return JSON.parse(value);
   return value;
 }
 

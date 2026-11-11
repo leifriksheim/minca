@@ -516,16 +516,55 @@ describe('actions', () => {
     const space = z
       .object({ id: z.string() })
       .parse(await runAction(node, 'spaces_create', { name: 'Via actions', visibility: 'public' }));
-    await runAction(node, 'records_put', { space: space.id, collection: 'app.note', body: { text: 'hi' } });
+    await runAction(node, 'records_put', {
+      space: space.id,
+      records: [{ collection: 'app.note', body: { text: 'hi' } }],
+    });
     const records = await runAction(node, 'records_query', { space: space.id, collection: 'app.note' });
 
     assert.deepEqual(JSON.parse(JSON.stringify(records)), records);
-    await assert.rejects(runAction(node, 'records_put', { space: space.id }), /Missing "collection"/);
+    await assert.rejects(runAction(node, 'records_put', { space: space.id }), /Missing "records"/);
     await assert.rejects(
       runAction(node, 'spaces_create', { name: 'x', roles: 'weird', visibility: 'public' }),
       /must be one of/,
     );
     await assert.rejects(runAction(node, 'no_such_thing'), /Unknown action/);
+  });
+
+  test('records_put writes a list in order, and one refused leaves the rest written', async () => {
+    const node = await startNode();
+    const { id: space } = await node.spaces.create({ name: 'Many', visibility: 'public' });
+    const results = z.array(z.union([z.object({ key: z.string() }), z.object({ error: z.string() })])).parse(
+      await runAction(node, 'records_put', {
+        space,
+        records: [
+          { collection: 'app.note', body: { text: 'first' } },
+          { collection: 'sys.collection', body: {} },
+          { collection: 'app.note', body: { text: 'third' }, key: 'third' },
+        ],
+      }),
+    );
+
+    assert.equal(results.length, 3);
+    assert.ok('key' in results[0]! && 'error' in results[1]! && 'key' in results[2]!);
+    const notes = await node.records.list(space, { collection: 'app.note' });
+    assert.deepEqual(notes.map((note) => z.object({ text: z.string() }).parse(note.body).text).sort(), [
+      'first',
+      'third',
+    ]);
+    await assert.rejects(runAction(node, 'records_put', { space, records: [] }), /1 to 100 records/);
+    await assert.rejects(
+      runAction(node, 'records_put', { space, records: [{ collection: 'app.note' }] }),
+      /records\[0\] must be/,
+    );
+    await assert.rejects(
+      runAction(node, 'records_put', {
+        space,
+        records: [{ collection: 'app.note', body: { text: 'linked?' }, link: [{ rel: 'about', to: 'x' }] }],
+      }),
+      /records\[0\] must be/,
+      'a misspelt field is refused, not dropped',
+    );
   });
 
   test('a record reads without the bookkeeping every sound version shares', async () => {

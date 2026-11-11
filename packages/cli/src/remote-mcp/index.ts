@@ -258,7 +258,10 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
             const since = Date.now();
             const done = await callAction(node, name, args);
             if (done.isError) return done;
-            const said = await keptAfter(node, space, since);
+            // Unconfirmed, what was written is still said, so it is read back, not written twice.
+            const said = await keptAfter(node, space, since).catch((error: unknown) => {
+              throw new Error(`${done.text}\n\n${messageOf(error)}`);
+            });
             return said ? { ...done, text: `${done.text}\n\n${said}` } : done;
           });
         } catch (error) {

@@ -330,8 +330,11 @@ describe('a space that describes itself', () => {
       [['app.friends.poll', 'Poll']],
     );
     await assert.rejects(
-      runAction(me, 'records_put', { space: space.id, collection: 'sys.collection', body: {} }),
-      /written by the node itself/,
+      runAction(me, 'records_put', {
+        space: space.id,
+        records: [{ collection: 'sys.collection', body: {} }],
+      }),
+      /Nothing was written: records\[0\]: .*written by the node itself/,
     );
   });
 });
