@@ -308,4 +308,54 @@ describe('sync engine', () => {
     assert.equal((await newcomerStorage.sums()).get(COLLECTION)?.count, EDITS);
     assert.equal(await newcomerStorage.fingerprint(), await holderStorage.fingerprint());
   });
+
+  test('a new peer that syncs shallow takes a record edited thousands of times as two versions', async () => {
+    const EDITS = 2500;
+    const holderStorage = createStorageProvider(createMemoryAdapter());
+    const newcomerStorage = createStorageProvider(createMemoryAdapter());
+    const sent: SyncMessage[] = [];
+    const holder: ReturnType<typeof createSyncEngine> = createSyncEngine({
+      storageProvider: holderStorage,
+      sendToPeer: (_peer, message) => void newcomer.handleMessage('a', message),
+      self: 'a',
+    });
+    const newcomer: ReturnType<typeof createSyncEngine> = createSyncEngine({
+      storageProvider: newcomerStorage,
+      sendToPeer: (_peer, message) => {
+        sent.push(message);
+        void holder.handleMessage('b', message);
+      },
+      self: 'b',
+      shallowWith: () => true,
+    });
+
+    const author = await makeKey();
+    let previous = await signer.sign(
+      createVersion({ author: author.did, collection: COLLECTION, body: { edit: 0 } }),
+      author.privateKey,
+    );
+    const genesis = previous;
+    await holderStorage.addVersion(previous);
+    for (let edit = 1; edit < EDITS; edit++) {
+      previous = await signer.sign(
+        createVersion({
+          author: author.did,
+          collection: COLLECTION,
+          body: { edit },
+          version: { key: previous.key, seq: edit, prev: previous.id, genesis: genesis.id },
+        }),
+        author.privateKey,
+      );
+      await holderStorage.addVersion(previous);
+    }
+
+    holder.addPeer('b');
+    newcomer.addPeer('a');
+    newcomer.notifyPeers(['a']);
+    await until(() => newcomer.levelWith('a'), 10_000, 'the newcomer to be level with the holder');
+    assert.equal((await newcomerStorage.sums()).get(COLLECTION)?.count, 2, 'its first and current version');
+    assert.equal((await newcomerStorage.getCurrent(genesis.key))?.id, previous.id);
+    assert.deepEqual(await newcomerStorage.shallowSums(), await holderStorage.shallowSums());
+    assert.ok(sent.length < 20, `a handful of messages, not ${sent.length}`);
+  });
 });
