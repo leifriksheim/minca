@@ -384,10 +384,15 @@ const toScreen = (
   viaAgent: record.recordsOnly === true,
 });
 
-/** Only plain data crosses into a screen, and only this much of it */
-function plain(value: unknown, what: string): unknown {
+/** The most a screen may send in one call: a record, a live message, what it remembers */
+const MAX_FROM_SCREEN = 256 * 1024;
+/** The most one answer may hand a screen: a whole collection, like a CRM's organisations with their notes */
+const MAX_ANSWER = 16 * 1024 * 1024;
+
+/** Only plain data crosses between a screen and the page, and only this much of it */
+function plain(value: unknown, what: string, max = MAX_FROM_SCREEN): unknown {
   const text = JSON.stringify(value ?? null);
-  if (text.length > 256 * 1024) throw new Error(`${what} is too large`);
+  if (text.length > max) throw new Error(`${what} is too large`);
   return JSON.parse(text);
 }
 
@@ -869,7 +874,11 @@ export function createScreenBridge(params: {
     methods[message.method]!(...args).then(
       (value) =>
         !closed &&
-        port.postMessage({ id, ok: true, value: value instanceof Blob ? value : plain(value, 'The answer') }),
+        port.postMessage({
+          id,
+          ok: true,
+          value: value instanceof Blob ? value : plain(value, 'The answer', MAX_ANSWER),
+        }),
       (error: unknown) =>
         !closed &&
         port.postMessage({
