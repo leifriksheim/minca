@@ -138,7 +138,7 @@ describe('a node that syncs shallow', () => {
     await Promise.all(nodes.splice(0).map((node) => node.close().catch(() => {})));
   });
 
-  async function personOn(hub: FakeHub, options: { shallow?: ShallowMode; seed?: string } = {}) {
+  async function personOn(hub: FakeHub, options: { shallow?: ShallowMode; seed?: Uint8Array } = {}) {
     const manager = createIdentityManager();
     const seed = options.seed ?? generateSeed();
     const stores = memoryStores();
