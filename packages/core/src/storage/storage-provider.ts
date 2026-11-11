@@ -225,7 +225,15 @@ function removeFromIndex(index: Index, e: Version): void {
   index.totals.set(e.collection, removeFromSum(index.totals.get(e.collection) ?? EMPTY_SUM, item.id));
 }
 
-const yieldToOthers = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const isScheduler = (value: unknown): value is (run: () => void) => unknown => typeof value === 'function';
+
+/** Lets other work run: by `setImmediate` where there is one (Node, Bun), which no fake timer holds back */
+const yieldToOthers = () =>
+  new Promise<void>((resolve) => {
+    const immediate: unknown = Reflect.get(globalThis, 'setImmediate');
+    if (isScheduler(immediate)) immediate(resolve);
+    else setTimeout(resolve, 0);
+  });
 
 /**
  * Creates a StorageProvider wrapping an adapter.
