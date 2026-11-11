@@ -436,6 +436,12 @@ that lives for a session). A node that chooses it:
   arrives without one.
 - does not chase gaps in writers' lines (§9): it lacks the versions below
   what it holds by design.
+- MUST NOT write a change that takes power from an account (an `assign`
+  taking a role, a `remove`, a `stepdown`) while it lacks a place in that
+  account's lines below the last it holds: the cutoff ([03](03-spaces.md))
+  would leave out writes that should stand. It waits for its history, or
+  refuses. A `revoke` is written at once: what it leaves out of a lost key's
+  writes is taken away, the safe side.
 
 A node holding a space shallow trusts its keepers with one check: it cannot
 itself see that a chain below what it holds skips a `seq` (02 §4.7). It still

@@ -422,6 +422,29 @@ when it was first level with a whole-space peer, and `missing` to the version
 ids a writer's line names that aren't here.
 [Spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
+### Syncing shallow
+
+A record edited thousands of times has thousands of versions, and a new
+device doesn't need them to show the record. With `config.shallow`, a node
+syncs a space with its keepers by **shallow sets**: each record's current and
+first versions, and what its writer retained, not every superseded stub. A
+keeper's version comes without the chain below it, as the keeper's to have
+checked; signatures, standing and first versions are still checked here.
+
+- `'first'`: a space this node holds no records of syncs shallow until it is
+  level with a keeper, then whole. Usable at once; the history follows. Apps
+  connected to an account home do this by default.
+- `'always'`: it never takes more. For a node that lives for a session, as a
+  remote MCP session's.
+
+A space that names no keepers, or this node among them, syncs whole. Until
+the node has caught up with a whole-space peer it holds only `sys.*`, so it
+knows which. A change taking power from someone (`unassign`, `removeMember`,
+`stepDown`) waits, up to 30 seconds, for the places in their lines a shallow
+node lacks, so its cutoff covers everything they wrote; `'always'` refuses at
+once. `revoke` never waits.
+[Spec 05 §5.1](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
+
 ### Planned: caches that widen and trim
 
 > **Planned.** A node holding part of a space would hold all of it when too
@@ -468,9 +491,14 @@ one run at a time:
    afresh each run what the registry still lacks. A space left meanwhile
    stays left.
 4. It brings every carrier's passes and wakes up to date.
-5. It names the account's carriers as keepers of the open spaces it manages.
+5. It names the account's carriers as keepers of the open spaces it manages,
+   the account registry and contacts space among them: a carrier keeps the
+   account's personal space. Carry spaces name none.
 6. It asks each host the account uses how it stands, without waiting, and
    hands it the spaces if it was paid ([hosting](#carriers-hosting-and-notifications)).
+   A host whose signed status says the account's subscription lapsed, or has
+   none, and that it won't carry for it as things stand, stops being a carrier,
+   and so a keeper. A host that doesn't answer stays one.
 
 Creating or joining a space writes its `sys.joined` record. Leaving deletes it.
 

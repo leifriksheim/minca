@@ -9,6 +9,7 @@
  * its lines hold (its cutoff).
  */
 import type { StorageAdapter, Version } from '../types.js';
+import type { ShallowMode } from './types.js';
 import { accessRequirement, noteGrants } from '../identity/abilities.js';
 import { breaksLine, forkProof } from '../records/fork.js';
 import { forkKey } from '../space/space-access.js';
@@ -35,7 +36,12 @@ export interface LinesDeps extends SpaceBase {
   readonly noteGap: (version: Version) => Promise<void>;
   readonly upsert: (collection: string, recordKey: string, body: unknown) => Promise<unknown>;
   readonly cannotWrite: () => Promise<string | null>;
+  /** When this node syncs by shallow sets (`NodeConfig.shallow`): it may lack places in anyone's lines */
+  readonly shallow: ShallowMode | null;
 }
+
+/** How long a change taking power waits for the history a shallow node is still taking */
+const HISTORY_WAIT_MS = 30_000;
 
 export function createLines(deps: LinesDeps) {
   const { space, session, adapter, storage, everyCurrent, noteGap, upsert, cannotWrite } = deps;
@@ -133,6 +139,59 @@ export function createLines(deps: LinesDeps) {
    * collections first, then the rest, each in name order.
    */
   async function linesOf(did: string, only?: string): Promise<Version[]> {
+    const ends: Version[] = [];
+    for (const held of (await heldPlacesOf(did, only)).values()) {
+      let end: Version | null = null;
+      for (let n = 0; ; n++) {
+        const version = held.get(n);
+        if (!version || (n > 0 && version.log?.prev !== end?.id)) break;
+        end = version;
+      }
+      if (end) ends.push(end);
+    }
+    // Defined collections first: writing into many undefined ones costs only whoever did.
+    const defined = new Set((await catalog()).keys());
+    return ends.sort(
+      (a, b) =>
+        Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
+        byCodeUnit(a.collection, b.collection) ||
+        byCodeUnit(a.author, b.author),
+    );
+  }
+
+  /** Whether a line of the account's lacks a place below the last this node holds of it: history still to come */
+  async function missesPlacesOf(did: string): Promise<boolean> {
+    for (const held of (await heldPlacesOf(did)).values()) {
+      const last = Math.max(...held.keys());
+      for (let n = 0; n < last; n++) if (!held.has(n)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The cutoff of a change taking power from an account, from its lines held
+   * whole. A node that started shallow lacks the places below what it holds,
+   * and a cutoff from those would take away writes that should stand: it waits
+   * for them while it takes the space's history, and a node that never does
+   * refuses. A revoke doesn't come here: a lost key's writes taken away too is
+   * the safe side, and it must never wait.
+   */
+  async function cutoffFromWholeLinesFor(did: string): Promise<Record<string, Record<string, number>>> {
+    if (deps.shallow !== null) {
+      const giveUpAt = Date.now() + (deps.shallow === 'first' ? HISTORY_WAIT_MS : 0);
+      while (await missesPlacesOf(did)) {
+        if (Date.now() >= giveUpAt || deps.isClosed())
+          throw new Error(
+            `This device doesn't hold all they wrote in "${space.name}" yet, so taking their place now could take away writes that should stand. Try again in a moment.`,
+          );
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    return cutoffFor(did);
+  }
+
+  /** The versions this node holds of the account's lines: `author collection` → place → version */
+  async function heldPlacesOf(did: string, only?: string): Promise<Map<string, Map<number, Version>>> {
     // What it holds of theirs, whatever way it came: the lines' places are kept only for what arrived by sync.
     const placed = new Map<string, Map<number, Version>>();
     const add = (version: Version) => {
@@ -156,27 +215,10 @@ export function createLines(deps: LinesDeps) {
         if (version?.author === key) add(version);
       }
     }
-    const ends: Version[] = [];
-    for (const held of placed.values()) {
-      let end: Version | null = null;
-      for (let n = 0; ; n++) {
-        const version = held.get(n);
-        if (!version || (n > 0 && version.log?.prev !== end?.id)) break;
-        end = version;
-      }
-      if (end) ends.push(end);
-    }
-    // Defined collections first: writing into many undefined ones costs only whoever did.
-    const defined = new Set((await catalog()).keys());
-    return ends.sort(
-      (a, b) =>
-        Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
-        byCodeUnit(a.collection, b.collection) ||
-        byCodeUnit(a.author, b.author),
-    );
+    return placed;
   }
 
-  return { placeInLog, cutoffFor };
+  return { placeInLog, cutoffFor, cutoffFromWholeLinesFor };
 }
 
 export type Lines = ReturnType<typeof createLines>;

@@ -137,12 +137,13 @@ describe('a node that syncs shallow', () => {
     await Promise.all(nodes.splice(0).map((node) => node.close().catch(() => {})));
   });
 
-  async function personOn(hub: FakeHub, options: { shallow?: ShallowMode } = {}) {
+  async function personOn(hub: FakeHub, options: { shallow?: ShallowMode; seed?: string } = {}) {
     const manager = createIdentityManager();
+    const seed = options.seed ?? generateSeed();
     const stores = memoryStores();
     let session = '';
     const config = {
-      signer: createLocalRootSigner(await manager.fromSeed(generateSeed()), manager.getProvider()),
+      signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
       stores,
       watchIntervalMs: 0,
       network: {
@@ -154,7 +155,7 @@ describe('a node that syncs shallow', () => {
     };
     const node = await createNode({ ...config, ...(options.shallow ? { shallow: options.shallow } : {}) });
     nodes.push(node);
-    return { node, stores, config, session: () => session };
+    return { node, stores, config, seed, session: () => session };
   }
 
   /** Alice's space with one card edited `edits` times, kept whole by Bob, who it names its keeper */
@@ -229,6 +230,46 @@ describe('a node that syncs shallow', () => {
     nodes.push(daveAgain);
     await hold(daveAgain, space);
     await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
+  });
+
+  test('a new device that removes someone at once waits for their whole line: what they wrote stands', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, bob, space, key } = await editedSpace(hub, 200);
+    for (let n = 201; n <= 250; n++) await bob.node.records.update(space, key, { n });
+    const latest = async (node: P2PNode) => (await node.records.get<{ n: number }>(space, key))?.body?.n;
+    await until(async () => (await latest(alice.node)) === 250, 10_000, 'Alice to have Bob’s edits');
+
+    const aliceAgain = await personOn(hub, { shallow: 'first', seed: alice.seed });
+    await aliceAgain.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(aliceAgain.node, space);
+    await until(async () => (await latest(aliceAgain.node)) === 250, 20_000, 'the latest edit');
+    await aliceAgain.node.spaces.removeMember(space, bob.node.did);
+
+    await until(
+      async () =>
+        !(await alice.node.spaces.access(space)).members.some((member) => member.did === bob.node.did),
+      10_000,
+      'Bob removed',
+    );
+    assert.equal(await latest(alice.node), 250, 'Bob’s edits before he was removed stand');
+  });
+
+  test('a node that stays shallow refuses to remove someone whose line it lacks', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, bob, space, key } = await editedSpace(hub, 20);
+    for (let n = 21; n <= 30; n++) await bob.node.records.update(space, key, { n });
+    const aliceAgain = await personOn(hub, { shallow: 'always', seed: alice.seed });
+    await aliceAgain.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(aliceAgain.node, space);
+    await until(
+      async () => (await aliceAgain.node.records.get<{ n: number }>(space, key))?.body?.n === 30,
+      20_000,
+      'the latest edit',
+    );
+    await assert.rejects(
+      aliceAgain.node.spaces.removeMember(space, bob.node.did),
+      /doesn't hold all they wrote/,
+    );
   });
 
   test('a node that does not sync shallow takes every edit, as before', async () => {

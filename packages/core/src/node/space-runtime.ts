@@ -254,6 +254,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     noteGap: holding.noteGap,
     upsert,
     cannotWrite,
+    shallow: deps.shallow ?? null,
   });
   const warrants = createWarrants({ ...base, versions, history, rules, standing, upsert, cannotWrite });
 
