@@ -19,18 +19,22 @@ test('a look is written once, not again each time the account changes', async ()
     return store.read().has(space);
   }, 'the registry is read');
 
-  store.look(space, 'chat', new Date(Date.now() + 1).toISOString());
+  // A look counts only once it is later than the space began, in another millisecond.
+  await waitFor(async () => {
+    store.look(space, 'chat', new Date().toISOString());
+    return 'chat' in (store.read().get(space)?.apps ?? {});
+  }, 'the look is taken');
   store.keep(space);
   const seenRecord = async () => {
     const { records } = await alice.node.records.query(registry, { collection: 'minca.seen' });
     return records[0];
   };
-  await waitFor(async () => (await seenRecord()) !== undefined, 'the look is written');
-  const record = await seenRecord();
-  assert.ok(record);
+  const seqOfLook = 1;
+  await waitFor(async () => ((await seenRecord())?.seq ?? -1) >= seqOfLook, 'the look is written');
   // Each write is an account change, which reads the registry again: it must find nothing to add.
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  const versions = await alice.node.records.history(registry, record.key);
-  assert.equal(versions.length, 1, `written ${versions.length} times`);
+  const record = await seenRecord();
+  assert.ok(record);
+  assert.equal(record.seq, seqOfLook, `written ${record.seq + 1} times`);
   await alice.node.close();
 });

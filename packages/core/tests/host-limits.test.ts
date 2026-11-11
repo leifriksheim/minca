@@ -741,7 +741,9 @@ describe('the free line', () => {
     await c.aliceNode.spaces.removeMember(c.space, c.bob.did);
     await until(async () => (await node.usage(c.space))?.writers === 1, 8000, 'only Alice');
     clock += 2 * 3600;
-    assert.deepEqual((await node.evaluate()).stopped, [c.space], 'over five days ago: stopped all the same');
+    // Removing Bob changes the space's key, and a look while the host opens it again judges nothing.
+    const isStoppedByEvaluate = async () => (await node.evaluate()).stopped.includes(c.space);
+    await until(isStoppedByEvaluate, 8000, 'over five days ago: stopped all the same');
   });
 
   test('a device ignores an over entry or a usage not shaped as the spec says', async () => {
