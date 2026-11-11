@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useAccount } from '@minca/react';
+import { Icon } from '@minca/app-shared/Icon';
 import { clauseFields, type Clause } from '../../derive/conditions';
 import { NEWEST_FIRST } from '../../derive/filters';
 import { isComputed, withComputed, type Field } from '../../derive/schema-ui';
@@ -13,6 +15,8 @@ import styles from './Sheets.module.css';
 export function Toolbar({
   look,
   onLook,
+  search,
+  onSearch,
   all,
   shown,
   groupable,
@@ -21,6 +25,9 @@ export function Toolbar({
 }: {
   look: Look;
   onLook: (look: Look) => void;
+  /** What this person is searching for, which only they see; null when the table has no text to search */
+  search: string | null;
+  onSearch: (search: string) => void;
   /** Every field the table has */
   all: ReadonlyArray<Field>;
   shown: ReadonlyArray<Field>;
@@ -40,6 +47,7 @@ export function Toolbar({
 
   return (
     <div className={styles.toolbar}>
+      {search !== null && <SearchBox search={search} onSearch={onSearch} />}
       {look.layout === 'board' && groupable.length > 1 && (
         <Popover icon="board" label="Group">
           {(close) => (
@@ -140,3 +148,33 @@ const ORDERS_BY_TIME = [
   { name: '@createdAt', label: 'Date added' },
   { name: '@updatedAt', label: 'Last changed' },
 ] as const;
+
+/** A magnifier that opens into a box as it is pressed, and folds away again when left empty */
+function SearchBox({ search, onSearch }: { search: string; onSearch: (search: string) => void }) {
+  const [opened, setOpened] = useState(false);
+  if (!opened && search === '')
+    return (
+      <button className={styles.tool} aria-label="Search" onClick={() => setOpened(true)}>
+        <Icon name="search" size={14} />
+      </button>
+    );
+  return (
+    <label className={styles.search}>
+      <Icon name="search" size={14} />
+      <input
+        type="search"
+        placeholder="Search"
+        aria-label="Search"
+        value={search}
+        autoFocus
+        onChange={(e) => onSearch(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return;
+          onSearch('');
+          setOpened(false);
+        }}
+        onBlur={() => setOpened(false)}
+      />
+    </label>
+  );
+}

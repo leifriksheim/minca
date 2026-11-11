@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { NodeCollection, NodeRecord, QueryRecord, SpaceSummary } from '@minca/core';
+import { useDeferredValue, useState } from 'react';
+import type { Filter, NodeCollection, NodeRecord, QueryRecord, SpaceSummary } from '@minca/core';
 import { useAccount, useLive, useNode, useProfiles } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
 import { Icon, type IconName } from '@minca/app-shared/Icon';
@@ -17,7 +17,7 @@ import { AddColumn } from './AddColumn';
 import { Board } from './Board';
 import { Gallery } from './Gallery';
 import { Grid } from './Grid';
-import { groupableFields, shownFields, tableFields } from './fields';
+import { cellEditOf, groupableFields, shownFields, tableFields } from './fields';
 import type { LayoutProps } from './layout';
 import { Toolbar } from './Toolbar';
 import { Panel } from './Popover';
@@ -54,13 +54,16 @@ export function SheetTable({
   const { run, error } = useAction();
   const [adding, setAdding] = useState<Record<string, unknown> | null>(null);
   const mayAddColumns = useMayDefine(space.id, collection.name);
+  const [search, setSearch] = useState('');
 
   const look = view?.look ?? { layout: 'table' };
   const all = tableFields(collection, collections);
   const fields = shownFields(all, look.fields);
   const groupable = groupableFields(all);
   const group = groupable.find((f) => f.name === look.groupBy) ?? groupable[0] ?? null;
-  const { rows, more, showMore } = useRows(space.id, collection.name, look);
+  const searchableFields = fields.filter((f) => cellEditOf(f) === 'text');
+  const searchWhere = searchFilterOf(useDeferredValue(search), searchableFields);
+  const { rows, more, showMore } = useRows(space.id, collection.name, look, searchWhere);
 
   const saveLook = (next: Look) => {
     if (view)
@@ -123,6 +126,8 @@ export function SheetTable({
           <Toolbar
             look={look}
             onLook={saveLook}
+            search={searchableFields.length > 0 ? search : null}
+            onSearch={setSearch}
             all={all}
             shown={fields}
             groupable={groupable}
@@ -155,7 +160,9 @@ export function SheetTable({
           </p>
         ))}
       {look.layout === 'cards' && <Gallery {...layoutProps} />}
-      {rows && rows.length === 0 && look.filters?.length ? (
+      {rows && rows.length === 0 && searchWhere ? (
+        <p className={styles.hint}>Nothing matches “{search.trim()}”.</p>
+      ) : rows && rows.length === 0 && look.filters?.length ? (
         <p className={styles.hint}>Nothing matches the filters.</p>
       ) : null}
       {more && (
@@ -182,11 +189,20 @@ export function SheetTable({
   );
 }
 
-/** A view's records as its filters and order pick them, kept current; a page at a time */
-function useRows(spaceId: string, collection: string, look: Look) {
+/** Records with the words in any of the fields, ignoring case; undefined when nothing is searched */
+function searchFilterOf(search: string, fields: ReadonlyArray<Field>): Filter | undefined {
+  const words = search.trim();
+  if (!words || fields.length === 0) return undefined;
+  return { $or: fields.map((f) => ({ [f.name]: { $contains: words } })) };
+}
+
+/** A view's records as its filters, the search and its order pick them, kept current; a page at a time */
+function useRows(spaceId: string, collection: string, look: Look, searchWhere: Filter | undefined) {
   const { did } = useAccount();
   const [limit, setLimit] = useState(PAGE);
-  const where = whereOf(look.filters ?? [], did);
+  const filterWhere = whereOf(look.filters ?? [], did);
+  const where =
+    filterWhere && searchWhere ? { $and: [filterWhere, searchWhere] } : (filterWhere ?? searchWhere);
   const sort = look.sort ?? NEWEST_FIRST;
   const query = { collection, ...(where ? { where } : {}), sort: { [sort.field]: sort.direction }, limit };
   const page = useLive(spaceId, (node) => node.records.query(spaceId, query), [JSON.stringify(query)]);

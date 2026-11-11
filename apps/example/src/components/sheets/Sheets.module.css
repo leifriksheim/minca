@@ -40,6 +40,28 @@
   color: var(--color-action);
 }
 
+/* The search box, quiet like the tools beside it until it is typed in */
+.search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-small);
+  background: var(--color-sunken);
+  color: var(--color-text-muted);
+
+  & input {
+    width: 160px;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+    outline: none;
+  }
+}
+
 .newButton {
   min-height: 30px;
   padding: 0 12px;
