@@ -246,6 +246,8 @@ export function createMesh(config: MeshConfig): Mesh {
 
   /** Forgets a connection, closed by either side. */
   const lost = (peer: string): void => {
+    const ourOfferFailed = shouldInitiate(did, peer) && attempted.has(peer) && !links.has(peer);
+    const roomsMetIn = expected.get(peer) ?? new Set<string>();
     clearTimeout(idle.get(peer));
     idle.delete(peer);
     unwatch(peer);
@@ -253,6 +255,8 @@ export function createMesh(config: MeshConfig): Mesh {
     attempted.delete(peer);
     expected.delete(peer);
     for (const room of rooms.values()) drop(room, peer);
+    // The peer's hello back (spec 04 §2) brings the next offer, rather than its hello two minutes on.
+    if (ourOfferFailed) for (const name of roomsMetIn) signaling.hello(name);
   };
 
   const closeIfIdle = (peer: string): void => {

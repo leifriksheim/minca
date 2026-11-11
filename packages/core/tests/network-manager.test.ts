@@ -13,7 +13,7 @@ import { createEmitter } from '../src/utils/events.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createNetworkManager, type NetworkManager } from '../src/network/network-manager.js';
 import { createMesh } from '../src/network/mesh.js';
-import type { PeerTransport, PeerTransportEvents } from '../src/network/transport.js';
+import type { PeerTransport, PeerTransportEvents, SignalledTransport } from '../src/network/transport.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, didToPublicKey, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
@@ -198,6 +198,31 @@ describe('sync through a transport', () => {
   });
 });
 
+/**
+ * A transport whose first connection fails after the answer, before it opens,
+ * as a WebRTC connection does when its DTLS handshake fails.
+ */
+function failingFirstConnection(transport: SignalledTransport): SignalledTransport {
+  const told = createEmitter<PeerTransportEvents>();
+  let hasFailedOnce = false;
+  return {
+    ...transport,
+    on: (event, callback) => {
+      told.on(event, callback);
+      transport.on(event, callback);
+    },
+    off: (event, callback) => {
+      told.off(event, callback);
+      transport.off(event, callback);
+    },
+    handleAnswer: async (peerId, answer) => {
+      if (hasFailedOnce) return transport.handleAnswer(peerId, answer);
+      hasFailedOnce = true;
+      told.emit('disconnected', peerId);
+    },
+  };
+}
+
 describe('the mesh, through real relays', () => {
   const randomPort = () => 20_000 + Math.floor(Math.random() * 20_000);
   const ports = [randomPort(), randomPort()] as const;
@@ -232,7 +257,10 @@ describe('the mesh, through real relays', () => {
     who: Session,
     relays: string[],
     namespace: string,
-    options: { authTimeoutMs?: number } = {},
+    {
+      failsFirstConnection = false,
+      ...options
+    }: { authTimeoutMs?: number; failsFirstConnection?: boolean } = {},
   ) => {
     const opened: string[] = [];
     const created = createMesh({
@@ -242,7 +270,7 @@ describe('the mesh, through real relays', () => {
       createTransport: () => {
         const transport = hub.signalled(who.did, namespace);
         transport.on('connected', (peer) => opened.push(peer));
-        return transport;
+        return failsFirstConnection ? failingFirstConnection(transport) : transport;
       },
       ...options,
     });
@@ -399,6 +427,24 @@ describe('the mesh, through real relays', () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.equal(seenPlain.connected.includes(C.did), false);
     for (const room of [a, c, plainA, plainC]) room.disconnect();
+  });
+
+  test('a connection that fails before it opens is offered again, without waiting for the next hello', async () => {
+    const meshA = mesh(A, [relay], 'retry', { failsFirstConnection: true });
+    const meshB = mesh(B, [relay], 'retry', { failsFirstConnection: true });
+    const [a, b] = [meshA.join('room'), meshB.join('room')];
+    const [seenA, seenB] = [collect(a), collect(b)];
+    try {
+      for (const room of [a, b]) await room.connect();
+      // The hello back is paced at one per 10 s; the next periodic hello is two minutes away.
+      await until(
+        () => seenA.connected.length === 1 && seenB.connected.length === 1,
+        15_000,
+        'the second offer to connect them',
+      );
+    } finally {
+      for (const room of [a, b]) room.disconnect();
+    }
   });
 
   test('two spaces shared by two devices use one connection', async () => {

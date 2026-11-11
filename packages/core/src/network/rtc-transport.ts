@@ -53,12 +53,16 @@ export function createRTCTransport(config?: RTCTransportConfig): SignalledTransp
 
   const { on, off, emit } = createEmitter<PeerTransportEvents>();
 
-  const setupDataChannel = (peerId: string, channel: RTCDataChannel) => {
+  const isCurrent = (peerId: string, connection: RTCPeerConnection) =>
+    connections.get(peerId)?.connection === connection;
+
+  const setupDataChannel = (peerId: string, connection: RTCPeerConnection, channel: RTCDataChannel) => {
     channel.binaryType = 'arraybuffer';
     const peerData = connections.get(peerId);
     if (peerData) peerData.channel = channel;
     channel.onopen = () => emit('connected', peerId);
     channel.onclose = () => {
+      if (!isCurrent(peerId, connection)) return;
       emit('disconnected', peerId);
       close(peerId);
     };
@@ -74,6 +78,7 @@ export function createRTCTransport(config?: RTCTransportConfig): SignalledTransp
     const connection = new RTCPeerConnection({ iceServers: [...iceServers()] });
     connections.set(peerId, { connection, channel: null });
     connection.onconnectionstatechange = () => {
+      if (!isCurrent(peerId, connection)) return;
       if (connection.connectionState === 'failed' || connection.connectionState === 'closed') {
         emit('disconnected', peerId);
         close(peerId);
@@ -84,7 +89,7 @@ export function createRTCTransport(config?: RTCTransportConfig): SignalledTransp
 
   const createOffer = async (peerId: string): Promise<RTCSessionDescriptionInit> => {
     const connection = createConnection(peerId);
-    setupDataChannel(peerId, connection.createDataChannel('data', { ordered: true }));
+    setupDataChannel(peerId, connection, connection.createDataChannel('data', { ordered: true }));
     await connection.setLocalDescription(await connection.createOffer());
     return gathered(connection);
   };
@@ -94,7 +99,7 @@ export function createRTCTransport(config?: RTCTransportConfig): SignalledTransp
     offer: RTCSessionDescriptionInit,
   ): Promise<RTCSessionDescriptionInit> => {
     const connection = createConnection(peerId);
-    connection.ondatachannel = (event) => setupDataChannel(peerId, event.channel);
+    connection.ondatachannel = (event) => setupDataChannel(peerId, connection, event.channel);
     await connection.setRemoteDescription(offer);
     await connection.setLocalDescription(await connection.createAnswer());
     return gathered(connection);

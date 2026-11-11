@@ -84,6 +84,8 @@ export interface Rendezvous {
   /** Enters a room on every relay, and on `relays` as well — joining again with a different list moves to it */
   readonly join: (room: string, relays?: ReadonlyArray<string>) => void;
   readonly leave: (room: string) => void;
+  /** Says hello in a room now, as on joining it */
+  readonly hello: (room: string) => void;
   /**
    * Sends an offer or answer to a peer in one room: an offer where its hello
    * was heard, sealed to the box it said hello with; an answer where the
@@ -403,6 +405,7 @@ export function createRendezvous(
 
     join,
     leave,
+    hello: (room: string) => hello(room),
 
     signal: (kind: SignalKind, to: string, payload: unknown, room: string, given?: string): void => {
       const state = rooms.get(room);
