@@ -180,7 +180,7 @@ const links = {
   },
 } as const;
 // Links are checked where the record is written, like every other writer's.
-const linksOf = (input: Record<string, unknown>) =>
+const linksOf = (input: { readonly links?: unknown }) =>
   Array.isArray(input.links)
     ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checked by the write
       { links: input.links as Array<{ rel: string; to: string }> }
@@ -229,6 +229,31 @@ function standardInFull(name: string) {
     ...(computed !== undefined ? { computed } : {}),
   };
   return { ...stored, summary: describeCollection(stored) };
+}
+
+/** Records one records_put writes at most, so a call ends while a chat app still waits for it */
+const MAX_RECORDS_PUT = 100;
+const RECORD_TO_PUT_SHAPE = '{ collection, body, key?, links? }';
+interface RecordToPut {
+  readonly collection: string;
+  readonly body: Record<string, unknown>;
+  readonly key?: string;
+  readonly links?: ReadonlyArray<{ rel: string; to: string }>;
+}
+const isRecordToPut = (value: unknown): value is RecordToPut =>
+  isRecord(value) &&
+  typeof value.collection === 'string' &&
+  isRecord(value.body) &&
+  (value.key === undefined || typeof value.key === 'string') &&
+  isLinks(value.links);
+
+function recordsToPutOf(value: unknown): RecordToPut[] {
+  const given: unknown[] = Array.isArray(value) ? value : [];
+  if (given.length === 0 || given.length > MAX_RECORDS_PUT)
+    throw new Error(`"records" must hold 1 to ${MAX_RECORDS_PUT} records`);
+  const wrong = given.findIndex((record) => !isRecordToPut(record));
+  if (wrong >= 0) throw new Error(`records[${wrong}] must be ${RECORD_TO_PUT_SHAPE}`);
+  return given.filter(isRecordToPut);
 }
 
 function examplesOf(value: unknown): ContractExample[] {
@@ -884,30 +909,55 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'records_put',
-    title: 'Add a record',
+    title: 'Add records',
     description:
-      'Create a record in a collection. Collections are named like "app.todo.item"; the body is any JSON object. ' +
-      'It gets a fresh key of this account’s unless a name is given, which is put in this account’s namespace. It is signed by this node and synced to the space.',
+      `Create records, 1 to ${MAX_RECORDS_PUT} in one call, each in a collection named like "app.todo.item" with a body that is any ` +
+      'JSON object. Each gets a fresh key of this account’s unless a name is given, which is put in this account’s namespace. ' +
+      'They are written in order. A link needs the key of a record already written, so put what others link to in an ' +
+      'earlier call. Each is signed by this node and synced to the space. Gives one result ' +
+      'per record, in order: { key } of the record written, or { error } saying why that one was refused; the others still count.',
     input: {
       type: 'object',
       properties: {
         space,
-        collection: { type: 'string' },
-        body: { type: 'object' },
-        key: {
-          type: 'string',
-          description:
-            'Optional name for the key, 1–101 of a–z, 0–9 and : . _ -: written at <your owner part>.<name>',
+        records: {
+          type: 'array',
+          description: `The records, 1 to ${MAX_RECORDS_PUT}, each ${RECORD_TO_PUT_SHAPE}`,
+          items: {
+            type: 'object',
+            properties: {
+              collection: { type: 'string' },
+              body: { type: 'object' },
+              key: {
+                type: 'string',
+                description:
+                  'Optional name for the key, 1–101 of a–z, 0–9 and : . _ -: written at <your owner part>.<name>',
+              },
+              links,
+            },
+            required: ['collection', 'body'],
+          },
         },
-        links,
       },
-      required: ['space', 'collection', 'body'],
+      required: ['space', 'records'],
     },
-    run: (node, input) =>
-      node.records.put(str(input, 'space'), str(input, 'collection'), input.body, {
-        ...(typeof input.key === 'string' ? { key: input.key } : {}),
-        ...linksOf(input),
-      }),
+    run: async (node, input) => {
+      const spaceId = str(input, 'space');
+      const results: Array<{ key: string } | { error: string }> = [];
+      for (const record of recordsToPutOf(input.records)) {
+        const result = await node.records
+          .put(spaceId, record.collection, record.body, {
+            ...(record.key === undefined ? {} : { key: record.key }),
+            ...linksOf(record),
+          })
+          .then(
+            (written) => ({ key: written.key }),
+            (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+          );
+        results.push(result);
+      }
+      return results;
+    },
   },
   {
     name: 'records_update',

@@ -135,8 +135,7 @@ import { runAction } from '@minca/core';
 
 await runAction(node, 'records_put', {
   space: space.id,
-  collection: 'app.todo.item',
-  body: { text: 'milk' },
+  records: [{ collection: 'app.todo.item', body: { text: 'milk' } }],
 });
 ```
 

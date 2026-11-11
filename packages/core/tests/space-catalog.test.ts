@@ -329,9 +329,12 @@ describe('a space that describes itself', () => {
       listed.map((c) => [c.name, c.title]),
       [['app.friends.poll', 'Poll']],
     );
-    await assert.rejects(
-      runAction(me, 'records_put', { space: space.id, collection: 'sys.collection', body: {} }),
-      /written by the node itself/,
+    const [refused] = z.tuple([z.object({ error: z.string() })]).parse(
+      await runAction(me, 'records_put', {
+        space: space.id,
+        records: [{ collection: 'sys.collection', body: {} }],
+      }),
     );
+    assert.match(refused.error, /written by the node itself/);
   });
 });

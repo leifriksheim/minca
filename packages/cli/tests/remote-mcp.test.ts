@@ -397,7 +397,10 @@ describe('a host’s MCP endpoint', () => {
       async () => {
         const result = await client.callTool({
           name: 'records_put',
-          arguments: { space: space.id, collection: 'app.note', body: { text: 'Soup on Friday' } },
+          arguments: {
+            space: space.id,
+            records: [{ collection: 'app.note', body: { text: 'Soup on Friday' } }],
+          },
         });
         written = result.isError ? '' : textOf(result);
         return written !== '';
@@ -444,7 +447,7 @@ describe('a host’s MCP endpoint', () => {
     // Its node's copy goes when it stops, and no always-on node is named to keep it: her laptop, online, does.
     const put = await client.callTool({
       name: 'records_put',
-      arguments: { space: space.id, collection: 'app.note', body: { text: 'Bread too' } },
+      arguments: { space: space.id, records: [{ collection: 'app.note', body: { text: 'Bread too' } }] },
     });
     assert.equal(put.isError, false, textOf(put));
     assert.match(textOf(put), /Kept by a device of this space that is online now/);
@@ -755,7 +758,7 @@ describe('a host’s MCP endpoint', () => {
         !(
           await client.callTool({
             name: 'records_put',
-            arguments: { space: later.id, collection: 'app.note', body: { text: 'Found it' } },
+            arguments: { space: later.id, records: [{ collection: 'app.note', body: { text: 'Found it' } }] },
           })
         ).isError,
       10_000,
@@ -1008,7 +1011,7 @@ describe('a session’s node', () => {
     await client
       .callTool({
         name: 'records_put',
-        arguments: { space: space.id, collection: 'app.note', body: { text: 'after' } },
+        arguments: { space: space.id, records: [{ collection: 'app.note', body: { text: 'after' } }] },
       })
       .catch(() => null);
     await new Promise((resolve) => setTimeout(resolve, 2000));

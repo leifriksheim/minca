@@ -110,8 +110,7 @@ test('with every device of theirs offline, a chat app reads and writes through t
   );
   const put = await callTool(issuer, token, 'records_put', {
     space: space.id,
-    collection: 'app.note',
-    body: { text: 'Bread too' },
+    records: [{ collection: 'app.note', body: { text: 'Bread too' } }],
   });
   assert.match(put, /"isError":false/);
   // Its node goes idle and its spaces go with it. Where its key has signed stays:
@@ -133,8 +132,7 @@ test('with every device of theirs offline, a chat app reads and writes through t
   );
   const again = await callTool(issuer, token, 'records_put', {
     space: space.id,
-    collection: 'app.note',
-    body: { text: 'Cake' },
+    records: [{ collection: 'app.note', body: { text: 'Cake' } }],
   });
   assert.match(again, /"isError":false/);
   // Her phone, later, gets both from the host, as hers and "via agent".
@@ -265,8 +263,7 @@ test('given no nodes of its own, the service reaches a space through the host he
   );
   const put = await callTool(issuer, token, 'records_put', {
     space: space.id,
-    collection: 'app.note',
-    body: { text: 'Bread too' },
+    records: [{ collection: 'app.note', body: { text: 'Bread too' } }],
   });
   assert.match(put, /"isError":false/, put);
 });
@@ -327,8 +324,7 @@ test('with no host at all, a chat app writes to her open tab through a relay, an
   // The space names no keepers: her tab has what it writes, and the app is told that is all.
   const put = await callTool(issuer, token, 'records_put', {
     space: space.id,
-    collection: 'app.note',
-    body: { text: 'Bread too' },
+    records: [{ collection: 'app.note', body: { text: 'Bread too' } }],
   });
   assert.match(put, /"isError":false/, put);
   assert.match(put, /Kept by a device of this space that is online now/);

@@ -464,16 +464,15 @@ describe('computed: an agent, through the actions', () => {
         done: "linked('app.reaction', 'on').size() >= 1",
       },
     });
-    const todo = z
-      .object({ key: z.string() })
-      .parse(
-        await runAction(node, 'records_put', { space, collection: 'app.todo', body: { text: 'Dishes' } }),
-      );
+    const [todo] = z.tuple([z.object({ key: z.string() })]).parse(
+      await runAction(node, 'records_put', {
+        space,
+        records: [{ collection: 'app.todo', body: { text: 'Dishes' } }],
+      }),
+    );
     await runAction(node, 'records_put', {
       space,
-      collection: 'app.reaction',
-      body: { emoji: '👍' },
-      links: [{ rel: 'on', to: todo.key }],
+      records: [{ collection: 'app.reaction', body: { emoji: '👍' }, links: [{ rel: 'on', to: todo.key }] }],
     });
     const found = z
       .object({

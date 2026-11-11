@@ -81,11 +81,11 @@ describe('minca agent', () => {
       call(
         {
           name: 'records_put',
-          input: { space: space.id, collection: 'app.club.idea', body: { idea: 'polls' } },
+          input: { space: space.id, records: [{ collection: 'app.club.idea', body: { idea: 'polls' } }] },
         },
         {
           name: 'records_put',
-          input: { space: space.id, collection: 'app.club.idea', body: { idea: 'rides' } },
+          input: { space: space.id, records: [{ collection: 'app.club.idea', body: { idea: 'rides' } }] },
         },
       ),
       say('Added both ideas.'),

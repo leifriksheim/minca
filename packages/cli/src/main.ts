@@ -1024,7 +1024,7 @@ function inputFromFlags(action: NodeAction, args: ReadonlyArray<string>): Record
 
 function flagValue(type: string | undefined, value: string): unknown {
   if (type === 'integer' || type === 'number') return Number(value);
-  if (type === 'object') return JSON.parse(value);
+  if (type === 'object' || type === 'array') return JSON.parse(value);
   return value;
 }
 

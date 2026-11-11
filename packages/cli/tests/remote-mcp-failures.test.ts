@@ -99,8 +99,7 @@ test('a write the keepers haven’t confirmed is not said to be written', async 
   link.cutBack();
   const put = await callTool(issuer, token, 'records_put', {
     space: space.id,
-    collection: 'app.note',
-    body: { text: 'Bread too' },
+    records: [{ collection: 'app.note', body: { text: 'Bread too' } }],
   });
   assert.match(put, /"isError":true/);
   assert.match(put, /not yet kept elsewhere/);
@@ -113,8 +112,7 @@ test('a write the keepers haven’t confirmed is not said to be written', async 
       (
         await callTool(issuer, token, 'records_put', {
           space: space.id,
-          collection: 'app.note',
-          body: { text: `Cake ${n++}` },
+          records: [{ collection: 'app.note', body: { text: `Cake ${n++}` } }],
         })
       ).includes('"isError":false'),
     30_000,
@@ -124,8 +122,7 @@ test('a write the keepers haven’t confirmed is not said to be written', async 
     assert.match(
       await callTool(issuer, token, 'records_put', {
         space: space.id,
-        collection: 'app.note',
-        body: { text: `Pie ${more}` },
+        records: [{ collection: 'app.note', body: { text: `Pie ${more}` } }],
       }),
       /"isError":false/,
     );
@@ -207,8 +204,7 @@ test('a space the always-on nodes don’t carry fails its own calls only', async
   assert.ok(club.includes('Soup on Friday'), club);
   const elsewhere = await callTool(issuer, token, 'records_put', {
     space: other.id,
-    collection: 'app.note',
-    body: { text: 'Unseen' },
+    records: [{ collection: 'app.note', body: { text: 'Unseen' } }],
   });
   assert.match(elsewhere, /"isError":true/);
   assert.match(elsewhere, /Nobody who keeps this space is online right now/);
