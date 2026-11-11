@@ -589,7 +589,10 @@ A later version (`seq > 0`) MUST follow the version its `prev` names. On
 arrival, a peer looks that version up, whole or as a stub (§4.5):
 
 - If it is not held, judging waits (§9.5), and the peer asks for it
-  ([05](05-sync-and-storage.md)).
+  ([05](05-sync-and-storage.md)). A peer syncing by shallow sets
+  ([05](05-sync-and-storage.md) §5.1) instead takes a version a keeper sent
+  without it, as checked by that keeper, and lacks the versions below what it
+  holds by design.
 - Otherwise, with `P` the version `prev` names, the version is refused unless
   all of these hold:
   1. `P.key` equals `key`;

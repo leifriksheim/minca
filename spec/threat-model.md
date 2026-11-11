@@ -1345,6 +1345,12 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
   - It cannot read the bodies of a private space's records outside the
     collections 03 §8.2 keeps in the clear, without the space key.
   - It cannot alter or forge what it serves (02 §3).
+  - A node syncing a space it keeps by shallow sets (05 §5.1) takes its word
+    for the chain below each version: it can show such a node a version that
+    skipped a `seq`, which a node holding the space whole refuses (02 §4.7).
+    Its signature, its author's standing and its first version are still
+    checked, so it can withhold or reorder history, never forge a record or
+    let in someone who may not write.
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).

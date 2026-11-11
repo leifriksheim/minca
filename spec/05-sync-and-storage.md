@@ -268,12 +268,13 @@ Ids below are version ids (strings, §2). Byte strings are `base64url`.
 
 "Here is what I hold, and a fingerprint of each collection I keep."
 
-| Field   | Type                       | Meaning                                                                                                                                                     |
-| ------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `type`  | `"hello"`                  |                                                                                                                                                             |
-| `holds` | `"all"` \| `string[]`      | Optional. `"all"`, or the collections held besides `sys.*` (§5). Absent means `"all"`.                                                                      |
-| `sums`  | `{ [collection]: string }` | For each held collection the sender keeps at least one version of: the collection's fingerprint (§3.3) over all its items, as 32 lower-case hex characters. |
-| `reply` | `true`                     | Optional. Marks a hello sent in answer to one; it is never answered by another hello.                                                                       |
+| Field     | Type                       | Meaning                                                                                                                                                     |
+| --------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`    | `"hello"`                  |                                                                                                                                                             |
+| `holds`   | `"all"` \| `string[]`      | Optional. `"all"`, or the collections held besides `sys.*` (§5). Absent means `"all"`.                                                                      |
+| `sums`    | `{ [collection]: string }` | For each held collection the sender keeps at least one version of: the collection's fingerprint (§3.3) over all its items, as 32 lower-case hex characters. |
+| `reply`   | `true`                     | Optional. Marks a hello sent in answer to one; it is never answered by another hello.                                                                       |
+| `shallow` | `true`                     | Optional. The sender syncs with this peer by shallow sets (§5.1): `sums` are over its shallow sets, and the receiver answers and compares in kind.          |
 
 Example (fingerprint values illustrative):
 
@@ -304,6 +305,7 @@ One round of reconciling one collection, initiator to responder.
 | `id`         | number        | The session id, chosen by the initiator, echoed in the answer.              |
 | `collection` | string        | The collection being reconciled.                                            |
 | `message`    | string        | A Negentropy message (§3), base64url. At most 32,000 bytes before encoding. |
+| `shallow`    | `true`        | Optional. Compare the collection's shallow set (§5.1), not all its items.   |
 
 ### `reconciled`
 
@@ -395,6 +397,43 @@ library chooses is in
 
 _Source: `packages/core/src/sync/sync-engine.ts` (`Holds`, `holdsCollection`, `readHolds`).
 Tests: `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
+
+### 5.1 Shallow sets
+
+A collection's **shallow set** is every version a node keeps of it except
+the unretained stubs past a record's first version: each record's current
+version (whole; a current version held only as a stub is not in it until its
+body arrives), every first version (`seq 0`, whole or stub), and every
+retained version ([02](02-records.md) §4.5). Whether a kept version is in it
+is decided by the version alone, so nodes keeping the same versions keep the
+same shallow sets. Every `sys.*` version is retained, so a space's access
+history is always in its shallow sets whole.
+
+Two peers **sync by shallow sets** when either says `shallow` in its hello:
+both compute `sums` over their shallow sets, every `reconcile` between them
+says `shallow`, and each side compares its own shallow set. A peer that does
+not know the field compares all its items; the exchange is then a whole one,
+so nothing is ever missed, only fetched in full.
+
+Syncing by shallow sets is a node's own choice, never required. A node that
+chooses it:
+
+- MUST hold only `sys.*` until it has been level with a node holding the
+  whole space (§6.5), and so knows whether the space names keepers (§9);
+- MUST hold the space whole, and sync whole, when the space names no keepers;
+- takes a version from a **keeper** without the version its `prev` names, as
+  the keeper's to have checked (§8). From any other peer such a version
+  waits, and the version before is not asked for: a keeper's copy of it
+  arrives without one.
+- does not chase gaps in writers' lines (§9): it lacks the versions below
+  what it holds by design.
+
+A node holding a space shallow trusts its keepers with one check: it cannot
+itself see that a chain below what it holds skips a `seq` (02 §4.7). It still
+checks every signature, the author's standing and the first version, so a
+keeper can withhold, but never forge.
+
+_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-standing.ts` (`chainStanding`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
 
 ---
 
@@ -588,7 +627,8 @@ a data folder (§14.5), or a mirror (§16), a node MUST run
 it through the validation pipeline of [02 — Records](02-records.md) and the
 access rules of [03 — Spaces](03-spaces.md), and MUST NOT store it unless it
 passes. Shape (schema conformance) is **not** a reason to refuse a version on
-arrival; see 02.
+arrival; see 02. A node syncing by shallow sets takes a keeper's version
+without the version before it (§5.1, [02](02-records.md) §4.7).
 
 The gatekeeper gives one of the four answers of [02](02-records.md) §9.5:
 
