@@ -463,10 +463,13 @@ export function createNodeCarriers(ctx: NodeContext) {
    * a space it manages, and stops naming ones it removed, so apps there hold
    * only what they use. Other keepers the space names stay. Done as each space
    * opens and whenever the carriers change; a space this account doesn't
-   * manage is left to whoever does.
+   * manage is left to whoever does. The account's own spaces too, its
+   * registry first: a carrier is a keeper of the account's personal space,
+   * and so of every space it manages (06 §4). Not a carry space, which holds
+   * only a carrier's passes.
    */
   async function nameKeepers(spaceId: string, rt: SpaceRuntime): Promise<void> {
-    if (!account || ctx.narrowNote || (await ctx.kindOf(spaceId))) return;
+    if (!account || ctx.narrowNote || (await ctx.kindOf(spaceId)) === 'carry') return;
     if (!(await rt.may(SPACE_KEEPERS))) return;
     const access = await rt.access();
     const carriers = await carrierRecords();
