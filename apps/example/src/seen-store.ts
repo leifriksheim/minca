@@ -104,7 +104,7 @@ export function createSeenStore(node: P2PNode) {
     for (const [space, one] of found) {
       const here = next.get(space);
       next.set(space, here ? merged(one, here) : one);
-      if (here && !unwritten.has(space) && lacks(one, here)) lost.push(space);
+      if (here && !unwritten.has(space) && space !== spaceBeingWritten && lacks(one, here)) lost.push(space);
     }
     loaded = true;
     changed(next);
@@ -115,22 +115,29 @@ export function createSeenStore(node: P2PNode) {
     }
   };
 
+  /** Written one at a time: a registry read from before this lands doesn't have its looks yet */
+  let spaceBeingWritten: string | null = null;
   const write = async (space: string) => {
     const one = seen.get(space);
     const registry = await node.account.space();
     if (!one || !registry) return;
     unwritten.delete(space);
+    spaceBeingWritten = space;
     const body = {
       space,
       since: one.since,
       apps: Object.entries(one.apps).map(([app, at]) => ({ app, at })),
     };
-    if (!(await node.collections.list(registry)).some((c) => c.name === seenRecords.name && c.schema))
-      await node.collections.define(registry, seenRecords);
-    // One record per space: the first look writes it, every one after edits it.
-    const key = await node.records.onePerKey(registry, seenRecords.name, body);
-    if (key && (await node.records.get(registry, key))) await node.records.update(registry, key, body);
-    else await node.records.put(registry, seenRecords.name, body);
+    try {
+      if (!(await node.collections.list(registry)).some((c) => c.name === seenRecords.name && c.schema))
+        await node.collections.define(registry, seenRecords);
+      // One record per space: the first look writes it, every one after edits it.
+      const key = await node.records.onePerKey(registry, seenRecords.name, body);
+      if (key && (await node.records.get(registry, key))) await node.records.update(registry, key, body);
+      else await node.records.put(registry, seenRecords.name, body);
+    } finally {
+      spaceBeingWritten = null;
+    }
   };
   // One write at a time, so two looks in quick succession don't both create the space's record.
   let writing = Promise.resolve();

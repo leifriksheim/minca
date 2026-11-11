@@ -88,7 +88,10 @@ async function eavesdrop(url: string, room = 'room') {
 describe('meeting through relays', () => {
   test('two peers on two shared relays hear each other once, and an offer arrives once, opened', async () => {
     // B is there first, so it hears A's hello, and says hello back since A is the one to offer.
+    const bothRelays = [await eavesdrop(one.url), await eavesdrop(two.url)];
     const b = await peer(B, [one.url, two.url]);
+    // B's hello on joining is out before A is there, so A hears only the hello back: two hellos would be two joins.
+    await until(() => bothRelays.every((relay) => relay.blobs.length > 0), 2000, 'B’s hello on both relays');
     const a = await peer(A, [one.url, two.url]);
     await until(() => a.joined.includes(B.did) && b.joined.includes(A.did), 2000, 'hellos');
     // Each hello came through both relays; the second copy changes nothing.
