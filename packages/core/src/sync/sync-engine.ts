@@ -72,8 +72,9 @@ export interface SyncEngineConfig {
 }
 
 /**
- * - `synced` (peer, full, levelShallow): nothing left in flight with the peer; `full` when it holds every
- *   collection, `levelShallow` when it just answered this node's ask with shallow sums that all match
+ * - `synced` (peer, full, levelShallow, wholeSets): nothing left in flight with the peer; `full` when it
+ *   holds every collection, `levelShallow` when it just answered this node's ask with shallow sums that
+ *   all match, `wholeSets` when the two compared whole sets
  * - `level` (peer, collection, full): this node holds what the peer holds of a collection
  * - `stored` (peer, ids): the peer says it now has these versions
  * - `version-received` (version): each version taken in
@@ -81,7 +82,7 @@ export interface SyncEngineConfig {
  * - `rejected` (peer, version, reason), `error` (error)
  */
 interface SyncEvents {
-  synced: (peer: string, full: boolean, levelShallow: boolean) => void;
+  synced: (peer: string, full: boolean, levelShallow: boolean, wholeSets: boolean) => void;
   level: (peer: string, collection: string, full: boolean) => void;
   stored: (peer: string, ids: string[]) => void;
   'version-received': (version: Version) => void;
@@ -495,7 +496,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const settleIfDone = (peerId: string, levelShallow = false) => {
     if (busy(peerId)) return;
     level.add(peerId);
-    emit('synced', peerId, states.get(peerId)?.holds === 'all', levelShallow);
+    emit('synced', peerId, states.get(peerId)?.holds === 'all', levelShallow, !shallowWith(peerId));
   };
 
   const sendRound = (peerId: string, session: Session, message: Uint8Array) =>

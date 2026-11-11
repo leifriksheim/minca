@@ -13,7 +13,7 @@ import { createStorageProvider, inShallowSet, SHALLOW_PREFIX } from '../src/stor
 import { cidOfDigest } from '../src/utils/hash.js';
 import type { StorageProvider } from '../src/storage/storage-provider.js';
 import type { Version } from '../src/types.js';
-import { makeKey } from './helpers/person.js';
+import { forge, makeKey } from './helpers/person.js';
 import { createNode } from '../src/node/node.js';
 import type { P2PNode, ShallowMode } from '../src/node/types.js';
 import type { StoreFactory } from '../src/node/stores.js';
@@ -23,7 +23,7 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
-import { hold } from './helpers/hold.js';
+import { hold, letGo } from './helpers/hold.js';
 import { joined } from './helpers/joined.js';
 import { until } from './helpers/until.js';
 import { lineKey } from '../src/records/key.js';
@@ -130,6 +130,12 @@ describe('shallow sets', () => {
     assert.ok(inShallowSet(second!));
     assert.ok(!inShallowSet(stubOf(second!)), 'a stub past the first version');
   });
+
+  test('a stub at a line key is in the set: a losing twin decides what counts', async () => {
+    const [, second] = await editedRecord(1);
+    const atLine = { ...stubOf(second!), key: await lineKey(second!.author, 'app.pay') };
+    assert.ok(inShallowSet(atLine));
+  });
 });
 
 describe('a node that syncs shallow', () => {
@@ -141,10 +147,11 @@ describe('a node that syncs shallow', () => {
   async function personOn(hub: FakeHub, options: { shallow?: ShallowMode; seed?: Uint8Array } = {}) {
     const manager = createIdentityManager();
     const seed = options.seed ?? generateSeed();
+    const me = await manager.fromSeed(seed);
     const stores = memoryStores();
     let session = '';
     const config = {
-      signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
+      signer: createLocalRootSigner(me, manager.getProvider()),
       stores,
       watchIntervalMs: 0,
       network: {
@@ -156,7 +163,7 @@ describe('a node that syncs shallow', () => {
     };
     const node = await createNode({ ...config, ...(options.shallow ? { shallow: options.shallow } : {}) });
     nodes.push(node);
-    return { node, stores, config, seed, session: () => session };
+    return { node, me, manager, stores, config, seed, session: () => session };
   }
 
   /** Alice's space with one card edited `edits` times, kept whole by Bob, who it names its keeper */
@@ -338,5 +345,152 @@ describe('a node that syncs shallow', () => {
     const { alice, space, key, versionsAt } = await editedSpace(hub, 200);
     const dave = await newcomer(hub, alice.node, space, key);
     await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
+  });
+
+  test('a double spend counts on no shallow node: a line is held whole, losing twins too', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await personOn(hub);
+    const bob = await personOn(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Credit', ...team, visibility: 'public' });
+    await hold(alice.node, space);
+    await alice.node.collections.define(space, {
+      name: 'app.pay',
+      schema: { type: 'object' },
+      contract: { line: { once: ['received'] } },
+    });
+    const line = await lineKey(alice.node.did, 'app.pay');
+    const first = await alice.node.records.put(space, 'app.pay', { amount: 30, balance: -30 }, { key: line });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(bob.node, space);
+    await joined(bob.node, space);
+    await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+    await until(
+      async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+      10_000,
+      'Bob keeps it',
+    );
+
+    // Two payments after the first, the losing one without `retain`: a superseded stub past the first.
+    await letGo(alice.node, space);
+    const after = { key: line, seq: 1, prev: first.version, genesis: first.version };
+    const pay = (amount: number, retain: boolean) =>
+      forge(
+        alice,
+        space,
+        {
+          collection: 'app.pay',
+          ...(retain ? { retain: true } : {}),
+          body: { amount, balance: -30 - amount, received: [] },
+          version: after,
+        },
+        { keep: false },
+      );
+    let [winner, twin] = [await pay(50, true), await pay(60, false)];
+    while (winner.id > twin.id) [winner, twin] = [await pay(50, true), await pay(60, false)];
+    const store = createStorageProvider(await alice.stores(`spaces/${space}`));
+    await store.addVersion(winner);
+    await store.addVersion(twin);
+    await hold(alice.node, space);
+    const balance = async (node: P2PNode) =>
+      (await node.records.get<{ balance: number }>(space, line))?.body?.balance;
+    await until(async () => (await balance(bob.node)) === -30, 10_000, 'the keeper to fail both twins');
+
+    const dave = await personOn(hub, { shallow: 'always' });
+    await dave.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(dave.node, space);
+    await joined(dave.node, space);
+    await until(
+      async () => (await balance(dave.node)) === -30,
+      20_000,
+      'the shallow node to fail both twins',
+    );
+  });
+
+  test('a new device with its keeper away takes the latest edits whole from any other peer', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, bob, space, key } = await editedSpace(hub, 20);
+    await bob.node.close();
+    const dave = await personOn(hub, { shallow: 'first' });
+    await dave.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(dave.node, space);
+    await until(
+      async () => (await dave.node.records.get<{ n: number }>(space, key))?.body?.n === 20,
+      20_000,
+      'the latest edit, from Alice',
+    );
+  });
+
+  test('a device holding a space whole removes a member at once, a gap in their log or not', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await personOn(hub, { shallow: 'first' });
+    const mallory = await personOn(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'public' });
+    await hold(alice.node, space);
+    await alice.node.collections.define(space, { name: 'app.card', schema: { type: 'object' } });
+    await mallory.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(mallory.node, space);
+    await joined(mallory.node, space);
+    await letGo(mallory.node, space);
+    const gapped = await forge(mallory, space, {
+      collection: 'app.card',
+      body: { spam: true },
+      log: { n: 5, prev: 'bafkreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+    });
+    await hold(mallory.node, space);
+    await until(async () => (await alice.node.records.get(space, gapped.key)) !== null, 10_000, 'the spam');
+
+    const started = Date.now();
+    await alice.node.spaces.removeMember(space, mallory.node.did);
+    assert.ok(Date.now() - started < 5_000, 'no wait for a gap that never fills');
+  });
+
+  test('a version a keeper vouched for goes once the one before shows it breaks the chain', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await personOn(hub);
+    const bob = await personOn(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'public' });
+    await hold(alice.node, space);
+    await alice.node.collections.define(space, { name: 'app.card', schema: { type: 'object' } });
+    const first = await alice.node.records.put(space, 'app.card', { n: 0 });
+    const { key } = first;
+    const next = await alice.node.records.update(space, key, { n: 1 });
+    for (let n = 2; n <= 10; n++) await alice.node.records.update(space, key, { n });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(bob.node, space);
+    await joined(bob.node, space);
+    await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+    await until(
+      async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+      10_000,
+      'Bob keeps it',
+    );
+    const versionsAt = async (who: { stores: StoreFactory }) =>
+      (await createStorageProvider(await who.stores(`spaces/${space}`)).sums()).get('app.card')?.count ?? 0;
+    await until(async () => (await versionsAt(bob)) === 11, 10_000, 'Bob to keep every edit');
+
+    // Bob, keeper and editor, skips ahead to a `seq` nobody can outrank, past his own gatekeeper.
+    await letGo(bob.node, space);
+    const frozen = await forge(bob, space, {
+      collection: 'app.card',
+      body: { n: 'frozen' },
+      version: { key, seq: Number.MAX_SAFE_INTEGER, prev: next.version, genesis: first.version },
+    });
+    await hold(bob.node, space);
+
+    const dave = await personOn(hub, { shallow: 'first' });
+    await dave.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(dave.node, space);
+    await joined(dave.node, space);
+    await until(async () => (await versionsAt(dave)) >= 11, 20_000, 'the whole history');
+    await alice.node.records.update(space, key, { n: 11 });
+    await until(
+      async () => (await dave.node.records.get<{ n: unknown }>(space, key))?.body?.n === 11,
+      15_000,
+      'the latest honest edit',
+    );
+    assert.equal(
+      await createStorageProvider(await dave.stores(`spaces/${space}`)).getVersion(frozen.id),
+      null,
+    );
   });
 });

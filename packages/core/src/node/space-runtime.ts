@@ -38,6 +38,8 @@ import type { Delegation } from '../identity/ucan.js';
 import { actsForAccount } from '../identity/abilities.js';
 import { contactKeyPair } from '../identity/contact-key.js';
 import { ownedKey } from '../records/key.js';
+import { chainProblem, supersedes } from '../records/version.js';
+import { cidOfDigest } from '../utils/hash.js';
 import { topicTag } from '../records/topics.js';
 import { storedComputed, storedContract } from '../records/contract-builder.js';
 import { usableComputed, type ComputedFields } from '../query/computed.js';
@@ -255,6 +257,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     upsert,
     cannotWrite,
     shallow: deps.shallow ?? null,
+    holdsHistory: holding.holdsHistory,
   });
   const warrants = createWarrants({ ...base, versions, history, rules, standing, upsert, cannotWrite });
 
@@ -283,7 +286,60 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // Whatever its key signed takes a place in that key's log, allowed or not: a second at one place is a fork.
     if ((await versions.judge(version)).verified) await lines.placeInLog(version);
     // From a keeper this node syncs shallow with: the chain below it is the keeper's to have checked.
-    return standing.admission(version, from !== undefined && holding.vouches(from));
+    const vouched = from !== undefined && holding.vouches(from);
+    const verdict = await standing.admission(version, vouched);
+    if (vouched && verdict.ok) await awaitVersionBefore(version);
+    return verdict;
+  }
+
+  /**
+   * Versions a keeper vouched for without the one before (05 §5.1), by that
+   * one's id: kept across runs, and checked against it once it arrives.
+   */
+  const VOUCHED_PREFIX = 'vouched/';
+  const vouchedAwaiting = new Set(
+    (await adapter.list(VOUCHED_PREFIX)).map((name) => name.slice(VOUCHED_PREFIX.length).split('/')[0]!),
+  );
+
+  async function awaitVersionBefore(version: Version): Promise<void> {
+    if (version.seq === 0 || typeof version.prev !== 'string' || (await storage.getVersion(version.prev)))
+      return;
+    vouchedAwaiting.add(version.prev);
+    await adapter.put(`${VOUCHED_PREFIX}${version.prev}/${version.id}`, new Uint8Array());
+  }
+
+  /**
+   * Checks what a keeper vouched for against the versions before them that
+   * just arrived, as any node checks a chain (02 §4.7). One that breaks it
+   * goes, as a node holding the space whole refused it; the best version left
+   * of its record is current again, its body asked of the peers.
+   */
+  async function checkVouchedChains(placed: ReadonlyArray<Version>): Promise<void> {
+    for (const before of placed) {
+      if (!vouchedAwaiting.delete(before.id)) continue;
+      for (const name of await adapter.list(`${VOUCHED_PREFIX}${before.id}/`)) {
+        await adapter.delete(name);
+        const vouched = await storage.getVersion(name.slice(name.lastIndexOf('/') + 1));
+        if (!vouched || !chainProblem(vouched, before)) continue;
+        await storage.removeVersion(vouched.id);
+        const best = await findBestHeldVersion(vouched.collection, vouched.key);
+        if (best) {
+          await storage.addVersion(best);
+          peers.sync.ask(best.collection, [best.id]);
+        }
+        recordsChanged();
+      }
+    }
+  }
+
+  /** The version of a record that supersedes every other held, stubs included: a whole collection's read, so only when one went */
+  async function findBestHeldVersion(collection: string, key: string): Promise<Version | null> {
+    let best: Version | null = null;
+    for (const item of (await storage.items(collection)).items) {
+      const version = await storage.getVersion(cidOfDigest(item.id));
+      if (version?.key === key && (!best || supersedes(version, best))) best = version;
+    }
+    return best;
   }
 
   // ─── Mirrors and files ─────────────────────────────────────────────
@@ -362,6 +418,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   function recordsChanged(placed?: ReadonlyArray<Version>): void {
     filesChanged();
     if (placed) holding.noteArrived(placed);
+    if (placed && vouchedAwaiting.size > 0) void checkVouchedChains(placed).catch(() => {});
     index.linksChanged();
     emit({ type: 'records', space: space.id });
     mirrors.changed();

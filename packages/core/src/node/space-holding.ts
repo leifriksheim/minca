@@ -25,6 +25,8 @@ const DAY = 24 * HOUR;
 
 /** Where it is kept in the space's store */
 const CACHE_KEY = 'cache';
+/** There while this node takes the history of a space it held shallow */
+const TAKING_HISTORY_KEY = 'taking-history';
 /** One entry per write of this node's still waiting for keepers: `pending/<id>` */
 const PENDING_PREFIX = 'pending/';
 /** How many pending writes a node holding a whole space keeps track of */
@@ -141,13 +143,25 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     shallow === 'always' ||
     (shallow === 'first' && [...(await storage.sums()).keys()].every((name) => name.startsWith('sys.')));
   /**
-   * Whether to sync with a peer by shallow sets: with every peer, once this
-   * node knows the space names keepers to vouch, and is not one itself. A
-   * space that names none is held whole.
+   * Whether this node is still taking the space's history: from when it held
+   * the space shallow until it is first level with a peer on whole sets.
+   * Kept across runs, so a restart mid-way doesn't pass for holding it all.
    */
-  const shallowWith = (_peer: string) =>
-    shallowNow && cacheState.settled && keepers.size > 0 && !keepers.has(sessionDid);
-  /** Whether a version a peer sent may skip the chain below it: from a keeper, when syncing shallow */
+  let takingHistory = shallowNow || (await adapter.get(TAKING_HISTORY_KEY)) !== null;
+  if (takingHistory) await adapter.put(TAKING_HISTORY_KEY, new Uint8Array());
+  /**
+   * Whether to sync by shallow sets: once this node knows the space names
+   * keepers, and is not one itself. A space that names none syncs whole.
+   */
+  const syncsShallow = () => shallowNow && cacheState.settled && keepers.size > 0 && !keepers.has(sessionDid);
+  const keeperConnected = () => connectedPeers().some((peer) => keepers.has(peer));
+  /**
+   * With a keeper, and with any other peer while a keeper is connected to
+   * vouch for what it skips. With none connected, others sync whole: their
+   * versions bring the chain below them, so a keeper away only slows this node.
+   */
+  const shallowWith = (peer: string) => syncsShallow() && (keepers.has(peer) || keeperConnected());
+  /** Whether a version a peer sent may skip the chain below it: from a keeper this node syncs shallow with */
   const vouches = (peer: string) => shallowWith(peer) && keepers.has(peer);
 
   /** Takes the rest of the space, as a node holding it whole: once usable, for a node shallow at first */
@@ -156,6 +170,13 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     shallowNow = false;
     sync().notifyPeers(connectedPeers());
     statusChanged();
+  }
+
+  /** Level with a peer on whole sets after holding the space shallow: it holds the history the peer does */
+  function noteHistoryHeld(): void {
+    if (!takingHistory || shallowNow) return;
+    takingHistory = false;
+    void adapter.delete(TAKING_HISTORY_KEY).catch(() => {});
   }
   const holds = (): Holds => {
     // Syncing shallow: only the space's own until it knows whether keepers name themselves to vouch.
@@ -188,10 +209,10 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   async function refreshHolds(): Promise<void> {
     if (isClosed()) return;
     const named = (await access()).history.current.keepers;
-    const wasShallow = shallowWith('');
+    const wasShallow = syncsShallow();
     keepers = new Set(named.map((keeper) => keeper.did));
     // Peers hear the sets this node compares now.
-    if (shallowWith('') !== wasShallow) sync().notifyPeers(connectedPeers());
+    if (syncsShallow() !== wasShallow) sync().notifyPeers(connectedPeers());
     if (!cache) return;
     const next = named.length > 0 || !cacheState.settled;
     if (next === partial) return;
@@ -231,7 +252,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
    */
   async function noteGap(version: Version): Promise<void> {
     // A shallow node lacks the versions below what it holds by design: no gap to fill.
-    if (!cache || shallowWith('') || !version.log || version.collection.startsWith('sys.')) return;
+    if (!cache || syncsShallow() || !version.log || version.collection.startsWith('sys.')) return;
     const { collection } = version;
     const missing = cacheState.missing[collection] ?? [];
     const before = version.log.prev;
@@ -402,9 +423,14 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   /** Starts holding: saves what was settled, follows sync, and drops what goes unused */
   function start(): void {
     saveCache();
-    sync().on('synced', (peer: string, full: boolean, levelShallow: boolean) => {
+    sync().on('synced', (peer: string, full: boolean, levelShallow: boolean, wholeSets: boolean) => {
       // Level with a keeper on what it holds shallow: usable now, so the rest comes next.
       if (full && levelShallow && vouches(peer)) return deepen();
+      // Level on whole sets with a peer holding the space whole: so is this node now.
+      if (full && wholeSets && cacheState.settled) {
+        deepen();
+        noteHistoryHeld();
+      }
       if ((!cache && !shallowNow) || !full || cacheState.settled) return;
       // Caught up with a node holding everything: the access history here is the space's now.
       cacheState.settled = true;
@@ -445,6 +471,8 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     noteArrived,
     markPending,
     start,
+    /** Whether this node holds the space's history, as one that never held it shallow does */
+    holdsHistory: () => !takingHistory,
     /** What this node holds now, for its status */
     held: () => (partial ? Object.keys(cacheState.used).sort() : ('all' as const)),
     /** How many of this node's writes still wait for keepers */

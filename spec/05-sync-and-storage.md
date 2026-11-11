@@ -401,20 +401,23 @@ Tests: `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
 ### 5.1 Shallow sets
 
 A collection's **shallow set** is every version a node keeps of it except
-the unretained stubs past a record's first version: each record's current
-version (whole; a current version held only as a stub is not in it until its
-body arrives), every first version (`seq 0`, whole or stub), and every
-retained version ([02](02-records.md) §4.5). Whether a kept version is in it
-is decided by the version alone, so nodes keeping the same versions keep the
-same shallow sets. Every `sys.*` version is retained, so a space's access
-history is always in its shallow sets whole.
+the unretained stubs past a record's first version outside a line: each
+record's current version (whole; a current version held only as a stub is
+not in it until its body arrives), every first version (`seq 0`, whole or
+stub), every retained version ([02](02-records.md) §4.5), and every version
+at a key of a line's form, `<owner>.line:` and 26 base32 characters
+([09](09-contracts.md) §7), since a losing twin there decides what counts
+(09 §7.3). Whether a kept version is in it is decided by the version alone,
+so nodes keeping the same versions keep the same shallow sets. The access
+history is retained (02 §4.5), so it is always in its shallow sets whole.
 
 Two peers **sync by shallow sets** while either's last hello asked to: both
 compute `sums` over their shallow sets, every `reconcile` between them says
 `shallow`, and each side compares its own shallow set. A node that stops
 asking sends a hello without the field, and the next exchange is whole. A
 peer that does not know the field compares all its items; the exchange is
-then a whole one, so nothing is ever missed, only fetched in full.
+then a whole one: nothing is missed, but it offers the stubs outside the
+asker's shallow set again at each exchange.
 
 A node that receives a hello asking for shallow sets, not itself a reply,
 whose `sums` all match its own, MUST answer with a hello (`reply: true`). It
@@ -429,26 +432,39 @@ that lives for a session). A node that chooses it:
 
 - MUST hold only `sys.*` until it has been level with a node holding the
   whole space (§6.5), and so knows whether the space names keepers (§9);
-- MUST hold the space whole, and sync whole, when the space names no keepers;
-- takes a version from a **keeper** without the version its `prev` names, as
-  the keeper's to have checked (§8). From any other peer such a version
-  waits, and the version before is not asked for: a keeper's copy of it
-  arrives without one.
+- asks a peer for shallow sets only while one of the space's **keepers**
+  (§9) is connected: that keeper, and any other peer, since the keeper
+  vouches for what they skip. With no keeper connected, it syncs whole, and
+  with every peer when the space names no keeper or names this node;
+- takes a version from a keeper it syncs shallow with without the version
+  its `prev` names, as the keeper's to have checked (§8), and does not ask
+  that keeper for the version before. A version from any other peer waits
+  for a keeper's copy, and with no keeper connected for the version before,
+  as on any node (02 §4.7), so a keeper that is away slows such a node but
+  never leaves it behind a peer it syncs with;
+- once the version before such a version arrives, MUST check the chain
+  between them (02 §4.7), and drop the later one if it breaks it, as a node
+  holding the space whole refused it;
 - does not chase gaps in writers' lines (§9): it lacks the versions below
-  what it holds by design.
+  what it holds by design;
+- takes the space's history from the moment it is level with a peer
+  holding the whole space, on shallow sets with a keeper or on whole sets
+  with anyone, if it chose to only at first;
 - MUST NOT write a change that takes power from an account (an `assign`
-  taking a role, a `remove`, a `stepdown`) while it lacks a place in that
-  account's lines below the last it holds: the cutoff ([03](03-spaces.md))
-  would leave out writes that should stand. It waits for its history, or
-  refuses. A `revoke` is written at once: what it leaves out of a lost key's
-  writes is taken away, the safe side.
+  taking a role, a `remove`, a `stepdown`) from the time it holds the space
+  shallow until it has been level with a peer holding the whole space on
+  whole sets: the cutoff ([03](03-spaces.md) §6.3) would leave out writes
+  that should stand. It waits, or refuses. A `revoke` is written at once:
+  what it leaves out of a lost key's writes is taken away, the safe side.
 
-A node holding a space shallow trusts its keepers with one check: it cannot
-itself see that a chain below what it holds skips a `seq` (02 §4.7). It still
+A node holding a space shallow takes its keepers' word for one check only:
+that the chain below what it holds skips no `seq` (02 §4.7), until the
+versions below arrive, which for a node shallow always is never. It still
 checks every signature, the author's standing and the first version, so a
-keeper can withhold, but never forge.
+keeper can withhold, reorder or freeze a record for such a node, never forge
+one.
 
-_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-standing.ts` (`chainStanding`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
+_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-runtime.ts` (`checkVouchedChains`), `packages/core/src/node/space-lines.ts` (`cutoffFromWholeLinesFor`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
 
 ---
 

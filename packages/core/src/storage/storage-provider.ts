@@ -22,6 +22,7 @@
 
 import type { StorageAdapter, Version, BatchOp } from '../types.js';
 import { byVersion, supersedes } from '../records/version.js';
+import { hasLineKeyForm } from '../records/key.js';
 import { isStub, stubOf } from '../schema/version.js';
 import { utf8Encode, utf8Decode, bytesToHex } from '../utils/encoding.js';
 import { cidDigest } from '../utils/hash.js';
@@ -117,11 +118,12 @@ const itemKey = (e: Version, prefix = ITEM_PREFIX) =>
 
 /**
  * Whether a kept version is in its collection's shallow set (05 §5): every
- * version but an unretained stub past a record's first. Decided by the
- * version alone, so two stores keeping the same versions keep the same set.
+ * version but an unretained stub past a record's first, outside a line, where
+ * a losing twin decides what counts. Decided by the version alone, so two
+ * stores keeping the same versions keep the same set.
  */
 export const inShallowSet = (version: Version): boolean =>
-  !isStub(version) || version.seq === 0 || version.retain === true;
+  !isStub(version) || version.seq === 0 || version.retain === true || hasLineKeyForm(version.key);
 
 /** Reads an `i/` or `t/` entry back: null for anything malformed, or an id that is not a content id */
 function parseItemKey(key: string): { collection: string; id: string; item: Item } | null {
