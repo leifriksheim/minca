@@ -33,7 +33,14 @@ describe('the minca command', () => {
     );
     const space = at(created, 'id');
     assert.ok(typeof space === 'string');
-    await minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"hi"}');
+    await minca(
+      'records',
+      'put',
+      '--space',
+      space,
+      '--records',
+      '[{"collection":"app.note","body":{"text":"hi"}}]',
+    );
     const listed: unknown = JSON.parse(
       (await minca('records', 'query', '--space', space, '--collection', 'app.note')).stdout,
     );
