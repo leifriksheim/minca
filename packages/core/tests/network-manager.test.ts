@@ -13,6 +13,7 @@ import { createEmitter } from '../src/utils/events.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createNetworkManager, type NetworkManager } from '../src/network/network-manager.js';
 import { createMesh } from '../src/network/mesh.js';
+import { createRendezvous } from '../src/network/rendezvous.js';
 import type { PeerTransport, PeerTransportEvents, SignalledTransport } from '../src/network/transport.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, didToPublicKey, P256_MULTICODEC } from '../src/identity/did.js';
@@ -198,13 +199,21 @@ describe('sync through a transport', () => {
   });
 });
 
+/** Says yes the first time it is asked, and no after */
+function firstOnly(): (peerId: string) => boolean {
+  let asked = false;
+  return () => !asked && (asked = true);
+}
+
 /**
- * A transport whose first connection fails after the answer, before it opens,
- * as a WebRTC connection does when its DTLS handshake fails.
+ * A transport whose connections the predicate picks fail after the answer,
+ * before they open, as a WebRTC connection does when its DTLS handshake fails.
  */
-function failingFirstConnection(transport: SignalledTransport): SignalledTransport {
+function failingConnections(
+  transport: SignalledTransport,
+  failsConnectionTo: (peerId: string) => boolean,
+): SignalledTransport {
   const told = createEmitter<PeerTransportEvents>();
-  let hasFailedOnce = false;
   return {
     ...transport,
     on: (event, callback) => {
@@ -216,8 +225,7 @@ function failingFirstConnection(transport: SignalledTransport): SignalledTranspo
       transport.off(event, callback);
     },
     handleAnswer: async (peerId, answer) => {
-      if (hasFailedOnce) return transport.handleAnswer(peerId, answer);
-      hasFailedOnce = true;
+      if (!failsConnectionTo(peerId)) return transport.handleAnswer(peerId, answer);
       told.emit('disconnected', peerId);
     },
   };
@@ -259,8 +267,9 @@ describe('the mesh, through real relays', () => {
     namespace: string,
     {
       failsFirstConnection = false,
+      failsEveryConnectionTo,
       ...options
-    }: { authTimeoutMs?: number; failsFirstConnection?: boolean } = {},
+    }: { authTimeoutMs?: number; failsFirstConnection?: boolean; failsEveryConnectionTo?: string } = {},
   ) => {
     const opened: string[] = [];
     const created = createMesh({
@@ -270,7 +279,9 @@ describe('the mesh, through real relays', () => {
       createTransport: () => {
         const transport = hub.signalled(who.did, namespace);
         transport.on('connected', (peer) => opened.push(peer));
-        return failsFirstConnection ? failingFirstConnection(transport) : transport;
+        if (failsEveryConnectionTo)
+          return failingConnections(transport, (peer) => peer === failsEveryConnectionTo);
+        return failsFirstConnection ? failingConnections(transport, firstOnly()) : transport;
       },
       ...options,
     });
@@ -444,6 +455,43 @@ describe('the mesh, through real relays', () => {
       );
     } finally {
       for (const room of [a, b]) room.disconnect();
+    }
+  });
+
+  test('a peer that fails every offer can’t make a node say hello faster than a hello back', async () => {
+    // A offers to C, the greater, and C makes every connection fail after its answer, as it can make DTLS
+    // fail, then says hello again at once to be offered to again. B hears what A says in the room.
+    const victim = mesh(A, [relay], 'fails-every-offer', { failsEveryConnectionTo: C.did }).join('room');
+    const bystander = createRendezvous([relay], B);
+    const attacker = createRendezvous([relay], C);
+    let victimHellosHeard = 0;
+    bystander.on('peer-joined', (from) => from === A.did && victimHellosHeard++);
+    attacker.on('peer-joined', (from) => {
+      if (from !== A.did) return;
+      attacker.leave('room');
+      attacker.join('room');
+    });
+    attacker.on('signal', (signal) => {
+      if (signal.type === 'offer')
+        attacker.signal(
+          'answer',
+          A.did,
+          { type: 'answer', sdp: `answer:${C.did}->${A.did}` },
+          'room',
+          signal.box,
+        );
+    });
+    try {
+      for (const peer of [bystander, attacker]) await peer.connect();
+      for (const peer of [bystander, attacker]) peer.join('room');
+      await victim.connect();
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+      // Its hello on joining, and one hello back; the retries share the hello back's 10 s. Unpaced, it was 39.
+      assert.ok(victimHellosHeard <= 3, `the bystander heard ${victimHellosHeard} hellos from the victim`);
+    } finally {
+      victim.disconnect();
+      bystander.disconnect();
+      attacker.disconnect();
     }
   });
 

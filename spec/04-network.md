@@ -352,8 +352,7 @@ sender's own `box`, so a message re-wrapped with another box opens nothing.
 > not make a node dial without end.
 
 A node says hello when it joins a room, on each relay whenever that relay's
-socket (re)opens, after a connection it offered fails before opening (§7.3),
-and SHOULD say it again every 2 minutes while in the room,
+socket (re)opens, and SHOULD say it again every 2 minutes while in the room,
 since relays keep nothing and a hello may be lost. There is no goodbye: a peer
 is gone when its connection is (§5).
 
@@ -907,8 +906,11 @@ _Source: `packages/core/src/network/mesh.ts` (`greet`, `onHandshake`, `admit`, `
   restarts. A connection started by offering or answering that has not opened
   within an attempt timeout of the node's choosing is closed and forgotten,
   and the next hello from that peer starts again. One that fails before it
-  opens is forgotten too, and the side that offered says hello again in the
-  rooms it met the peer in: the peer's hello back brings the next offer.
+  opens is forgotten too, counts as a failed try, and the node that is the one
+  to offer to that peer says hello in the rooms it met the peer in, paced as a
+  hello back (§2: at most once per 10 s in a room, however often it is asked),
+  so the peer's hello back brings the next offer. A peer that fails every
+  offer on purpose can't make a node say hello any faster than a hello back.
 
 _Source: `packages/core/src/network/mesh.ts` (`meet`, `offerTo`, `onSignal`, `watch`, `lost`). Tests: `packages/core/tests/network-manager.test.ts`, `packages/core/tests/relay-socket.test.ts` ("the mesh offers again")._
 
