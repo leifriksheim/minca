@@ -422,6 +422,24 @@ describe('screens', () => {
       close();
     }
   });
+
+  test('a screen gets a whole collection, however much its records hold, but sends only a little at a time', async () => {
+    const { alice, space } = await setup();
+    await alice.node.collections.define(space, { name: 'app.crm.organisation', schema: { type: 'object' } });
+    const notes = 'n'.repeat(40 * 1024);
+    for (let i = 0; i < 10; i++) await alice.node.records.put(space, 'app.crm.organisation', { notes });
+
+    const { call, close } = bridgeFor(alice.node, space, ['app.crm.organisation']);
+    try {
+      const listed = await call('list', 'app.crm.organisation');
+      assert.equal(listed.ok, true, 'about 400 KB of records');
+      assert.equal(Array.isArray(listed.value) && listed.value.length, 10);
+      const tooMuch = await call('put', 'app.crm.organisation', { notes: 'n'.repeat(300 * 1024) });
+      assert.equal(tooMuch.ok, false);
+    } finally {
+      close();
+    }
+  });
 });
 
 /** A page that does what a screen asks by writing it down */

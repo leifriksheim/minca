@@ -68,7 +68,9 @@ export function Board({ group, ...props }: LayoutProps & { group: Field }) {
   );
 }
 
-/** A record as a card: its title, then the shown fields that hold something */
+const DETAILS_ON_A_CARD = 4;
+
+/** A record as a card: its title, then the first few shown fields that hold something */
 export function Card({
   record,
   fields,
@@ -84,7 +86,9 @@ export function Card({
   draggable?: boolean;
 }) {
   const title = titleField(schema);
-  const details = fields.filter((f) => f.name !== title && f.name !== hide && !isBlank(valueOf(record, f)));
+  const details = fields
+    .filter((f) => f.name !== title && f.name !== hide && !isBlank(valueOf(record, f)))
+    .slice(0, DETAILS_ON_A_CARD);
   return (
     <button
       type="button"
