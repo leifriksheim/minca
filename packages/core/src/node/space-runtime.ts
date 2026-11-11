@@ -118,6 +118,8 @@ export interface SpaceRuntimeDeps {
   readonly accountOnly?: boolean;
   /** Hold only the collections used, once the space names a keeper (`NodeConfig.cache`). Absent: hold it whole. */
   readonly cache?: CacheConfig;
+  /** Sync by shallow sets with the space's keepers (`NodeConfig.shallow`) */
+  readonly shallow?: boolean;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
   /** The limits on others' files as they are now; null fetches and keeps every file named, as a keeper does (spec 05 §16.6). Absent: a device's. */
@@ -153,6 +155,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // What this node holds (`node/space-holding.ts`): settled here, since sync asks on every hello.
   const holding = await openSpaceHolding({
     cache: deps.cache ?? null,
+    shallow: deps.shallow ?? false,
     adapter,
     storage,
     spaceId: space.id,
@@ -256,22 +259,23 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     recordsChanged([version]);
   }
 
-  /** Whether a version from outside — a peer, a folder — may be stored */
-  async function admit(version: Version): Promise<Standing> {
-    const verdict = await admitOnce(version);
+  /** Whether a version from outside — a peer, a folder — may be stored; `from` the peer that sent it */
+  async function admit(version: Version, from?: string): Promise<Standing> {
+    const verdict = await admitOnce(version, from);
     // Refused for good, or a change to who may do what: perhaps proof of a broken rule (docs/warrants.md).
     if ((!verdict.ok && !verdict.later && !verdict.withdrawn) || ACCESS_COLLECTIONS.has(version.collection))
       void warrants.warrantIfDue(version).catch(() => {});
     return verdict;
   }
 
-  async function admitOnce(version: Version): Promise<Standing> {
+  async function admitOnce(version: Version, from?: string): Promise<Standing> {
     // Before any cached verdict: a copy with another envelope or body shares the id and signature.
     const problem = await versions.copyProblem(version);
     if (problem) return { ok: false, reason: problem };
     // Whatever its key signed takes a place in that key's log, allowed or not: a second at one place is a fork.
     if ((await versions.judge(version)).verified) await lines.placeInLog(version);
-    return standing.admission(version);
+    // From a keeper this node syncs shallow with: the chain below it is the keeper's to have checked.
+    return standing.admission(version, from !== undefined && holding.vouches(from));
   }
 
   // ─── Mirrors and files ─────────────────────────────────────────────
@@ -379,6 +383,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     history,
     keys,
     holds: holding.holds,
+    shallowWith: holding.shallowWith,
     files,
     emit,
     statusChanged,

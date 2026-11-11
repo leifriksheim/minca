@@ -93,6 +93,8 @@ const isPending = (value: unknown): value is Pending =>
 /** What holding part of the space reads of the open space */
 export interface HoldingContext {
   readonly cache: CacheConfig | null;
+  /** Sync by shallow sets with the space's keepers (`NodeConfig.shallow`) */
+  readonly shallow: boolean;
   readonly adapter: StorageAdapter;
   readonly storage: StorageProvider;
   readonly spaceId: string;
@@ -111,6 +113,7 @@ export interface HoldingContext {
 export async function openSpaceHolding(ctx: HoldingContext) {
   const {
     cache,
+    shallow,
     adapter,
     storage,
     spaceId,
@@ -128,7 +131,21 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     if (!collection.startsWith('sys.')) cacheState.used[collection] ??= Date.now();
   // Only what it uses, until it has caught up enough to know whether the space names keepers.
   let partial = cache !== null;
-  const holds = (): Holds => (partial ? new Set(Object.keys(cacheState.used)) : 'all');
+  /** The keepers the access history names now: a shallow node takes on their word the chains it skips */
+  let keepers = new Set<string>();
+  /**
+   * Whether to sync with a peer by shallow sets: with every peer, once this
+   * node knows the space names keepers to vouch. A space that names none is
+   * held whole.
+   */
+  const shallowWith = (_peer: string) => shallow && cacheState.settled && keepers.size > 0;
+  /** Whether a version a peer sent may skip the chain below it: from a keeper, when syncing shallow */
+  const vouches = (peer: string) => shallow && keepers.has(peer);
+  const holds = (): Holds => {
+    // Syncing shallow: only the space's own until it knows whether keepers name themselves to vouch.
+    if (shallow && !cacheState.settled) return new Set();
+    return partial ? new Set(Object.keys(cacheState.used)) : 'all';
+  };
   let dropTimer: ReturnType<typeof setInterval> | null = null;
   let tidying: Promise<void> = Promise.resolve();
 
@@ -153,8 +170,14 @@ export async function openSpaceHolding(ctx: HoldingContext) {
    * again if it stops — once this node has caught up enough to know.
    */
   async function refreshHolds(): Promise<void> {
-    if (!cache || isClosed()) return;
-    const next = (await access()).history.current.keepers.length > 0 || !cacheState.settled;
+    if (isClosed()) return;
+    const named = (await access()).history.current.keepers;
+    const wasShallow = shallowWith('');
+    keepers = new Set(named.map((keeper) => keeper.did));
+    // Peers hear the sets this node compares now.
+    if (shallowWith('') !== wasShallow) sync().notifyPeers(connectedPeers());
+    if (!cache) return;
+    const next = named.length > 0 || !cacheState.settled;
     if (next === partial) return;
     partial = next;
     // Peers learn what this node holds now; anything newly held comes across.
@@ -191,7 +214,8 @@ export async function openSpaceHolding(ctx: HoldingContext) {
    * every peer for it; one that arrives takes itself off.
    */
   async function noteGap(version: Version): Promise<void> {
-    if (!cache || !version.log || version.collection.startsWith('sys.')) return;
+    // A shallow node lacks the versions below what it holds by design: no gap to fill.
+    if (!cache || shallow || !version.log || version.collection.startsWith('sys.')) return;
     const { collection } = version;
     const missing = cacheState.missing[collection] ?? [];
     const before = version.log.prev;
@@ -363,11 +387,14 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   function start(): void {
     saveCache();
     sync().on('synced', (_peer: string, full: boolean) => {
-      if (!cache || !full || cacheState.settled) return;
+      if ((!cache && !shallow) || !full || cacheState.settled) return;
       // Caught up with a node holding everything: the access history here is the space's now.
       cacheState.settled = true;
       saveCache();
-      void refreshHolds().catch(() => {});
+      void refreshHolds()
+        // Syncing shallow, what it holds just grew past the space's own.
+        .then(() => shallow && sync().notifyPeers(connectedPeers()))
+        .catch(() => {});
     });
     sync().on('stored', (peer: string, ids: ReadonlyArray<string>) => {
       void confirm(peer, { ids: new Set(ids) }).catch(() => {});
@@ -392,6 +419,8 @@ export async function openSpaceHolding(ctx: HoldingContext) {
 
   return Object.freeze({
     holds,
+    shallowWith,
+    vouches,
     refreshHolds,
     use,
     noteGap,

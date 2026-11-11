@@ -2,7 +2,7 @@
  * Shallow sets (05 §5): what a store keeps of each collection but the
  * unretained stubs past a record's first version, indexed as versions land.
  */
-import { test, describe } from 'node:test';
+import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
@@ -14,6 +14,18 @@ import { cidOfDigest } from '../src/utils/hash.js';
 import type { StorageProvider } from '../src/storage/storage-provider.js';
 import type { Version } from '../src/types.js';
 import { makeKey } from './helpers/person.js';
+import { createNode } from '../src/node/node.js';
+import type { P2PNode } from '../src/node/types.js';
+import type { StoreFactory } from '../src/node/stores.js';
+import { createIdentityManager } from '../src/identity/identity-manager.js';
+import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { generateSeed } from '../src/identity/recovery-code.js';
+import { team } from '../src/space/presets.js';
+import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
+import { memoryStores } from './helpers/memory-stores.js';
+import { hold } from './helpers/hold.js';
+import { joined } from './helpers/joined.js';
+import { until } from './helpers/until.js';
 
 const signer = createSigner(createP256Provider());
 const COLLECTION = 'app.note';
@@ -31,7 +43,9 @@ async function editedRecord(edits: number, options: { retain?: boolean } = {}): 
           collection: COLLECTION,
           body: { seq },
           ...(options.retain ? { retain: true } : {}),
-          ...(previous ? { version: { key: previous.key, seq, prev: previous.id, genesis: versions[0]!.id } } : {}),
+          ...(previous
+            ? { version: { key: previous.key, seq, prev: previous.id, genesis: versions[0]!.id } }
+            : {}),
         }),
         author.privateKey,
       ),
@@ -114,5 +128,94 @@ describe('shallow sets', () => {
     assert.ok(inShallowSet(stubOf(first!)), 'a first version, also as its stub');
     assert.ok(inShallowSet(second!));
     assert.ok(!inShallowSet(stubOf(second!)), 'a stub past the first version');
+  });
+});
+
+describe('a node that syncs shallow', () => {
+  const nodes: P2PNode[] = [];
+  afterEach(async () => {
+    await Promise.all(nodes.splice(0).map((node) => node.close().catch(() => {})));
+  });
+
+  async function personOn(hub: FakeHub, options: { shallow?: boolean } = {}) {
+    const manager = createIdentityManager();
+    const stores = memoryStores();
+    let session = '';
+    const node = await createNode({
+      signer: createLocalRootSigner(await manager.fromSeed(generateSeed()), manager.getProvider()),
+      stores,
+      watchIntervalMs: 0,
+      ...(options.shallow ? { shallow: true } : {}),
+      network: {
+        transports: (spaceId: string, sessionDid: string) => {
+          session = sessionDid;
+          return [hub.transport(sessionDid, spaceId)];
+        },
+      },
+    });
+    nodes.push(node);
+    return { node, stores, session: () => session };
+  }
+
+  /** Alice's space with one card edited `edits` times, kept whole by Bob, who it names its keeper */
+  async function editedSpace(hub: FakeHub, edits: number, options: { keepers?: false } = {}) {
+    const alice = await personOn(hub);
+    const bob = await personOn(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'public' });
+    await hold(alice.node, space);
+    await alice.node.collections.define(space, { name: 'app.card', schema: { type: 'object' } });
+    const { key } = await alice.node.records.put(space, 'app.card', { n: 0 });
+    for (let n = 1; n <= edits; n++) await alice.node.records.update(space, key, { n });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(bob.node, space);
+    await joined(bob.node, space);
+    const versionsAt = async (who: { stores: StoreFactory }) =>
+      (await createStorageProvider(await who.stores(`spaces/${space}`)).sums()).get('app.card')?.count ?? 0;
+    await until(async () => (await versionsAt(bob)) === edits + 1, 10_000, 'Bob to keep every edit');
+    if (options.keepers !== false) {
+      await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+      // As at a host: the keeper knows it is one before anyone new comes.
+      await until(
+        async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+        10_000,
+        'Bob to know he keeps it',
+      );
+    }
+    return { alice, bob, space, key, versionsAt };
+  }
+
+  /** A new node of someone Alice invites, with the card's latest edit once it reads it */
+  async function newcomer(hub: FakeHub, alice: P2PNode, space: string, key: string, shallow: boolean) {
+    const dave = await personOn(hub, { shallow });
+    await dave.node.spaces.join(await alice.spaces.invite(space));
+    await hold(dave.node, space);
+    await joined(dave.node, space);
+    await until(
+      async () => (await dave.node.records.get<{ n: number }>(space, key))?.body?.n === 200,
+      20_000,
+      'the latest edit',
+    );
+    return dave;
+  }
+
+  test('takes a record edited 200 times as its first and current version, from its keeper', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, space, key, versionsAt } = await editedSpace(hub, 200);
+    const dave = await newcomer(hub, alice.node, space, key, true);
+    assert.equal(await versionsAt(dave), 2);
+  });
+
+  test('where the space names no keepers, nobody vouches for what it skips: it takes every edit', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, space, key, versionsAt } = await editedSpace(hub, 200, { keepers: false });
+    const dave = await newcomer(hub, alice.node, space, key, true);
+    await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
+  });
+
+  test('a node that does not sync shallow takes every edit, as before', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, space, key, versionsAt } = await editedSpace(hub, 200);
+    const dave = await newcomer(hub, alice.node, space, key, false);
+    await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
   });
 });

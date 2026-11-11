@@ -120,6 +120,13 @@ export interface NodeConfig {
   readonly fetchFiles?: 'all';
   /** Hold only the collections this node uses, once a space names a keeper to hold the rest */
   readonly cache?: CacheConfig;
+  /**
+   * Sync each space with its keepers by shallow sets (05 §5): each record's
+   * current and first versions and what its writer retained, not every
+   * superseded stub. For a node that never needs a space's whole history,
+   * as an agent's for one call. With no keeper connected, a space syncs whole.
+   */
+  readonly shallow?: boolean;
 }
 
 /** How a node holds part of a space: its own choice */

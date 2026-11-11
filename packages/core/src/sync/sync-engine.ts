@@ -58,7 +58,8 @@ export interface SyncEngineConfig {
    * rejects is dropped and surfaces as `rejected`. Without it, everything is
    * accepted: only for a trusted transport or a test.
    */
-  readonly validate?: (version: Version) => Promise<IncomingValidation>;
+  /** Judges a version from a peer, given which peer sent it */
+  readonly validate?: (version: Version, from: string) => Promise<IncomingValidation>;
   /** What this node holds, asked afresh for every hello. Default: everything. */
   readonly holds?: () => Holds;
   /**
@@ -265,7 +266,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   /** Stores a version from a peer if the gatekeeper allows it; one that must wait names what it waits for */
   const admit = async (peerId: string, version: Version, intake: Intake): Promise<boolean> => {
-    const verdict: IncomingValidation = validate ? await validate(version) : { valid: true };
+    const verdict: IncomingValidation = validate ? await validate(version, peerId) : { valid: true };
     if (!verdict.valid) {
       if (verdict.later) await holdBack(peerId, version, intake);
       else refuse(peerId, version, verdict.reason);
@@ -286,6 +287,8 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     for (const needed of dependsOn) {
       if (typeof needed !== 'string' || (await storage.getVersion(needed))) continue;
       lacking.push(needed);
+      // Syncing shallow, the version before is not fetched: a keeper's copy of this one comes without it.
+      if (needed === version.prev && shallowWith(peerId)) continue;
       intake.firsts.set(needed, version.collection);
     }
     if (lacking.length === 0) waitingOther.add(version.id);

@@ -223,6 +223,8 @@ export function createSessions(options: {
       // In memory: what it holds is the always-on nodes', and goes when it stops.
       stores: storesFor(given),
       network: await options.network(given.grant),
+      // What it holds goes when it stops: each record as it is now, not every edit it ever had.
+      shallow: true,
     });
     // Disconnected at the account home: it reads and writes no more, from now on.
     const unsubscribe = agent.node.subscribe((event) => {

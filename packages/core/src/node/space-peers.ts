@@ -169,7 +169,10 @@ export interface PeersDeps extends SpaceBase {
   readonly files: SpaceFiles;
   readonly emit: (event: NodeEvent) => void;
   readonly statusChanged: () => void;
-  readonly admit: (version: Version) => Promise<Standing>;
+  /** Whether a version from outside may be stored; `from` the peer that sent it */
+  readonly admit: (version: Version, from?: string) => Promise<Standing>;
+  /** Whether to sync with a peer by shallow sets (`space-holding.ts`) */
+  readonly shallowWith: (peer: string) => boolean;
   readonly recordsChanged: (placed?: ReadonlyArray<Version>) => void;
   readonly filesChanged: () => void;
   readonly onArrived: ((version: Version) => void) | undefined;
@@ -227,12 +230,13 @@ export async function openPeers(deps: PeersDeps) {
     storageProvider: storage,
     self: session.did,
     holds: deps.holds,
+    shallowWith: deps.shallowWith,
     files: (peer, message) => files.onMessage(peer, message),
     sendToPeer: (peerId, message) => {
       routes.get(peerId)?.send(peerId, { type: 'sync', from: session.did, payload: message });
     },
-    validate: async (version) => {
-      const verdict = await admit(version);
+    validate: async (version, from) => {
+      const verdict = await admit(version, from);
       return verdict.ok || verdict.withdrawn
         ? { valid: true }
         : { valid: false, reason: verdict.reason, ...(verdict.later ? { later: true } : {}) };
