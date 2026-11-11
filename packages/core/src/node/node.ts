@@ -309,8 +309,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       ...(config.network ? { network: config.network } : {}),
       ...(mesh ? { mesh } : {}),
       accountOnly: kind !== null,
-      // The account's own spaces are always held whole: every device needs all of them.
+      // Every device needs all of the account's own spaces: never only the collections it uses.
       ...(config.cache && !kind ? { cache: config.cache } : {}),
+      ...(config.shallow ? { shallow: config.shallow } : {}),
       watchIntervalMs: config.watchIntervalMs ?? 2000,
       fileLimits: () => fileLimits,
       emit: fromRuntime,

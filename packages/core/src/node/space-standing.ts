@@ -315,19 +315,25 @@ export function createStanding(
    * that version is held, so a writer can't skip ahead to a `seq` nobody can
    * outrank.
    */
-  async function chainStanding(version: Version): Promise<Standing> {
+  async function chainStanding(version: Version, vouched: boolean): Promise<Standing> {
     if (version.seq === 0 || typeof version.prev !== 'string') return STANDS;
     const previous = await storage.getVersion(version.prev);
+    if (!previous && vouched) return STANDS;
     if (!previous) return { ok: false, reason: 'The version it follows has not arrived yet', later: true };
     const problem = chainProblem(version, previous);
     return problem ? { ok: false, reason: problem } : STANDS;
   }
 
-  /** Whether a version from outside, checked to be what its id names and placed in its key's log, may be stored */
-  async function admission(version: Version): Promise<Standing> {
+  /**
+   * Whether a version from outside, checked to be what its id names and
+   * placed in its key's log, may be stored. `vouched`: it came from a
+   * keeper this node syncs shallow with (05 §5), so a `prev` this node lacks
+   * by design is that keeper's to have checked; one it holds is checked here.
+   */
+  async function admission(version: Version, vouched = false): Promise<Standing> {
     if (version.retain && isStub(version))
       return { ok: false, reason: 'A version its writer retained travels whole' };
-    const chain = await chainStanding(version);
+    const chain = await chainStanding(version, vouched);
     if (!chain.ok) return chain;
     if (ACCESS_COLLECTIONS.has(version.collection)) return admissible(version);
     const standing = await standingOf(version);

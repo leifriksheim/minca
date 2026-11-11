@@ -813,6 +813,15 @@ _Source: `packages/core/src/session/connect-code.ts` (`newConnectCode`, `connect
 
 ## 4. Carriers and hosts
 
+A carrier is a keeper of the account's personal space, its registry (03
+§10): the account names it there as in any space it manages, and so its
+devices hand it a pass to every space it lists (§4.2) and name it a keeper of
+each space they manage. A carry space names none: it holds only a carrier's
+passes. A device that reads, in a host's signed status, that the account's
+subscription there is `lapsed` or gone, and that it won't carry for it as
+things stand ([08](08-hosting.md) §1), removes it as a carrier, and so as a
+keeper. Only that signed word does: a carrier that is silent stays named.
+
 ### 4.1 What a carrier holds, and sees
 
 A carrier keeps an account's spaces online and backed up without being able to

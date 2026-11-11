@@ -441,6 +441,8 @@ export async function startGrantedAgent(params: {
   readonly keys: CryptoKeyPair;
   readonly stores: NodeConfig['stores'];
   readonly network: NodeConfig['network'];
+  /** Sync each space with its keepers by shallow sets: for a node that lives for a call or a session */
+  readonly shallow?: boolean;
 }): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   const { grant, keys: sessionKey } = params;
   // The network is the caller's: relays, the host's own socket, or a test's hub.
@@ -451,6 +453,7 @@ export async function startGrantedAgent(params: {
     stores: params.stores,
     ...keys,
     network: params.network,
+    ...(params.shallow ? { shallow: true } : {}),
   });
   // Spaces granted by name, when the grant wasn't for the whole account.
   await joinGranted(base, grant, () => {});

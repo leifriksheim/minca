@@ -6,6 +6,7 @@
  * g/<key>                      → the record's first version   (once it has been edited)
  * h/<key>/<seq>/<id>           → a superseded version, whole  (only if marked `retain`)
  * i/<collection>/<time>/<id>   → every version kept, by collection — what sync compares
+ * t/<collection>/<time>/<id>   → those in the shallow set — what a shallow exchange compares
  * ```
  *
  * A version that arrives is compared with the one at `r/<key>` by the ordering
@@ -21,6 +22,7 @@
 
 import type { StorageAdapter, Version, BatchOp } from '../types.js';
 import { byVersion, supersedes } from '../records/version.js';
+import { hasLineKeyForm } from '../records/key.js';
 import { isStub, stubOf } from '../schema/version.js';
 import { utf8Encode, utf8Decode, bytesToHex } from '../utils/encoding.js';
 import { cidDigest } from '../utils/hash.js';
@@ -68,6 +70,10 @@ export interface StorageProvider {
   items(collection: string): Promise<ItemSet>;
   /** Every collection this store keeps anything in, and the sum of its version ids. */
   sums(): Promise<ReadonlyMap<string, Sum>>;
+  /** {@link items} of a collection's shallow set ({@link inShallowSet}), as a shallow exchange compares it (05 §5). */
+  shallowItems(collection: string): Promise<ItemSet>;
+  /** {@link sums} of every collection's shallow set. */
+  shallowSums(): Promise<ReadonlyMap<string, Sum>>;
   /**
    * One fingerprint of everything kept, hex. Equal fingerprints mean the
    * same versions kept — for status, and for tests.
@@ -83,6 +89,12 @@ export const CURRENT_PREFIX = 'r/';
 export const GENESIS_PREFIX = 'g/';
 export const HISTORY_PREFIX = 'h/';
 export const ITEM_PREFIX = 'i/';
+/** `t/<collection>/<time>/<id>`: the versions of {@link ITEM_PREFIX} in their collection's shallow set */
+export const SHALLOW_PREFIX = 't/';
+/** Present once a store's `t/` entries are complete: one kept before them is indexed once, when first read */
+const SHALLOW_INDEXED = 'shallow-indexed';
+/** Versions read at a time while indexing a store kept before `t/`, between which other work runs */
+const INDEX_CHUNK = 200;
 /** Version bodies a store keeps in memory when it has a cache of its own, the one used longest ago let go first */
 const MAX_BODIES = 50_000;
 
@@ -101,9 +113,19 @@ export function syncTime(version: Pick<Version, 'createdAt'>): number {
 }
 
 /** Collection names may hold anything; the entry needs them free of `/`. */
-const itemKey = (e: Version) => `${ITEM_PREFIX}${encodeURIComponent(e.collection)}/${syncTime(e)}/${e.id}`;
+const itemKey = (e: Version, prefix = ITEM_PREFIX) =>
+  `${prefix}${encodeURIComponent(e.collection)}/${syncTime(e)}/${e.id}`;
 
-/** Reads an `i/` entry back: null for anything malformed, or an id that is not a content id */
+/**
+ * Whether a kept version is in its collection's shallow set (05 §5): every
+ * version but an unretained stub past a record's first, outside a line, where
+ * a losing twin decides what counts. Decided by the version alone, so two
+ * stores keeping the same versions keep the same set.
+ */
+export const inShallowSet = (version: Version): boolean =>
+  !isStub(version) || version.seq === 0 || version.retain === true || hasLineKeyForm(version.key);
+
+/** Reads an `i/` or `t/` entry back: null for anything malformed, or an id that is not a content id */
 function parseItemKey(key: string): { collection: string; id: string; item: Item } | null {
   const [, collection, time, id, extra] = key.split('/');
   if (collection === undefined || time === undefined || id === undefined || extra !== undefined) return null;
@@ -160,10 +182,13 @@ function mergeInto(group: Batch, layer: Batch): void {
 
 const decodeId = (bytes: Uint8Array | null | undefined) => (bytes ? utf8Decode(bytes) : null);
 
-/** Every `i/` entry, by collection, then by id */
-async function readKept(adapter: StorageAdapter): Promise<Map<string, Map<string, Item>>> {
+/** Every `i/` entry (or `t/`), by collection, then by id */
+async function readKept(
+  adapter: StorageAdapter,
+  prefix = ITEM_PREFIX,
+): Promise<Map<string, Map<string, Item>>> {
   const kept = new Map<string, Map<string, Item>>();
-  for (const key of await adapter.list(ITEM_PREFIX)) {
+  for (const key of await adapter.list(prefix)) {
     const parsed = parseItemKey(key);
     if (parsed) getOrAdd(kept, parsed.collection, () => new Map()).set(parsed.id, parsed.item);
   }
@@ -175,6 +200,42 @@ function sumOf(items: Iterable<Item>): Sum {
   for (const item of items) sum = addToSum(sum, item.id);
   return sum;
 }
+
+/** Versions kept, by collection then id, with each collection's sum kept up to date: what sync compares */
+interface Index {
+  readonly byCollection: Map<string, Map<string, Item>>;
+  readonly totals: Map<string, Sum>;
+}
+
+const indexOf = (byCollection: Map<string, Map<string, Item>>): Index => ({
+  byCollection,
+  totals: new Map([...byCollection].map(([collection, byId]) => [collection, sumOf(byId.values())])),
+});
+
+function addToIndex(index: Index, e: Version): void {
+  const digest = cidDigest(e.id);
+  const byId = getOrAdd(index.byCollection, e.collection, () => new Map<string, Item>());
+  if (!digest || byId.has(e.id)) return;
+  byId.set(e.id, { timestamp: syncTime(e), id: digest });
+  index.totals.set(e.collection, addToSum(index.totals.get(e.collection) ?? EMPTY_SUM, digest));
+}
+
+function removeFromIndex(index: Index, e: Version): void {
+  const item = index.byCollection.get(e.collection)?.get(e.id);
+  if (!item) return;
+  index.byCollection.get(e.collection)!.delete(e.id);
+  index.totals.set(e.collection, removeFromSum(index.totals.get(e.collection) ?? EMPTY_SUM, item.id));
+}
+
+const isScheduler = (value: unknown): value is (run: () => void) => unknown => typeof value === 'function';
+
+/** Lets other work run: by `setImmediate` where there is one (Node, Bun), which no fake timer holds back */
+const yieldToOthers = () =>
+  new Promise<void>((resolve) => {
+    const immediate: unknown = Reflect.get(globalThis, 'setImmediate');
+    if (isScheduler(immediate)) immediate(resolve);
+    else setTimeout(resolve, 0);
+  });
 
 /**
  * Creates a StorageProvider wrapping an adapter.
@@ -217,40 +278,66 @@ export function createStorageProvider(adapter: StorageAdapter, cache?: BodyCache
 
   // ─── What sync compares, in memory ─────────────────────────────────
 
-  /** Versions kept, by collection, then by id. Null until first needed. */
-  let kept: Map<string, Map<string, Item>> | null = null;
+  /** Every version kept, and the shallow sets' (`i/` and `t/`). Null until first needed. */
+  let indexes: { readonly all: Index; readonly shallow: Index } | null = null;
   /** Sorted sets, built when a reconciliation asks for one and dropped when their collection changes */
   const sets = new Map<string, ItemSet>();
-  /** The sum of each collection's ids, kept up to date on every change: a hello needs no sorting */
-  let totals: Map<string, Sum> | null = null;
+  const shallowSets = new Map<string, ItemSet>();
 
   /** Read in turn with changes, so none lands between the listing and the sets being kept up to date */
-  const loadKept = async (): Promise<Map<string, Map<string, Item>>> =>
-    kept ??
+  const loadIndexes = async (): Promise<{ readonly all: Index; readonly shallow: Index }> =>
+    indexes ??
     exclusively(async () => {
-      if (kept) return kept;
-      const loaded = await readKept(adapter);
-      kept = loaded;
-      totals = new Map([...loaded].map(([collection, byId]) => [collection, sumOf(byId.values())]));
-      return loaded;
+      if (indexes) return indexes;
+      const all = await readKept(adapter);
+      const shallow = (await adapter.get(SHALLOW_INDEXED))
+        ? await readKept(adapter, SHALLOW_PREFIX)
+        : await indexShallow(all);
+      indexes = { all: indexOf(all), shallow: indexOf(shallow) };
+      return indexes;
     });
+  const loadKept = async () => (await loadIndexes()).all.byCollection;
+
+  /**
+   * Writes the `t/` entries of a store kept before them, reading each version
+   * once, a chunk at a time so a large store doesn't hold up everything else.
+   * Run in turn with changes, so none lands meanwhile.
+   */
+  async function indexShallow(all: Map<string, Map<string, Item>>): Promise<Map<string, Map<string, Item>>> {
+    const shallow = new Map<string, Map<string, Item>>();
+    for (const [collection, byId] of all) {
+      const ids = [...byId.keys()];
+      for (let from = 0; from < ids.length; from += INDEX_CHUNK) {
+        const ops: BatchOp[] = [];
+        for (const version of await load(ids.slice(from, from + INDEX_CHUNK))) {
+          if (!inShallowSet(version)) continue;
+          ops.push({ type: 'put', key: itemKey(version, SHALLOW_PREFIX), value: utf8Encode(version.id) });
+          getOrAdd(shallow, collection, () => new Map<string, Item>()).set(version.id, byId.get(version.id)!);
+        }
+        if (ops.length > 0) await adapter.batch(ops);
+        await yieldToOthers();
+      }
+    }
+    await adapter.put(SHALLOW_INDEXED, utf8Encode('1'));
+    return shallow;
+  }
 
   /** Keeps the in-memory sets in step with a change just written */
   const track = (added: ReadonlyArray<Version>, removed: ReadonlyArray<Version>) => {
-    for (const e of [...added, ...removed]) sets.delete(e.collection);
-    if (!kept || !totals) return;
+    for (const e of [...added, ...removed]) {
+      sets.delete(e.collection);
+      shallowSets.delete(e.collection);
+    }
+    if (!indexes) return;
     for (const e of removed) {
-      const item = kept.get(e.collection)?.get(e.id);
-      if (!item) continue;
-      kept.get(e.collection)!.delete(e.id);
-      totals.set(e.collection, removeFromSum(totals.get(e.collection) ?? EMPTY_SUM, item.id));
+      removeFromIndex(indexes.all, e);
+      removeFromIndex(indexes.shallow, e);
     }
     for (const e of added) {
-      const digest = cidDigest(e.id);
-      const byId = getOrAdd(kept, e.collection, () => new Map<string, Item>());
-      if (!digest || byId.has(e.id)) continue;
-      byId.set(e.id, { timestamp: syncTime(e), id: digest });
-      totals.set(e.collection, addToSum(totals.get(e.collection) ?? EMPTY_SUM, digest));
+      addToIndex(indexes.all, e);
+      // Kept again as its stub once superseded: out of the shallow set, unless it is a first version or retained.
+      if (inShallowSet(e)) addToIndex(indexes.shallow, e);
+      else removeFromIndex(indexes.shallow, e);
     }
   };
 
@@ -350,11 +437,16 @@ export function createStorageProvider(adapter: StorageAdapter, cache?: BodyCache
           staging.set(version.id, version);
         }
         layer.writes.set(itemKey(version), utf8Encode(version.id));
+        layer.writes.set(
+          itemKey(version, SHALLOW_PREFIX),
+          inShallowSet(version) ? utf8Encode(version.id) : null,
+        );
         layer.added.set(version.id, version);
         layer.dropped.delete(version.id);
       },
       drop: (version) => {
         layer.writes.set(itemKey(version), null);
+        layer.writes.set(itemKey(version, SHALLOW_PREFIX), null);
         layer.dropped.set(version.id, version);
         layer.added.delete(version.id);
         layer.toStore.delete(version.id);
@@ -468,18 +560,23 @@ export function createStorageProvider(adapter: StorageAdapter, cache?: BodyCache
     return new Map([...ids].map(([key, held]) => [key, versionsOf(held)]));
   }
 
-  async function items(collection: string): Promise<ItemSet> {
-    const cached = sets.get(collection);
+  async function itemsOf(collection: string, shallow: boolean): Promise<ItemSet> {
+    const cache = shallow ? shallowSets : sets;
+    const cached = cache.get(collection);
     if (cached) return cached;
-    const set = new ItemSet((await loadKept()).get(collection)?.values() ?? []);
-    sets.set(collection, set);
+    const index = (await loadIndexes())[shallow ? 'shallow' : 'all'];
+    const set = new ItemSet(index.byCollection.get(collection)?.values() ?? []);
+    cache.set(collection, set);
     return set;
   }
 
-  async function sums(): Promise<Map<string, Sum>> {
-    await loadKept();
-    return new Map([...(totals ?? [])].filter(([, sum]) => sum.count > 0));
+  async function sumsOf(shallow: boolean): Promise<Map<string, Sum>> {
+    const index = (await loadIndexes())[shallow ? 'shallow' : 'all'];
+    return new Map([...index.totals].filter(([, sum]) => sum.count > 0));
   }
+
+  const items = (collection: string) => itemsOf(collection, false);
+  const sums = () => sumsOf(false);
 
   return Object.freeze({
     addVersion(incoming: Version): Promise<void> {
@@ -550,6 +647,8 @@ export function createStorageProvider(adapter: StorageAdapter, cache?: BodyCache
 
     items,
     sums,
+    shallowItems: (collection: string) => itemsOf(collection, true),
+    shallowSums: () => sumsOf(true),
 
     async fingerprint(): Promise<string> {
       let total = EMPTY_SUM;
@@ -558,9 +657,9 @@ export function createStorageProvider(adapter: StorageAdapter, cache?: BodyCache
     },
 
     invalidate() {
-      kept = null;
-      totals = null;
+      indexes = null;
       sets.clear();
+      shallowSets.clear();
       pointers.clear();
       bodies.clear();
       landed++;

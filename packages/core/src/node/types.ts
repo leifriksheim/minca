@@ -120,6 +120,14 @@ export interface NodeConfig {
   readonly fetchFiles?: 'all';
   /** Hold only the collections this node uses, once a space names a keeper to hold the rest */
   readonly cache?: CacheConfig;
+  /**
+   * Sync spaces with their keepers by shallow sets (05 §5.1): each record's
+   * current and first versions and what its writer retained, not every
+   * superseded stub. For a node that lives for a session and needs the
+   * space's always-on nodes anyway, as an agent's: it takes its keepers'
+   * word for the history it skips, and takes power from nobody. A space that names no keepers, or this node among them, is held whole.
+   */
+  readonly shallow?: boolean;
 }
 
 /** How a node holds part of a space: its own choice */

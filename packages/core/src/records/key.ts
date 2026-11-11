@@ -28,6 +28,12 @@ const OWNED_KEY_PATTERN = /^[a-z2-7]{26}\.[a-z0-9:._-]{1,101}$/;
 /** A shared `onePer` key: `one:` and 20 bytes of HMAC, in hex */
 const SHARED_KEY_PATTERN = /^one:[0-9a-f]{40}$/;
 
+/** A line's key: `<owner>.line:` and 16 bytes of hash, base32 ({@link lineKey}) */
+const LINE_KEY_PATTERN = /^[a-z2-7]{26}\.line:[a-z2-7]{26}$/;
+
+/** Whether a key has a line key's form, whoever's line and whichever collection's it is */
+export const hasLineKeyForm = (key: string): boolean => LINE_KEY_PATTERN.test(key);
+
 /** An owned key whose name has a `onePer` key's form: `<owner>.one:` and 20 bytes in hex */
 const OWNED_ONE_PER_PATTERN = /^[a-z2-7]{26}\.one:[0-9a-f]{40}$/;
 

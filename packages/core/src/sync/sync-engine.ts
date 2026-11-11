@@ -54,13 +54,19 @@ export interface SyncEngineConfig {
   readonly self?: string;
   readonly heartbeatInterval?: number;
   /**
-   * Gatekeeper for versions from peers, typically `createVersionCheck`. What it
-   * rejects is dropped and surfaces as `rejected`. Without it, everything is
-   * accepted: only for a trusted transport or a test.
+   * Gatekeeper for versions from peers, given which peer sent each, typically
+   * `createVersionCheck`. What it rejects is dropped and surfaces as
+   * `rejected`. Without it, everything is accepted: only for a trusted
+   * transport or a test.
    */
-  readonly validate?: (version: Version) => Promise<IncomingValidation>;
+  readonly validate?: (version: Version, from: string) => Promise<IncomingValidation>;
   /** What this node holds, asked afresh for every hello. Default: everything. */
   readonly holds?: () => Holds;
+  /**
+   * Whether this node asks a peer to sync by shallow sets (05 §5.1), asked
+   * afresh for every hello. A peer that asks is answered in kind anyway.
+   */
+  readonly shallowWith?: (peerId: string) => boolean;
   /** Where a files message from a peer goes (spec 05 §16.6); without it, they are dropped */
   readonly files?: (peerId: string, message: unknown) => Promise<void>;
 }
@@ -176,6 +182,8 @@ interface Session {
   readonly id: number;
   readonly collection: string;
   readonly reconciler: ReturnType<typeof createReconciler>;
+  /** Comparing shallow sets */
+  readonly shallow: boolean;
   rounds: number;
   touchedAt: number;
   /** The peer said something new about this collection mid-session: go again once done */
@@ -206,6 +214,8 @@ interface PeerState {
   readonly queuedIds: Set<string>;
   /** What the peer said it holds, in its last hello */
   holds: Holds;
+  /** Whether its last hello asked to sync with this node by shallow sets */
+  shallow: boolean;
 }
 
 /** What one message brought in: the versions stored, and the versions they wait for */
@@ -256,7 +266,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   /** Stores a version from a peer if the gatekeeper allows it; one that must wait names what it waits for */
   const admit = async (peerId: string, version: Version, intake: Intake): Promise<boolean> => {
-    const verdict: IncomingValidation = validate ? await validate(version) : { valid: true };
+    const verdict: IncomingValidation = validate ? await validate(version, peerId) : { valid: true };
     if (!verdict.valid) {
       if (verdict.later) await holdBack(peerId, version, intake);
       else refuse(peerId, version, verdict.reason);
@@ -277,6 +287,8 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     for (const needed of dependsOn) {
       if (typeof needed !== 'string' || (await storage.getVersion(needed))) continue;
       lacking.push(needed);
+      // Syncing shallow, the version before is not fetched: a keeper's copy of this one comes without it.
+      if (needed === version.prev && config.shallowWith?.(peerId)) continue;
       intake.firsts.set(needed, version.collection);
     }
     if (lacking.length === 0) waitingOther.add(version.id);
@@ -385,8 +397,9 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const inFlight = askedOf(peerId);
     const state = states.get(peerId);
     // Coming anyway, a batch at a time: asking for each one alone walks a chain a link per round trip.
+    // Or here already, waiting in turn for the one below it: asked again, it comes again, and waits again.
     const coming = (id: string, collection: string) =>
-      inFlight.has(id) || !!state?.queuedIds.has(id) || !!state?.sessions.has(collection);
+      inFlight.has(id) || waiting.has(id) || !!state?.queuedIds.has(id) || !!state?.sessions.has(collection);
     const byCollection = new Map<string, string[]>();
     for (const [id, collection] of firsts) {
       if (coming(id, collection) || isRefused(peerId, id) || (await storage.getVersion(id))) continue;
@@ -401,10 +414,14 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   // ─── Hello ─────────────────────────────────────────────────────────
 
-  /** A fingerprint of each collection held and kept, hex */
-  const ourSums = async (holds: Holds): Promise<Record<string, string>> => {
+  /** Whether an exchange with a peer compares shallow sets: either side may say so */
+  const shallowWith = (peerId: string) =>
+    !!states.get(peerId)?.shallow || (config.shallowWith?.(peerId) ?? false);
+
+  /** A fingerprint of each collection held and kept, hex: of its shallow set in a shallow exchange */
+  const ourSums = async (holds: Holds, shallow = false): Promise<Record<string, string>> => {
     const out: Record<string, string> = {};
-    for (const [collection, sum] of await storage.sums()) {
+    for (const [collection, sum] of await (shallow ? storage.shallowSums() : storage.sums())) {
       if (holdsCollection(holds, collection)) out[collection] = bytesToHex(await fingerprintOf(sum));
     }
     return out;
@@ -412,11 +429,14 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   const hello = async (peerId: string, reply = false) => {
     const holds = ourHolds();
+    // Only this node's own wish: a peer that asked has its answer in kind, not the same ask back.
+    const askShallow = config.shallowWith?.(peerId) ?? false;
     send(peerId, {
       type: 'hello',
       holds: holds === 'all' ? 'all' : [...holds],
-      sums: await ourSums(holds),
+      sums: await ourSums(holds, shallowWith(peerId)),
       ...(reply ? { reply } : {}),
+      ...(askShallow ? { shallow: true } : {}),
     });
   };
 
@@ -427,20 +447,26 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     theirs: Readonly<Record<string, string>>,
     theirHolds: unknown,
     reply: boolean,
+    theirShallow: boolean,
   ) => {
     if (typeof theirs !== 'object' || theirs === null) return;
     const names = Object.keys(theirs);
     if (names.length > MAX_COLLECTIONS) return;
     const state = stateOf(peerId);
     state.holds = readHolds(theirHolds);
+    state.shallow = theirShallow;
     const holds = ourHolds();
-    const ours = await ourSums(holds);
+    const ours = await ourSums(holds, shallowWith(peerId));
     // Every collection this node holds counts, even one it has nothing of yet.
     const named = new Set([...names, ...Object.keys(ours), ...(holds === 'all' ? [] : holds)]);
     const shared = [...named].filter((c) => holdsCollection(holds, c) && holdsCollection(state.holds, c));
     const differing = shared.filter((c) => theirs[c] !== ours[c]);
     for (const c of shared) if (theirs[c] === ours[c]) emit('level', peerId, c, state.holds === 'all');
-    if (differing.length === 0) return settleIfDone(peerId);
+    if (differing.length === 0) {
+      // A shallow ask hears that it is level: no round of reconciling tells it so.
+      if (theirShallow && !reply) await hello(peerId, true);
+      return settleIfDone(peerId);
+    }
     if (self !== undefined && self > peerId) {
       // The other side starts. It may not have heard from us yet.
       if (!reply) await hello(peerId, true);
@@ -474,6 +500,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       id: session.id,
       collection: session.collection,
       message: base64UrlEncode(message),
+      ...(session.shallow ? { shallow: true } : {}),
     });
 
   const begin = async (peerId: string, collection: string) => {
@@ -484,14 +511,16 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       current.again = true;
       return;
     }
-    const reconciler = createReconciler(await storage.items(collection), {
-      initiator: true,
-      frameSizeLimit: FRAME_SIZE_LIMIT,
-    });
+    const shallow = shallowWith(peerId);
+    const reconciler = createReconciler(
+      await (shallow ? storage.shallowItems(collection) : storage.items(collection)),
+      { initiator: true, frameSizeLimit: FRAME_SIZE_LIMIT },
+    );
     const session: Session = {
       id: nextId++,
       collection,
       reconciler,
+      shallow,
       rounds: 0,
       touchedAt: Date.now(),
       again: false,
@@ -570,16 +599,22 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   // ─── Answering ─────────────────────────────────────────────────────
 
-  const onReconcile = async (peerId: string, id: number, collection: string, message: string) => {
+  const onReconcile = async (
+    peerId: string,
+    id: number,
+    collection: string,
+    message: string,
+    shallow: boolean,
+  ) => {
     if (typeof collection !== 'string' || typeof message !== 'string') return;
     if (!holdsCollection(ourHolds(), collection)) {
       send(peerId, { type: 'reconciled', id, message: '', held: false });
       return;
     }
-    const responder = createReconciler(await storage.items(collection), {
-      initiator: false,
-      frameSizeLimit: FRAME_SIZE_LIMIT,
-    });
+    const responder = createReconciler(
+      await (shallow ? storage.shallowItems(collection) : storage.items(collection)),
+      { initiator: false, frameSizeLimit: FRAME_SIZE_LIMIT },
+    );
     const round = await responder.reconcile(base64UrlDecode(message));
     send(peerId, { type: 'reconciled', id, message: base64UrlEncode(round.message!) });
   };
@@ -642,9 +677,9 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       if (!msg || !peers.has(peerId)) return;
       switch (msg.type) {
         case 'hello':
-          return await onHello(peerId, msg.sums, msg.holds, msg.reply === true);
+          return await onHello(peerId, msg.sums, msg.holds, msg.reply === true, msg.shallow === true);
         case 'reconcile':
-          return await onReconcile(peerId, msg.id, msg.collection, msg.message);
+          return await onReconcile(peerId, msg.id, msg.collection, msg.message, msg.shallow === true);
         case 'reconciled':
           return await onReconciled(peerId, msg.id, msg.message, msg.held !== false);
         case 'want':
@@ -768,6 +803,7 @@ const newPeerState = (): PeerState => ({
   queued: [],
   queuedIds: new Set(),
   holds: 'all',
+  shallow: false,
 });
 
 const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;

@@ -128,6 +128,12 @@ export function createNodeHosting(ctx: NodeContext) {
     }
   }
 
+  /** Stops using a host as a carrier: no passes, and no longer named a keeper anywhere (`nameKeepers`) */
+  async function removeCarrierOf(host: string): Promise<void> {
+    const carrier = (await ctx.carrying.liveCarriers()).find(({ body }) => body.did === host);
+    if (carrier) await ctx.carrying.carriers.remove(carrier.carry.space.id);
+  }
+
   /** How a host stands, after handing it the spaces if it is paid for but not carrying them */
   async function handOverIfDue(
     hosting: Hosting,
@@ -137,11 +143,15 @@ export function createNodeHosting(ctx: NodeContext) {
   ): Promise<{ status: HostStatus; receipt: SignedStatus }> {
     const told = await client.status();
     if (told.status.carrying) return told;
+    const paid = accountPaid(told.status, description);
+    // Signed by the host: it dropped the subscription and won't carry for it, so it keeps nothing of the account's.
+    const dropped = told.status.state === 'lapsed' || told.status.state === 'none';
+    if (dropped && !paid && !ctx.narrowNote) await removeCarrierOf(hosting.host);
     // Another look is handing the spaces over now: wait for it, rather than answer "not carrying".
     const inFlight = handing.get(hosting.url);
     if (inFlight) return (await inFlight.catch(() => null)) ?? told;
     const due = force || Date.now() - (handedAt.get(hosting.url) ?? 0) > HAND_AGAIN_MS;
-    if (!accountPaid(told.status, description) || !due || ctx.narrowNote) return told;
+    if (!paid || !due || ctx.narrowNote) return told;
     handedAt.set(hosting.url, Date.now());
     const attaching = ctx.carrying.carriers
       .add({ did: hosting.host, name: new URL(hosting.url).host })
@@ -435,8 +445,7 @@ export function createNodeHosting(ctx: NodeContext) {
       const known = await requireHosting(url);
       const { client } = await hostClient(known);
       await client.detach().catch(() => {});
-      const carrier = (await ctx.carrying.liveCarriers()).find(({ body }) => body.did === known.host);
-      if (carrier) await ctx.carrying.carriers.remove(carrier.carry.space.id);
+      await removeCarrierOf(known.host);
       await registryRt.removeSystem(await hostingKey(known.url));
     },
   });

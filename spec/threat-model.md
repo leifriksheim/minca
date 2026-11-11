@@ -382,6 +382,12 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     accounts that may not each change it, and a contested collection takes
     no writes until someone granted `/collection/define` for it settles it (02 §6.3).
 - **Does not hold yet.**
+  - A member who may name keepers (`/space/keepers`) can name its own
+    session one, and stands as a host does toward a node syncing shallow
+    (§3.8). Being a member, it can also sign what it serves: if it may edit
+    a record it can freeze it there, and what that node then writes on the
+    record counts on no whole node. It can never forge another's record or
+    change who holds a role.
   - A bot connected to GitHub works like a chat app a workspace installs:
     any member whose record sets off an automation can ask it what is in the
     connected repositories, private ones included, and what they write steers
@@ -1345,6 +1351,21 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
   - It cannot read the bodies of a private space's records outside the
     collections 03 §8.2 keeps in the clear, without the space key.
   - It cannot alter or forge what it serves (02 §3).
+  - Toward a node syncing a space it keeps by shallow sets (05 §5.1), it
+    can't forge a record, let in someone who may not write, or change who
+    holds a role: a version's signature, its author's standing and its
+    first version are checked as on any node, and lines and the access
+    history are held whole there and never taken on its word. A line is
+    held whole, so a double spend fails there as on any node (09 §7.3).
+    Such a node writes no change that takes power from an account, since
+    its cutoff would leave out writes it never took, whoever opens its
+    store later: a node holding the space whole writes those. A record
+    edited before its collection had a contract counts there as on a whole
+    node, since it asks its peers for the stub a version's `prev` names; a
+    contract's verdict that cites a superseded stub reads pending there
+    while it fails on a whole node, and neither counts it. What it can do
+    to such a node is under "Does not hold yet".
+    _Tests: `packages/core/tests/shallow.test.ts` ("a keeper vouches for nothing in the access history: a role it slips in counts nowhere", "a shallow node with its keeper away takes the latest edits whole from any other peer", "a shallow node refuses to remove someone whose line it lacks", "a node that synced a space shallow still refuses once the space names no keeper", "a store synced shallow, opened by a node not set to sync shallow, still refuses to remove someone", "an edit after its collection gained a contract counts on a shallow node as on a whole one", "a double spend counts on no shallow node: a line is held whole, losing twins too")._
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).
@@ -1378,6 +1399,27 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     What it stops is being there for them: members meet only when two are
     online, wakes for the space stop, and after `keepDays` its copy goes.
 - **Does not hold yet.**
+  - A node syncing a space by shallow sets (05 §5.1) takes a keeper's word
+    for the chain below each version it sends, outside lines and the access
+    history, and never checks it. A keeper alone can hold records back from
+    it, or leave it at an older edit, for as long as it stays connected:
+    while a keeper is connected the node takes no chain from its other
+    peers. With a member who may edit a record, a keeper can also show it a
+    version that skipped a `seq` or follows one nobody has, which a whole
+    node refuses (02 §4.7). That freezes the record there for as long as
+    the node's store lasts, the keeper gone or not, and what the node
+    itself writes on top of it counts on no whole node. A remote MCP
+    session's store lasts as long as the session. Keepers include an
+    account's carriers, of its registry and contacts space too (06 §4), so
+    this reaches every space the account manages. A revoke written from
+    such a node takes away more of the revoked key's writes than one from a
+    whole node would.
+  - A host whose signed status says a subscription lapsed, or that it has
+    none, is dropped as a carrier by the first device that reads it, and
+    then forgets what it carried (06 §4.2): a host that lost its billing
+    records, or a payment that came too late, costs the account its copy
+    there. Members' own copies are untouched
+    ([#220](https://github.com/leifriksheim/minca/issues/220)).
   - An account home made with `network.hosts` keeps every new account online
     with the first of them, with nothing to choose, when that host keeps
     accounts with nothing paid (`packages/core/docs/sign-in.md`). It is handed

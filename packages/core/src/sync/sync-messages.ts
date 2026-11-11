@@ -30,6 +30,8 @@ export type SyncMessage = V &
         readonly holds?: 'all' | ReadonlyArray<string>;
         readonly sums: Readonly<Record<string, string>>;
         readonly reply?: boolean;
+        /** The sender syncs with this peer by shallow sets, and `sums` are theirs (05 §5) */
+        readonly shallow?: true;
       }
     /**
      * One round of reconciling one collection: a Negentropy message, base64url.
@@ -40,6 +42,8 @@ export type SyncMessage = V &
         readonly id: number;
         readonly collection: string;
         readonly message: string;
+        /** Compare the collection's shallow set, not every version kept */
+        readonly shallow?: true;
       }
     /** The answer to a round; `held: false` when the collection isn't held here, which ends the session */
     | { readonly type: 'reconciled'; readonly id: number; readonly message: string; readonly held?: false }

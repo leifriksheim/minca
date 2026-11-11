@@ -252,6 +252,16 @@ describe('a carrier', () => {
     );
     assert.deepEqual(await keepers(), [{ did, name: 'Chrome' }]);
 
+    // The account's personal space names it too, as a keeper of everything it lists; its own carry space does not.
+    const registry = (await laptop.account.space())!;
+    const registryKeepers = async () => (await laptop.spaces.access(registry)).keepers;
+    await until(
+      async () => (await registryKeepers()).some((k) => k.did === did),
+      5000,
+      'the registry to name the carrier',
+    );
+    assert.deepEqual((await laptop.spaces.access(added.space)).keepers, []);
+
     // A space made after the carrier was added names it too.
     const later = await laptop.spaces.create({ name: 'Later', visibility: 'public' });
     await until(
@@ -262,6 +272,7 @@ describe('a carrier', () => {
 
     await laptop.carriers.remove(added.space);
     await until(async () => (await keepers()).length === 0, 5000, 'the carrier to be no longer named');
+    await until(async () => (await registryKeepers()).length === 0, 5000, 'nor in the registry');
   });
 
   test('two devices never online together meet through it, and it cannot read what it carries', async () => {

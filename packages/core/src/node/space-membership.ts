@@ -68,7 +68,7 @@ export function createMembership(deps: MembershipDeps) {
   const { space } = record;
   const { access } = history;
   const { upsert } = writing;
-  const { cutoffFor } = deps.lines;
+  const { cutoffFor, cutoffFromWholeLinesFor } = deps.lines;
   const { currentKey, changeKeyNow } = deps.keys;
 
   /**
@@ -80,7 +80,7 @@ export function createMembership(deps: MembershipDeps) {
     const { history } = await access();
     if (!history.current.roles.has(role)) throw new Error(`There is no role "${role}" in "${space.name}"`);
     const takes = !assigned && rolesOf(history.current, did).includes(role);
-    const cutoff = takes ? await cutoffFor(did) : {};
+    const cutoff = takes ? await cutoffFromWholeLinesFor(did) : {};
     const body = withCutoff({ did, role, assigned }, cutoff);
     const written = await upsert(ASSIGN_COLLECTION, await assignKey(did, role), body);
     await changeKeyNow();
@@ -91,7 +91,7 @@ export function createMembership(deps: MembershipDeps) {
   async function removeAccount(did: string): Promise<NodeRecord<unknown>> {
     const { history } = await access();
     if (!isMember(history.current, did)) throw new Error(`They hold no place in "${space.name}"`);
-    const cutoff = await cutoffFor(did);
+    const cutoff = await cutoffFromWholeLinesFor(did);
     const written = await upsert(REMOVE_COLLECTION, await removalKey(did), withCutoff({ did }, cutoff));
     await changeKeyNow();
     return written;
@@ -190,7 +190,7 @@ export function createMembership(deps: MembershipDeps) {
         throw new Error(
           `You hold no role in "${space.name}", so stepping down would leave it: keep a role, or leave`,
         );
-      const cutoff = await cutoffFor(deps.rootDid);
+      const cutoff = await cutoffFromWholeLinesFor(deps.rootDid);
       const body = withCutoff({ did: deps.rootDid }, cutoff);
       await upsert(STEPDOWN_COLLECTION, await stepDownKey(deps.rootDid), body);
     },

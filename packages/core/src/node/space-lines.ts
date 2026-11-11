@@ -35,6 +35,8 @@ export interface LinesDeps extends SpaceBase {
   readonly noteGap: (version: Version) => Promise<void>;
   readonly upsert: (collection: string, recordKey: string, body: unknown) => Promise<unknown>;
   readonly cannotWrite: () => Promise<string | null>;
+  /** Whether this node holds the space's history: not once it has synced the space by shallow sets */
+  readonly holdsHistory: () => Promise<boolean>;
 }
 
 export function createLines(deps: LinesDeps) {
@@ -176,7 +178,22 @@ export function createLines(deps: LinesDeps) {
     );
   }
 
-  return { placeInLog, cutoffFor };
+  /**
+   * The cutoff of a change taking power from an account, from its lines held
+   * whole. A node that syncs the space shallow lacks places in them, and a
+   * cutoff from those would take away writes that should stand: it refuses.
+   * A revoke doesn't come here: a lost key's writes taken away too is the
+   * safe side, and it must never be refused.
+   */
+  async function cutoffFromWholeLinesFor(did: string): Promise<Record<string, Record<string, number>>> {
+    if (!(await deps.holdsHistory()))
+      throw new Error(
+        `This node doesn't hold all they wrote in "${space.name}", so taking their place from here could take away writes that should stand. Do it from a device that keeps the space whole.`,
+      );
+    return cutoffFor(did);
+  }
+
+  return { placeInLog, cutoffFor, cutoffFromWholeLinesFor };
 }
 
 export type Lines = ReturnType<typeof createLines>;

@@ -9,16 +9,21 @@ import { createLocalRootSigner } from '../../src/identity/root-signer.js';
 import { generateSeed } from '../../src/identity/recovery-code.js';
 import type { FakeHub } from '../helpers/fake-transport.js';
 import { memoryStores } from '../helpers/memory-stores.js';
+import type { StoreFactory } from '../../src/node/stores.js';
 
 const manager = createIdentityManager();
 
 /** A node of a new account; on the hub when one is given */
-export async function person(hub?: FakeHub): Promise<P2PNode> {
+export async function person(
+  hub?: FakeHub,
+  options: { shallow?: boolean; stores?: StoreFactory } = {},
+): Promise<P2PNode> {
   const signer = createLocalRootSigner(await manager.fromSeed(generateSeed()), manager.getProvider());
   return createNode({
     signer,
-    stores: memoryStores(),
+    stores: options.stores ?? memoryStores(),
     watchIntervalMs: 0,
+    ...(options.shallow ? { shallow: options.shallow } : {}),
     ...(hub ? { network: { transports: (s: string, d: string) => [hub.transport(d, s)] } } : {}),
   });
 }
