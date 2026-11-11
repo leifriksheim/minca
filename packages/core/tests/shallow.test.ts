@@ -26,6 +26,7 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { hold } from './helpers/hold.js';
 import { joined } from './helpers/joined.js';
 import { until } from './helpers/until.js';
+import { lineKey } from '../src/records/key.js';
 
 const signer = createSigner(createP256Provider());
 const COLLECTION = 'app.note';
@@ -270,6 +271,66 @@ describe('a node that syncs shallow', () => {
       aliceAgain.node.spaces.removeMember(space, bob.node.did),
       /doesn't hold all they wrote/,
     );
+  });
+
+  test('a payment line is held whole, so a shallow device pays after the last payment and its contract holds', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await personOn(hub);
+    const bob = await personOn(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Credit', ...team, visibility: 'public' });
+    await hold(alice.node, space);
+    await alice.node.collections.define(space, {
+      name: 'app.pay',
+      schema: { type: 'object' },
+      contract: {
+        check: [
+          {
+            that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount',
+            else: 'The balance follows from the one before',
+          },
+        ],
+        line: { once: ['received'] },
+      },
+    });
+    const line = await lineKey(alice.node.did, 'app.pay');
+    await alice.node.records.put(space, 'app.pay', { amount: 1, balance: -1 }, { key: line });
+    for (let paid = 2; paid <= 5; paid++)
+      await alice.node.records.update(space, line, { amount: 1, balance: -paid });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(bob.node, space);
+    await joined(bob.node, space);
+    await until(
+      async () => (await bob.node.records.get<{ balance: number }>(space, line))?.body?.balance === -5,
+      10_000,
+      'Bob to keep the line',
+    );
+    await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+    await until(
+      async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+      10_000,
+      'Bob keeping it',
+    );
+
+    const aliceAgain = await personOn(hub, { shallow: 'always', seed: alice.seed });
+    await aliceAgain.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(aliceAgain.node, space);
+    await until(
+      async () => (await aliceAgain.node.records.get<{ balance: number }>(space, line))?.body?.balance === -5,
+      20_000,
+      'the last payment',
+    );
+    const sixth = await aliceAgain.node.records.update(space, line, { amount: 1, balance: -6 });
+    assert.equal(
+      (await createStorageProvider(await aliceAgain.stores(`spaces/${space}`)).sums()).get('app.pay')?.count,
+      6,
+      'every payment, retained',
+    );
+    await until(
+      async () => (await alice.node.records.get<{ balance: number }>(space, line))?.body?.balance === -6,
+      10_000,
+      'Alice’s first device to count the sixth payment',
+    );
+    assert.notEqual((await alice.node.records.contracts(space, line, sixth.version))?.passes, false);
   });
 
   test('a node that does not sync shallow takes every edit, as before', async () => {

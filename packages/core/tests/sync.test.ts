@@ -358,4 +358,78 @@ describe('sync engine', () => {
     assert.deepEqual(await newcomerStorage.shallowSums(), await holderStorage.shallowSums());
     assert.ok(sent.length < 20, `a handful of messages, not ${sent.length}`);
   });
+
+  test('a peer taking a long history asks for no version twice, not even one waiting for the one below it', async () => {
+    const EDITS = 2000;
+    const holderStorage = createStorageProvider(createMemoryAdapter());
+    const newcomerStorage = createStorageProvider(createMemoryAdapter());
+    let shallow = true;
+    const asked: string[] = [];
+    const holder: ReturnType<typeof createSyncEngine> = createSyncEngine({
+      storageProvider: holderStorage,
+      sendToPeer: (_peer, message) => void newcomer.handleMessage('a', message),
+      self: 'a',
+    });
+    const newcomer: ReturnType<typeof createSyncEngine> = createSyncEngine({
+      storageProvider: newcomerStorage,
+      sendToPeer: (_peer, message) => {
+        if (message.type === 'want') asked.push(...message.ids);
+        void holder.handleMessage('b', message);
+      },
+      self: 'b',
+      shallowWith: () => shallow,
+      // As a node's chain check: a version waits for the one before it, but a keeper's comes alone while shallow.
+      validate: async (version) =>
+        shallow || version.seq === 0 || (await newcomerStorage.getVersion(String(version.prev)))
+          ? { valid: true }
+          : { valid: false, later: true, reason: 'waits for the version before' },
+    });
+
+    const author = await makeKey();
+    let previous = await signer.sign(
+      createVersion({ author: author.did, collection: COLLECTION, body: { edit: 0 } }),
+      author.privateKey,
+    );
+    const genesis = previous;
+    const ids = [genesis.id];
+    await holderStorage.addVersion(previous);
+    for (let edit = 1; edit < EDITS; edit++) {
+      previous = await signer.sign(
+        createVersion({
+          author: author.did,
+          collection: COLLECTION,
+          body: { edit },
+          version: { key: previous.key, seq: edit, prev: previous.id, genesis: genesis.id },
+        }),
+        author.privateKey,
+      );
+      await holderStorage.addVersion(previous);
+      ids.push(previous.id);
+    }
+    holder.addPeer('b');
+    newcomer.addPeer('a');
+    newcomer.notifyPeers(['a']);
+    await until(
+      async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === 2,
+      10_000,
+      'the first and current version',
+    );
+
+    // Its current version is here. The rest come in no order (edits in one millisecond sort by id), most waiting a while.
+    shallow = false;
+    asked.length = 0;
+    const inNoOrder = ids
+      .map((id) => ({ id, order: Math.random() }))
+      .sort((a, b) => a.order - b.order)
+      .map(({ id }) => id);
+    newcomer.ask(COLLECTION, inNoOrder);
+    newcomer.notifyPeers(['a']);
+    await until(
+      async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === EDITS,
+      30_000,
+      'every version',
+    );
+    const askedTwice = asked.length - new Set(asked).size;
+    assert.equal(askedTwice, 0, `${askedTwice} versions asked for again, of ${asked.length} asks`);
+  });
 });

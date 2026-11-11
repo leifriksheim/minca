@@ -54,17 +54,17 @@ export interface SyncEngineConfig {
   readonly self?: string;
   readonly heartbeatInterval?: number;
   /**
-   * Gatekeeper for versions from peers, typically `createVersionCheck`. What it
-   * rejects is dropped and surfaces as `rejected`. Without it, everything is
-   * accepted: only for a trusted transport or a test.
+   * Gatekeeper for versions from peers, given which peer sent each, typically
+   * `createVersionCheck`. What it rejects is dropped and surfaces as
+   * `rejected`. Without it, everything is accepted: only for a trusted
+   * transport or a test.
    */
-  /** Judges a version from a peer, given which peer sent it */
   readonly validate?: (version: Version, from: string) => Promise<IncomingValidation>;
   /** What this node holds, asked afresh for every hello. Default: everything. */
   readonly holds?: () => Holds;
   /**
-   * Whether to sync with a peer by shallow sets (05 §5), asked afresh for
-   * every hello. A peer that says so in its hello is answered by them anyway.
+   * Whether this node asks a peer to sync by shallow sets (05 §5.1), asked
+   * afresh for every hello. A peer that asks is answered in kind anyway.
    */
   readonly shallowWith?: (peerId: string) => boolean;
   /** Where a files message from a peer goes (spec 05 §16.6); without it, they are dropped */
@@ -400,8 +400,9 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const inFlight = askedOf(peerId);
     const state = states.get(peerId);
     // Coming anyway, a batch at a time: asking for each one alone walks a chain a link per round trip.
+    // Or here already, waiting in turn for the one below it: asked again, it comes again, and waits again.
     const coming = (id: string, collection: string) =>
-      inFlight.has(id) || !!state?.queuedIds.has(id) || !!state?.sessions.has(collection);
+      inFlight.has(id) || waiting.has(id) || !!state?.queuedIds.has(id) || !!state?.sessions.has(collection);
     const byCollection = new Map<string, string[]>();
     for (const [id, collection] of firsts) {
       if (coming(id, collection) || isRefused(peerId, id) || (await storage.getVersion(id))) continue;
