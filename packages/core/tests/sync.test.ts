@@ -432,35 +432,4 @@ describe('sync engine', () => {
     const askedTwice = asked.length - new Set(asked).size;
     assert.equal(askedTwice, 0, `${askedTwice} versions asked for again, of ${asked.length} asks`);
   });
-  test('level on whole sets with a peer lacking the history is not holding it', async () => {
-    const storageA = createStorageProvider(createMemoryAdapter());
-    const storageB = createStorageProvider(createMemoryAdapter());
-    let aLacksHistory = true;
-    const synced: boolean[] = [];
-    const a: ReturnType<typeof createSyncEngine> = createSyncEngine({
-      storageProvider: storageA,
-      sendToPeer: (_peer, message) => void b.handleMessage('a', message),
-      self: 'a',
-      lacksHistory: () => aLacksHistory,
-    });
-    const b: ReturnType<typeof createSyncEngine> = createSyncEngine({
-      storageProvider: storageB,
-      sendToPeer: (_peer, message) => void a.handleMessage('b', message),
-      self: 'b',
-    });
-    b.on('synced', (_peer: string, _full: boolean, _levelShallow: boolean, wholeHistory: boolean) =>
-      synced.push(wholeHistory),
-    );
-    a.addPeer('b');
-    b.addPeer('a');
-    a.notifyPeers(['b']);
-    await until(() => synced.length > 0, 5_000, 'b level with a');
-    assert.equal(synced.at(-1), false, 'a said it lacks the history');
-
-    aLacksHistory = false;
-    synced.length = 0;
-    a.notifyPeers(['b']);
-    await until(() => synced.length > 0, 5_000, 'b level with a again');
-    assert.equal(synced.at(-1), true);
-  });
 });

@@ -123,16 +123,12 @@ export interface NodeConfig {
   /**
    * Sync spaces with their keepers by shallow sets (05 §5.1): each record's
    * current and first versions and what its writer retained, not every
-   * superseded stub. `first`: a space this node holds nothing of yet is
-   * usable once it has those, then it takes the rest and is held whole, as
-   * an app's on a new device. `always`: never more, as an agent's for one
-   * call. A space that names no keepers, or this node among them, is held whole.
+   * superseded stub. For a node that lives for a session and needs the
+   * space's always-on nodes anyway, as an agent's: it takes its keepers'
+   * word for the history it skips, and takes power from nobody. A space that names no keepers, or this node among them, is held whole.
    */
-  readonly shallow?: ShallowMode;
+  readonly shallow?: boolean;
 }
-
-/** When a node syncs its spaces by shallow sets (`NodeConfig.shallow`) */
-export type ShallowMode = 'first' | 'always';
 
 /** How a node holds part of a space: its own choice */
 export interface CacheConfig {

@@ -424,31 +424,25 @@ ids a writer's line names that aren't here.
 
 ### Syncing shallow
 
-A record edited thousands of times has thousands of versions, and a new
-device doesn't need them to show the record. With `config.shallow`, a node
-syncs a space with its keepers by **shallow sets**: each record's current and
+A record edited thousands of times has thousands of versions, and an agent
+answering one question doesn't need them. With `shallow: true`, a node syncs
+a space with its keepers by **shallow sets**: each record's current and
 first versions, what its writer retained, and every version in a line, not
-every superseded stub. A keeper's version comes without the chain below it,
-as the keeper's to have checked, and checked here before the node counts as
-holding the history; signatures, standing and first versions are checked at
-once. With
-no keeper connected it syncs whole, so a keeper that is away only slows it.
+every superseded stub.
 
-- `'first'`: a space this node holds no records of syncs shallow until it is
-  level with a keeper, or with a peer holding the history on whole sets, or
-  for 30 seconds at most, then whole. Usable at once; the history follows. Apps
-  connected to an account home do this by default.
-- `'always'`: it never takes more. For a node that lives for a session, as a
-  remote MCP session's.
+It is for a node that lives for a session and can't work without the
+space's always-on nodes anyway, as a remote MCP session's. Apps and devices
+leave it off and hold every version, so they work the same with no host.
 
-A space that names no keepers, or this node among them, syncs whole. Until
-the node has caught up with any peer it holds only `sys.*`, so it knows
-which. Where the space names none, the node syncs whole and waits for no
-history, as any new device. A change taking power from someone (`unassign`, `removeMember`,
-`stepDown`) waits, up to 30 seconds, until a node that held the space shallow
-holds the history: level on whole sets with a peer that holds it, every
-chain checked. A node lacking it says so in its hello, so no other takes it
-from there. Its cutoff then covers everything they wrote; `'always'` refuses at once. `revoke` never waits.
+A shallow node takes its keepers' word for the history it skips. A keeper
+can hold a record back or show an older edit, but it can't forge one:
+signatures, standing and first versions are checked as always. With no
+keeper connected the node syncs whole from its other peers, and a space
+that names no keepers syncs whole.
+
+Removing someone, or taking a role away (`unassign`, `removeMember`,
+`stepDown`), needs everything they wrote, which a shallow node doesn't
+hold: it refuses. `revoke` always goes through.
 [Spec 05 §5.1](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
 ### Planned: caches that widen and trim

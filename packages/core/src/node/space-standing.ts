@@ -324,9 +324,9 @@ export function createStanding(
     return problem ? { ok: false, reason: problem } : STANDS;
   }
 
-  /** Whether a version from outside, checked to be what its id names and placed in its key's log, may be stored */
   /**
-   * Whether a version from outside may be stored. `vouched`: it came from a
+   * Whether a version from outside, checked to be what its id names and
+   * placed in its key's log, may be stored. `vouched`: it came from a
    * keeper this node syncs shallow with (05 §5), so a `prev` this node lacks
    * by design is that keeper's to have checked; one it holds is checked here.
    */

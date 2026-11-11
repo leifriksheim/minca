@@ -45,11 +45,14 @@ export function createChecks({
   history,
   rules,
   standing,
+  askPeersFor,
 }: SpaceBase & {
   readonly versions: Versions;
   readonly history: History;
   readonly rules: Rules;
   readonly standing: StandingJudge;
+  /** Asks the peers for a version a check can't be judged without: one a node syncing shallow skipped (05 §5.1) */
+  readonly askPeersFor: (collection: string, id: string) => void;
 }) {
   const { judge, openBody, unreadable, namedFirst, consistent, previousOf } = versions;
   const { access } = history;
@@ -165,14 +168,20 @@ export function createChecks({
     // It continues the version before: one that follows a version failing its checks fails too,
     // or a forged step would be laundered by the next.
     let previous = await previousOf(version);
-    if (version.seq > 0 && version.prev && !previous) return { pending: true };
+    if (version.seq > 0 && version.prev && !previous) {
+      askPeersFor(version.collection, version.prev);
+      return { pending: true };
+    }
     // In a line, a delete is a step that ends it for good: nothing after it counts (spec 09 §7.5).
     if (line !== undefined && previous?.deleted)
       return { passes: false, reason: 'It follows a delete, which ends its line' };
     // A delete in between hides nothing: the chain is judged by the step before it.
     while (previous?.deleted && previous.seq > 0 && previous.prev) {
       const before: Version | null = await storage.getVersion(previous.prev);
-      if (!before) return { pending: true };
+      if (!before) {
+        askPeersFor(previous.collection, previous.prev);
+        return { pending: true };
+      }
       previous = before;
     }
     // A step under checks is kept whole by an honest writer (it is signed, so every reader sees the same):

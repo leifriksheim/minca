@@ -2,14 +2,13 @@
  * A new device joining a space shaped like an account registry that churned:
  * one record edited HOT times (6000) and R records (100) edited E times (130)
  * each, kept whole by a keeper the space names. Timed until the newcomer
- * reads every record's latest edit, syncing whole, shallow always, and
- * shallow first (then until it holds every version), over links of LATENCY
- * ms (20).
+ * reads every record's latest edit, syncing whole and shallow, over links of
+ * LATENCY ms (20).
  *
- *   npx tsx --conditions=@minca/source tests/bench/shallow.ts [HOT] [R] [E] [LATENCY] [whole,always,first]
+ *   npx tsx --conditions=@minca/source tests/bench/shallow.ts [HOT] [R] [E] [LATENCY] [whole,shallow]
  */
 import { team } from '../../src/space/presets.js';
-import type { P2PNode, ShallowMode } from '../../src/node/types.js';
+import type { P2PNode } from '../../src/node/types.js';
 import { createStorageProvider } from '../../src/storage/storage-provider.js';
 import { createFakeHub } from '../helpers/fake-transport.js';
 import { memoryStores } from '../helpers/memory-stores.js';
@@ -22,7 +21,7 @@ const RECORDS = Number(process.argv[3] ?? 100);
 const EDITS = Number(process.argv[4] ?? 130);
 const LATENCY = Number(process.argv[5] ?? 20);
 const LIMIT = 600_000;
-const MODES = (process.argv[6] ?? 'whole,always,first').split(',');
+const MODES = (process.argv[6] ?? 'whole,shallow').split(',');
 const versions = 1 + HOT + RECORDS * (1 + EDITS);
 
 const hub = createFakeHub({ latencyMs: LATENCY });
@@ -67,20 +66,17 @@ const invite = await alice.spaces.invite(space);
 await alice.close();
 console.log(`${versions} versions, all at the keeper. A newcomer over ${LATENCY}ms links:`);
 
-const modes = [undefined, 'always', 'first'] satisfies ReadonlyArray<ShallowMode | undefined>;
-for (const shallow of modes.filter((mode) => MODES.includes(mode ?? 'whole'))) {
+for (const shallow of [false, true].filter((mode) => MODES.includes(mode ? 'shallow' : 'whole'))) {
   const stores = memoryStores();
   const node = await person(hub, { stores, ...(shallow ? { shallow } : {}) });
   const t = performance.now();
   await node.spaces.join(invite);
   await hold(node, space);
-  await until(async () => (await total(node)) === expected, `${shallow ?? 'whole'} reading the latest`, t);
-  let line = `  ${(shallow ?? 'whole').padEnd(6)} reads every latest edit in ${ms(performance.now() - t)}, holding ${await versionsIn(stores)} versions`;
-  if (shallow === 'first') {
-    await until(async () => (await versionsIn(stores)) === versions, 'first holding every version', t);
-    line += `; every version in ${ms(performance.now() - t)}`;
-  }
-  console.log(line);
+  const mode = shallow ? 'shallow' : 'whole';
+  await until(async () => (await total(node)) === expected, `${mode} reading the latest`, t);
+  console.log(
+    `  ${mode.padEnd(7)} reads every latest edit in ${ms(performance.now() - t)}, holding ${await versionsIn(stores)} versions`,
+  );
   await node.close();
 }
 await keeper.close();

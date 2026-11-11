@@ -3,7 +3,7 @@
  * given one, and an account that never runs a node, to add as a member.
  */
 import { createNode } from '../../src/node/node.js';
-import type { P2PNode, ShallowMode } from '../../src/node/types.js';
+import type { P2PNode } from '../../src/node/types.js';
 import { createIdentityManager } from '../../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../src/identity/root-signer.js';
 import { generateSeed } from '../../src/identity/recovery-code.js';
@@ -16,7 +16,7 @@ const manager = createIdentityManager();
 /** A node of a new account; on the hub when one is given */
 export async function person(
   hub?: FakeHub,
-  options: { shallow?: ShallowMode; stores?: StoreFactory } = {},
+  options: { shallow?: boolean; stores?: StoreFactory } = {},
 ): Promise<P2PNode> {
   const signer = createLocalRootSigner(await manager.fromSeed(generateSeed()), manager.getProvider());
   return createNode({

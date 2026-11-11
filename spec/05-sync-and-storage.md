@@ -268,14 +268,13 @@ Ids below are version ids (strings, §2). Byte strings are `base64url`.
 
 "Here is what I hold, and a fingerprint of each collection I keep."
 
-| Field          | Type                       | Meaning                                                                                                                                                     |
-| -------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `type`         | `"hello"`                  |                                                                                                                                                             |
-| `holds`        | `"all"` \| `string[]`      | Optional. `"all"`, or the collections held besides `sys.*` (§5). Absent means `"all"`.                                                                      |
-| `sums`         | `{ [collection]: string }` | For each held collection the sender keeps at least one version of: the collection's fingerprint (§3.3) over all its items, as 32 lower-case hex characters. |
-| `reply`        | `true`                     | Optional. Marks a hello sent in answer to one; it is never answered by another hello.                                                                       |
-| `shallow`      | `true`                     | Optional. The sender asks to sync with this peer by shallow sets (§5.1). Only the sender's own ask: a node answering one does not repeat it.                |
-| `lacksHistory` | `true`                     | Optional. The sender lacks the space's history: it holds the space shallow, or is still taking the rest (§5.1).                                             |
+| Field     | Type                       | Meaning                                                                                                                                                     |
+| --------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`    | `"hello"`                  |                                                                                                                                                             |
+| `holds`   | `"all"` \| `string[]`      | Optional. `"all"`, or the collections held besides `sys.*` (§5). Absent means `"all"`.                                                                      |
+| `sums`    | `{ [collection]: string }` | For each held collection the sender keeps at least one version of: the collection's fingerprint (§3.3) over all its items, as 32 lower-case hex characters. |
+| `reply`   | `true`                     | Optional. Marks a hello sent in answer to one; it is never answered by another hello.                                                                       |
+| `shallow` | `true`                     | Optional. The sender asks to sync with this peer by shallow sets (§5.1). Only the sender's own ask: a node answering one does not repeat it.                |
 
 Example (fingerprint values illustrative):
 
@@ -426,14 +425,13 @@ is how the asker learns it is level by shallow sets: a node answering a
 `reconcile` can't tell when the other side has sent everything it found
 missing.
 
-Syncing by shallow sets is a node's own choice, never required: for a space
-it holds nothing of yet, until level with a keeper by shallow sets and then
-whole (a new device: usable at once, the history after), or always (a node
-that lives for a session). A node that chooses it:
+Syncing by shallow sets is a node's own choice, never required: for a node
+that lives for a session and needs the space's always-on nodes anyway, as an
+agent's. A node that chooses it:
 
 - holds only `sys.*` until it has finished an exchange with any peer, and
-  so knows whether the space names keepers (§9). Any peer will do: two new
-  devices waiting for a node that holds the whole space would wait for each
+  so knows whether the space names keepers (§9). Any peer will do: two such
+  nodes waiting for one that holds the whole space would wait for each
   other. From a peer behind on the access history it learns the keepers as
   that peer has them, until the rest arrives;
 - asks a peer for shallow sets only while one of the space's **keepers**
@@ -443,41 +441,37 @@ that lives for a session). A node that chooses it:
 - takes a version from a keeper it syncs shallow with without the version
   its `prev` names, as the keeper's to have checked (§8), and does not ask
   that keeper for the version before; not in a line, nor in the access
-  history (02 §4.5), which it holds whole and checks as any node does. A version from any other peer waits
-  for a keeper's copy, and with no keeper connected for the version before,
-  as on any node (02 §4.7), so a keeper that is away slows such a node but
-  never leaves it behind a peer it syncs with;
+  history (02 §4.5), which it holds whole and checks as any node does. A
+  version from any other peer waits for a keeper's copy, and with no keeper
+  connected for the version before, as on any node (02 §4.7). So a keeper
+  that is away slows such a node, and one that is connected and behind
+  holds it back to what that keeper has;
 - does not chase gaps in writers' lines (§9): it lacks the versions below
   what it holds by design;
-- MUST say `lacksHistory` in every hello until it **holds the history**. A
-  node shallow always never does. One shallow at first lacks it from the
-  time it opens a space it holds no records of. Once it has finished that
-  first exchange, and for as long as the space names no keeper for it to ask,
-  it lacks nothing it was to wait for: it syncs whole, as any new node.
-  Otherwise it holds the history once it has been level on whole sets with a peer whose hello didn't say so, in an exchange where it held more than `sys.*`, and has then checked the chain
-  under every version it took on a keeper's word, down to its first
-  (02 §4.7). A version whose chain breaks, or lacks a version, goes with
-  every version that follows it, as a node holding the space whole never
-  took it;
-- if it chose to only at first, takes the history (syncs whole) once a
-  keeper answers that it is level by shallow sets, once it is level on whole
-  sets with a peer that holds the history, or a while after it first caught
-  up, whichever comes first: a keeper decides how fast it is usable, never
-  whether it gets the rest;
+- **lacks the space's history** from the first time the space names a
+  keeper for it to ask, and from then on, whatever the space names later:
+  what it skipped it never took. Before it has finished its first exchange
+  it lacks it too. In a space that has named no keeper since, it holds what
+  any new node holds;
 - MUST NOT write a change that takes power from an account (an `assign`
-  taking a role, a `remove`, a `stepdown`) until it holds the history: the
+  taking a role, a `remove`, a `stepdown`) while it lacks the history: the
   cutoff ([03](03-spaces.md) §6.3) would leave out writes that should stand.
-  It waits, or refuses. A `revoke` is written at once: what it leaves out of
-  a lost key's writes is taken away, the safe side.
+  It refuses; a node that holds the space whole writes it. A `revoke` is
+  written at once: what it leaves out of a lost key's writes is taken away,
+  the safe side;
+- asks its peers, by id (§4), for a version a contract can't be judged
+  without ([09](09-contracts.md) §4): the one a version's `prev` names,
+  where that is a stub from before the collection had a contract, outside
+  every shallow set. Until it arrives the verdict is pending, as on any
+  node.
 
-A node holding a space shallow takes its keepers' word for one check only:
-that the chain below what it holds skips no `seq` (02 §4.7), until it holds
-the history, which for a node shallow always is never. It still
+A node syncing a space shallow takes its keepers' word for one check only:
+that the chain below what it holds skips no `seq` (02 §4.7). It still
 checks every signature, the author's standing and the first version, so a
 keeper can withhold, reorder or freeze a record for such a node, never forge
 one.
 
-_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-runtime.ts` (`checkVouchedChains`), `packages/core/src/node/space-lines.ts` (`cutoffFromWholeLinesFor`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
+_Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-holding.ts` (`holdsHistory`), `packages/core/src/node/space-runtime.ts` (`askPeersFor`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-lines.ts` (`cutoffFromWholeLinesFor`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
 
 ---
 

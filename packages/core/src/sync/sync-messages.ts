@@ -32,8 +32,6 @@ export type SyncMessage = V &
         readonly reply?: boolean;
         /** The sender syncs with this peer by shallow sets, and `sums` are theirs (05 §5) */
         readonly shallow?: true;
-        /** The sender lacks the space's history: it holds it shallow, or is taking the rest (05 §5.1) */
-        readonly lacksHistory?: true;
       }
     /**
      * One round of reconciling one collection: a Negentropy message, base64url.

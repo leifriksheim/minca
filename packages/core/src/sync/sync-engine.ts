@@ -67,17 +67,12 @@ export interface SyncEngineConfig {
    * afresh for every hello. A peer that asks is answered in kind anyway.
    */
   readonly shallowWith?: (peerId: string) => boolean;
-  /** Whether this node lacks the space's history (05 §5.1), asked afresh for every hello */
-  readonly lacksHistory?: () => boolean;
   /** Where a files message from a peer goes (spec 05 §16.6); without it, they are dropped */
   readonly files?: (peerId: string, message: unknown) => Promise<void>;
 }
 
 /**
- * - `synced` (peer, full, levelShallow, wholeHistory): nothing left in flight with the peer; `full` when
- *   it holds every collection, `levelShallow` when it just answered this node's ask with shallow sums
- *   that all match, `wholeHistory` when the two compared whole sets of more than the space's own
- *   collections and the peer said it lacks no history
+ * - `synced` (peer, full): nothing left in flight with the peer; `full` when it holds every collection
  * - `level` (peer, collection, full): this node holds what the peer holds of a collection
  * - `stored` (peer, ids): the peer says it now has these versions
  * - `version-received` (version): each version taken in
@@ -85,7 +80,7 @@ export interface SyncEngineConfig {
  * - `rejected` (peer, version, reason), `error` (error)
  */
 interface SyncEvents {
-  synced: (peer: string, full: boolean, levelShallow: boolean, wholeHistory: boolean) => void;
+  synced: (peer: string, full: boolean) => void;
   level: (peer: string, collection: string, full: boolean) => void;
   stored: (peer: string, ids: string[]) => void;
   'version-received': (version: Version) => void;
@@ -221,12 +216,6 @@ interface PeerState {
   holds: Holds;
   /** Whether its last hello asked to sync with this node by shallow sets */
   shallow: boolean;
-  /** Whether this node's last hello to it asked to sync by shallow sets */
-  askedShallow: boolean;
-  /** Whether its last hello said it lacks the space's history */
-  lacksHistory: boolean;
-  /** Whether this node held only the space's own collections when it compared with the peer's last hello */
-  comparedOnlySpaceOwn: boolean;
 }
 
 /** What one message brought in: the versions stored, and the versions they wait for */
@@ -442,14 +431,12 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const holds = ourHolds();
     // Only this node's own wish: a peer that asked has its answer in kind, not the same ask back.
     const askShallow = config.shallowWith?.(peerId) ?? false;
-    stateOf(peerId).askedShallow = askShallow;
     send(peerId, {
       type: 'hello',
       holds: holds === 'all' ? 'all' : [...holds],
       sums: await ourSums(holds, shallowWith(peerId)),
       ...(reply ? { reply } : {}),
       ...(askShallow ? { shallow: true } : {}),
-      ...(config.lacksHistory?.() ? { lacksHistory: true } : {}),
     });
   };
 
@@ -461,7 +448,6 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     theirHolds: unknown,
     reply: boolean,
     theirShallow: boolean,
-    theirHistoryLacking: boolean,
   ) => {
     if (typeof theirs !== 'object' || theirs === null) return;
     const names = Object.keys(theirs);
@@ -469,9 +455,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const state = stateOf(peerId);
     state.holds = readHolds(theirHolds);
     state.shallow = theirShallow;
-    state.lacksHistory = theirHistoryLacking;
     const holds = ourHolds();
-    state.comparedOnlySpaceOwn = holds !== 'all' && holds.size === 0;
     const ours = await ourSums(holds, shallowWith(peerId));
     // Every collection this node holds counts, even one it has nothing of yet.
     const named = new Set([...names, ...Object.keys(ours), ...(holds === 'all' ? [] : holds)]);
@@ -479,9 +463,9 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const differing = shared.filter((c) => theirs[c] !== ours[c]);
     for (const c of shared) if (theirs[c] === ours[c]) emit('level', peerId, c, state.holds === 'all');
     if (differing.length === 0) {
-      // A shallow ask hears that it is level: what it skipped, it may now take.
+      // A shallow ask hears that it is level: no round of reconciling tells it so.
       if (theirShallow && !reply) await hello(peerId, true);
-      return settleIfDone(peerId, reply && state.askedShallow);
+      return settleIfDone(peerId);
     }
     if (self !== undefined && self > peerId) {
       // The other side starts. It may not have heard from us yet.
@@ -504,12 +488,10 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     return false;
   };
 
-  const settleIfDone = (peerId: string, levelShallow = false) => {
+  const settleIfDone = (peerId: string) => {
     if (busy(peerId)) return;
     level.add(peerId);
-    const state = states.get(peerId);
-    const wholeHistory = !shallowWith(peerId) && !state?.lacksHistory && !state?.comparedOnlySpaceOwn;
-    emit('synced', peerId, state?.holds === 'all', levelShallow, wholeHistory);
+    emit('synced', peerId, states.get(peerId)?.holds === 'all');
   };
 
   const sendRound = (peerId: string, session: Session, message: Uint8Array) =>
@@ -695,14 +677,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       if (!msg || !peers.has(peerId)) return;
       switch (msg.type) {
         case 'hello':
-          return await onHello(
-            peerId,
-            msg.sums,
-            msg.holds,
-            msg.reply === true,
-            msg.shallow === true,
-            msg.lacksHistory === true,
-          );
+          return await onHello(peerId, msg.sums, msg.holds, msg.reply === true, msg.shallow === true);
         case 'reconcile':
           return await onReconcile(peerId, msg.id, msg.collection, msg.message, msg.shallow === true);
         case 'reconciled':
@@ -829,9 +804,6 @@ const newPeerState = (): PeerState => ({
   queuedIds: new Set(),
   holds: 'all',
   shallow: false,
-  askedShallow: false,
-  lacksHistory: false,
-  comparedOnlySpaceOwn: false,
 });
 
 const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;

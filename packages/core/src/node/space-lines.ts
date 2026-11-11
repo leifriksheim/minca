@@ -9,7 +9,6 @@
  * its lines hold (its cutoff).
  */
 import type { StorageAdapter, Version } from '../types.js';
-import type { ShallowMode } from './types.js';
 import { accessRequirement, noteGrants } from '../identity/abilities.js';
 import { breaksLine, forkProof } from '../records/fork.js';
 import { forkKey } from '../space/space-access.js';
@@ -36,14 +35,9 @@ export interface LinesDeps extends SpaceBase {
   readonly noteGap: (version: Version) => Promise<void>;
   readonly upsert: (collection: string, recordKey: string, body: unknown) => Promise<unknown>;
   readonly cannotWrite: () => Promise<string | null>;
-  /** When this node syncs by shallow sets (`NodeConfig.shallow`) */
-  readonly shallow: ShallowMode | null;
-  /** Whether this node holds the space's history: not while it holds it shallow, nor while it takes the rest */
-  readonly holdsHistory: () => boolean;
+  /** Whether this node holds the space's history: not once it has synced the space by shallow sets */
+  readonly holdsHistory: () => Promise<boolean>;
 }
-
-/** How long a change taking power waits for the history a node that held the space shallow is still taking */
-const HISTORY_WAIT_MS = 30_000;
 
 export function createLines(deps: LinesDeps) {
   const { space, session, adapter, storage, everyCurrent, noteGap, upsert, cannotWrite } = deps;
@@ -186,21 +180,16 @@ export function createLines(deps: LinesDeps) {
 
   /**
    * The cutoff of a change taking power from an account, from its lines held
-   * whole. A node holding the space shallow lacks places in them, and a cutoff
-   * from those would take away writes that should stand: it waits while it
-   * takes the space's history, and one that never does refuses. A revoke
-   * doesn't come here: a lost key's writes taken away too is the safe side,
-   * and it must never wait.
+   * whole. A node that syncs the space shallow lacks places in them, and a
+   * cutoff from those would take away writes that should stand: it refuses.
+   * A revoke doesn't come here: a lost key's writes taken away too is the
+   * safe side, and it must never be refused.
    */
   async function cutoffFromWholeLinesFor(did: string): Promise<Record<string, Record<string, number>>> {
-    const giveUpAt = Date.now() + (deps.shallow === 'always' ? 0 : HISTORY_WAIT_MS);
-    while (!deps.holdsHistory()) {
-      if (Date.now() >= giveUpAt || deps.isClosed())
-        throw new Error(
-          `This device doesn't hold all they wrote in "${space.name}" yet, so taking their place now could take away writes that should stand. Try again in a moment.`,
-        );
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
+    if (!(await deps.holdsHistory()))
+      throw new Error(
+        `This node doesn't hold all they wrote in "${space.name}", so taking their place from here could take away writes that should stand. Do it from a device that keeps the space whole.`,
+      );
     return cutoffFor(did);
   }
 

@@ -664,8 +664,6 @@ export async function startConnectedNode(params: {
       stores: { indexedDB: `minca-app:${params.grant.did}` },
       ...(network ? { network } : {}),
       ...(params.cache === false ? {} : { cache: params.cache ?? {} }),
-      // A new device is usable once it has each record as it is now; the history follows.
-      shallow: 'first',
       ...keys,
     },
     params,

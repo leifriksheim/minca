@@ -38,8 +38,6 @@ import type { Delegation } from '../identity/ucan.js';
 import { actsForAccount } from '../identity/abilities.js';
 import { contactKeyPair } from '../identity/contact-key.js';
 import { hasLineKeyForm, ownedKey } from '../records/key.js';
-import { chainProblem, supersedes } from '../records/version.js';
-import { cidOfDigest } from '../utils/hash.js';
 import { topicTag } from '../records/topics.js';
 import { storedComputed, storedContract } from '../records/contract-builder.js';
 import { usableComputed, type ComputedFields } from '../query/computed.js';
@@ -78,14 +76,7 @@ import { createWarrants } from './space-warrants.js';
 import { openMirrors } from './space-mirrors.js';
 import { createMeeting, openPeers } from './space-peers.js';
 import { createMembership } from './space-membership.js';
-import type {
-  CacheConfig,
-  DefineCollection,
-  NodeCollection,
-  NodeEvent,
-  NodeNetworkConfig,
-  ShallowMode,
-} from './types.js';
+import type { CacheConfig, DefineCollection, NodeCollection, NodeEvent, NodeNetworkConfig } from './types.js';
 
 export interface SpaceRuntimeDeps {
   readonly record: SpaceRecord;
@@ -128,7 +119,7 @@ export interface SpaceRuntimeDeps {
   /** Hold only the collections used, once the space names a keeper (`NodeConfig.cache`). Absent: hold it whole. */
   readonly cache?: CacheConfig;
   /** Sync by shallow sets with the space's keepers (`NodeConfig.shallow`) */
-  readonly shallow?: ShallowMode;
+  readonly shallow?: boolean;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
   /** The limits on others' files as they are now; null fetches and keeps every file named, as a keeper does (spec 05 §16.6). Absent: a device's. */
@@ -164,7 +155,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // What this node holds (`node/space-holding.ts`): settled here, since sync asks on every hello.
   const holding = await openSpaceHolding({
     cache: deps.cache ?? null,
-    shallow: deps.shallow ?? null,
+    shallow: deps.shallow ?? false,
     adapter,
     storage,
     spaceId: space.id,
@@ -175,7 +166,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     access: () => history.access(),
     sync: () => peers.sync,
     connectedPeers: () => peers.connectedPeers(),
-    checkVouchedChains: () => checkVouchedChains(),
     recordsChanged: () => recordsChanged(),
   });
 
@@ -209,7 +199,17 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   });
   const rules = createRules({ ...base, versions });
   const standing = createStanding({ ...base, versions, history, rules });
-  const checks = createChecks({ ...base, versions, history, rules, standing });
+  /** When each version a check waits for was last asked of the peers: a read in a loop asks once in a while */
+  const askedForChecks = new Map<string, number>();
+  const ASK_AGAIN_MS = 10_000;
+  function askPeersFor(collection: string, id: string): void {
+    const now = Date.now();
+    if (now - (askedForChecks.get(id) ?? 0) < ASK_AGAIN_MS) return;
+    if (askedForChecks.size >= 1024) askedForChecks.clear();
+    askedForChecks.set(id, now);
+    peers.sync.ask(collection, [id]);
+  }
+  const checks = createChecks({ ...base, versions, history, rules, standing, askPeersFor });
   const catalog = createCatalog({ schemas, history, rules, currentOf: (key) => index.currentOf(key) });
   const index = createIndex({ ...base, versions, standing, checks, catalog, use: holding.use });
   const profiles = createProfiles({ ...base, versions, standing });
@@ -257,7 +257,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     noteGap: holding.noteGap,
     upsert,
     cannotWrite,
-    shallow: deps.shallow ?? null,
     holdsHistory: holding.holdsHistory,
   });
   const warrants = createWarrants({ ...base, versions, history, rules, standing, upsert, cannotWrite });
@@ -293,58 +292,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       holding.vouches(from) &&
       !hasLineKeyForm(version.key) &&
       !ACCESS_COLLECTIONS.has(version.collection);
-    const verdict = await standing.admission(version, vouched);
-    // Checked once the node holds the history, which one shallow always never does.
-    if (vouched && verdict.ok && deps.shallow === 'first' && !(await previousHeld(version)))
-      await adapter.put(`${VOUCHED_PREFIX}${version.id}`, new Uint8Array());
-    return verdict;
-  }
-
-  const previousHeld = async (version: Version) =>
-    version.seq === 0 || typeof version.prev !== 'string' || !!(await storage.getVersion(version.prev));
-
-  /** Versions taken on a keeper's word without the one before (05 §5.1), by id, until their chains are checked */
-  const VOUCHED_PREFIX = 'vouched/';
-  /**
-   * Checks the chain under each version a keeper vouched for, down to its
-   * first, as a node holding the space whole checked it on arrival (02 §4.7).
-   * What breaks it, or lacks a version, goes with what follows, as such a
-   * node never took it.
-   */
-  async function checkVouchedChains(): Promise<void> {
-    let dropped = false;
-    for (const name of await adapter.list(VOUCHED_PREFIX)) {
-      await adapter.delete(name);
-      const version = await storage.getVersion(name.slice(VOUCHED_PREFIX.length));
-      if (!version || (await chainHoldsUnder(version))) continue;
-      await dropBrokenVersionsOf(version.collection, version.key);
-      dropped = true;
-    }
-    if (dropped) recordsChanged();
-  }
-
-  /** Whether a version's chain holds down to its first, every version of it here */
-  async function chainHoldsUnder(version: Version): Promise<boolean> {
-    for (let at = version; at.seq > 0;) {
-      const before = typeof at.prev === 'string' ? await storage.getVersion(at.prev) : null;
-      if (!before || chainProblem(at, before)) return false;
-      at = before;
-    }
-    return true;
-  }
-
-  /** Drops a record's versions whose chain breaks or lacks a version; the best left is current, its body asked of the peers */
-  async function dropBrokenVersionsOf(collection: string, key: string): Promise<void> {
-    let best: Version | null = null;
-    for (const item of (await storage.items(collection)).items) {
-      const version = await storage.getVersion(cidOfDigest(item.id));
-      if (version?.key !== key) continue;
-      if (!(await chainHoldsUnder(version))) await storage.removeVersion(version.id);
-      else if (!best || supersedes(version, best)) best = version;
-    }
-    if (!best) return;
-    await storage.addVersion(best);
-    peers.sync.ask(best.collection, [best.id]);
+    return standing.admission(version, vouched);
   }
 
   // ─── Mirrors and files ─────────────────────────────────────────────
@@ -453,7 +401,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     keys,
     holds: holding.holds,
     shallowWith: holding.shallowWith,
-    lacksHistory: holding.lacksHistory,
     files,
     emit,
     statusChanged,
