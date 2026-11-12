@@ -681,7 +681,7 @@ export interface NodeCarriers {
   }): Promise<{ readonly space: string; readonly invite: string }>;
   /** Waits up to `waitMs` for the carrier to hold what this node wrote for it; for a node about to close */
   reached(space: string, waitMs: number): Promise<boolean>;
-  /** Waits up to `waitMs` for the passes and wakes written in the background to be done; for a node about to close */
+  /** Waits up to `waitMs` for the passes written in the background to be done; for a node about to close */
   settled(waitMs: number): Promise<boolean>;
   /** Stops using a carrier: its passes go, and it is told to forget what it held */
   remove(space: string): Promise<void>;

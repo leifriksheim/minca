@@ -278,9 +278,7 @@ record's first version is, when the rules have `onePer` or `fixed`, since
 those rules are checked against it. With a `contract`, every version is, so
 the contract can read and cite them.
 
-The account's wakes match records by their `topics`
-([automations](automations.md#the-accounts-own)). How `version` is numbered
-is [below](#versions-of-a-definition).
+How `version` is numbered is [below](#versions-of-a-definition).
 
 ## Versions of a definition
 

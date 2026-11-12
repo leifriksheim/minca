@@ -4,7 +4,7 @@ A **space** is the container every record lives in. This part specifies what a
 space is and how its id is made; how roles, members and invites are recorded
 inside it and replayed into one answer about who may do what; how a private
 space encrypts its records and changes its key; and the few spaces and
-collections built on top of that: the account registry, passes, wakes and
+collections built on top of that: the account registry, passes and
 profiles. Contacts, built on these, are described in the library's docs
 ([contacts](../packages/core/docs/contacts.md)).
 
@@ -28,9 +28,8 @@ How peers connect and prove they may read is in [04 — Network](04-network.md).
 - [12. The space manager](#12-the-space-manager)
 - [13. The account registry](#13-the-account-registry)
 - [14. Passes and carry spaces](#14-passes-and-carry-spaces)
-- [15. Wakes](#15-wakes)
-- [16. Contacts](#16-contacts)
-- [17. Not yet specified](#17-not-yet-specified)
+- [15. Contacts](#15-contacts)
+- [16. Not yet specified](#16-not-yet-specified)
 
 Terms used throughout:
 
@@ -1650,8 +1649,7 @@ _Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `pa
 >   the key must still recognise the access collections to replay the
 >   history. Depends on and touches: the envelope and the rules
 >   ([02](02-records.md)); the collections named in a sync hello and what a
->   partial holder keeps ([05](05-sync-and-storage.md)); wakes, which a
->   carrier matches by collection (§15). _Open:_
+>   partial holder keeps ([05](05-sync-and-storage.md)). _Open:_
 >   whether names are hashed or encrypted, and under which key.
 
 ---
@@ -1814,7 +1812,7 @@ sys.profile at profile:<hex40(accountDid)>
 `sys.profile` is reserved for this. It is encrypted in a private space (§8.2).
 `contactKey` is the public half of the account's contact key
 ([01 §10.1](01-identity.md)), to which others seal what only the account may
-open, such as a knock left in the space (§16). It is not the account's inbox
+open, such as a knock left in the space (§15). It is not the account's inbox
 key ([07](07-inbox.md)): nothing on a profile leads to the inbox. Other members are the
 library's, and peers judge none of them: the account's picture, `avatar`, is
 a file reference ([05](05-sync-and-storage.md) §16.6;
@@ -1889,7 +1887,7 @@ account is ignored by readers), and nothing written under a note without
 | ---------------- | ---------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`               | The account belongs to the space, never one of its own ([06](06-nodes-and-sessions.md) §1.3). `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
 | `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ did, name, since, gen?, removed? }`     | A carrier the account uses, or used until `removed` (§14).                                                                                                                                   |
-| `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format     | One of the account's own automations, from which its wakes are made (§15).                                                                                                                   |
+| `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format     | One of the account's own automations ([06](06-nodes-and-sessions.md) §2.11).                                                                                                                 |
 | `sys.hosting`    | —                                        | —                                          | Hosting; see [08](08-hosting.md).                                                                                                                                                            |
 | `sys.link`       | `link:<hex of the pin>`                  | `{ space, blob, invite?, keyId?, until? }` | A short link the account keeps (§7.7): its sealed invite, the space, the invite DID of a role link, the id of the key it carries. Never its secret.                                          |
 
@@ -1967,78 +1965,7 @@ _Source: `packages/core/src/space/pass.ts`, `packages/core/src/space/account-reg
 
 ---
 
-## 15. Wakes
-
-A **wake** tells the account's carriers which new records are worth waking
-one of its apps for. Carriers cannot read, so a wake says it by what is on
-the outside of a version: its collection, its space, its author's root and
-its topic tags ([02](02-records.md) §8).
-
-Each device of the account holding the account key writes the wakes into
-every carry space (§14), one record each:
-
-```
-sys.wake at wake:<id>                  ; <id>: the key of the automation it is made from
-Wake = { v: 1, collection, spaces: "all" | spaceId[], tags?: { <spaceId>: [tag] },
-         others: boolean, open?: url, paused: boolean, since: ISO date }
-```
-
-For example, a wake for new messages that mention the account, in either of
-two spaces, with the tag its device worked out for the first:
-
-```json
-{
-  "v": 1,
-  "collection": "std.message",
-  "spaces": ["bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku", "bafkreigq7c…"],
-  "tags": {
-    "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku": [
-      "Xq3vS0fH2r6NwXg0qU9n8ZlF4kM7yQ1pJ5tAeB2cD9E"
-    ]
-  },
-  "others": true,
-  "paused": false,
-  "since": "2026-09-29T12:00:00.000Z"
-}
-```
-
-A carrier **MUST** take a wake only from a version that verifies and whose
-root is the account, and **MUST** ignore one that is not valid (`readWake`):
-`v` is 1; `collection` is a collection name ([02](02-records.md) §6.1) that
-does not start with `sys.`; `spaces` is `"all"` or 1–256 strings; `tags`,
-when present, maps space ids to lists of at most 16 strings, each at most 64
-characters; `others` and `paused` are
-booleans; `since` is a date; `open`, when present, is a string.
-
-A version **wakes** a wake when all hold: not paused; same collection; `seq`
-is 0 and not deleted; the space is in `spaces` (or `spaces` is `"all"`); its
-`createdAt` is at or after `since` and within 24 hours of now; with
-`others`, its root is not the account; and, where `tags` has an entry for the
-space, the version's `tags` include one of that entry's. A space with no
-entry lets any version through; an empty entry lets none through.
-
-What a wake is made from, and how a device works out its tags, is the
-library's: it keeps the account's own automations in the registry
-(`sys.automation`, §13.2) and makes one wake from each, at `wake:<id>`
-([automations](../packages/core/docs/automations.md#the-accounts-own)).
-A carrier treats every wake alike, whatever its key. A
-wake carries no words of the person's and no topic values, only their tags,
-at most 16 for a space; a device that would need more leaves that space
-without an entry.
-A carrier on one of the account's own devices may show a match there itself;
-a wake is also what a carrier needs to wake an app
-that is closed ([06](06-nodes-and-sessions.md) §4.4).
-
-_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`), `packages/core/src/node/node-carriers.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else")._
-
-> **Planned: devices deliver wakes, by Web Push.** Issue:
-> [#60](https://github.com/leifriksheim/minca/issues/60). Delivery moves to
-> per-device receiver records, apart from wakes. Specified in
-> [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4.4.
-
----
-
-## 16. Contacts
+## 15. Contacts
 
 Contacts are not protocol: the contact list (`std.contact` in the contacts
 space, §13.1), asking someone in a space you share (`std.contact-request`)
@@ -2051,7 +1978,7 @@ knock ([07](07-inbox.md) §6).
 
 ---
 
-## 17. Not yet specified
+## 16. Not yet specified
 
 - Deleting an invite record does not close it; planned in §7.2
   ([#20](https://github.com/leifriksheim/minca/issues/20)).

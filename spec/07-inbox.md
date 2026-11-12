@@ -3,7 +3,7 @@
 A DID is a name, not an address: it is on everything an account signs, so
 knowing it must not be enough to reach the account. Two people who share a
 space can become contacts through it, with a knock left there
-([03](03-spaces.md) §16). This part covers two people who share nothing yet.
+([03](03-spaces.md) §15). This part covers two people who share nothing yet.
 
 An account's **inbox** is an address it hands out on purpose, and can
 replace:
@@ -252,7 +252,7 @@ _Source: `packages/relay/relay.mjs` (`fetchMail`, `dropMail`, `purge`, `sweep`, 
 A knock is a loose version ([02](02-records.md) §3.5) in `sys.knock`, signed
 by the knocker's session key under its account's note, with `to` the key it
 is sealed to: an inbox key (§1), or a contact key when left in a space both
-belong to ([03](03-spaces.md) §16). Its body:
+belong to ([03](03-spaces.md) §15). Its body:
 
 | Field    | Type                   |                                                                                                 |
 | -------- | ---------------------- | ----------------------------------------------------------------------------------------------- |
