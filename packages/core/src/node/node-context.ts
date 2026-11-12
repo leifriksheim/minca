@@ -54,8 +54,6 @@ export interface NodeContext {
   readonly findRecord: (spaceId: string) => Promise<SpaceRecord | null>;
   /** Which of the account's own spaces this is, or null for one it uses */
   readonly kindOf: (spaceId: string) => Promise<OwnSpaceKind | null>;
-  /** Takes in an invite; the space it is for may now have one waiting */
-  readonly joinRegistry: (invite: string) => Promise<SpaceRecord>;
   /** The account registry, or why `what` can't be done without it */
   readonly requireAccount: (what: string) => Promise<SpaceRuntime>;
   /** What this account wrote in a collection that `check` takes: only it writes its own lists */

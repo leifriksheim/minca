@@ -41,7 +41,7 @@ import type { LooseSigner } from '../records/loose.js';
 import { foundersOf } from '../space/constitution.js';
 import { unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
-import { serial } from '../utils/serial.js';
+import { queue, serial } from '../utils/serial.js';
 import { contactKeyPair, deriveMemberKeyBytes } from '../identity/contact-key.js';
 import { createMailboxClient } from '../network/relays.js';
 import {
@@ -355,17 +355,23 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * record that makes the difference may be the one that arrived meanwhile.
    */
   const joining = new Map<string, () => Promise<void>>();
+  const joinsInTurn = new Map<string, ReturnType<typeof queue>>();
+  /** Joins a space in the registry, one join of a space at a time, leaving no runtime open under keys from before it */
   async function joinRegistry(invite: string, memberKey?: Uint8Array): Promise<SpaceRecord> {
     const spaceId = parseSpaceInvite(invite).space.id;
-    const heldBefore = (await registry.get(spaceId)) !== null;
-    // Not held, the only runtime there can be is one still open from leaving it, which can't read
-    // under the new key. None opens after it until the space is listed, and by then its keys are held.
-    if (!heldBefore) await closeRuntime(spaceId);
-    const record = await registry.join(invite, memberKey);
-    // Held already, one may have opened under the keys from before.
-    if (heldBefore) await closeRuntime(spaceId);
-    noInviteWaiting.delete(record.space.id);
-    return record;
+    let inTurn = joinsInTurn.get(spaceId);
+    if (!inTurn) joinsInTurn.set(spaceId, (inTurn = queue()));
+    return inTurn(async () => {
+      const heldBefore = (await registry.get(spaceId)) !== null;
+      // Not held, the only runtime there can be is one still open from leaving it, which can't read
+      // under the new key. None opens after it until the space is listed, and by then its keys are held.
+      if (!heldBefore) await closeRuntime(spaceId);
+      const record = await registry.join(invite, memberKey);
+      // Held already, one may have opened under the keys from before.
+      if (heldBefore) await closeRuntime(spaceId);
+      noInviteWaiting.delete(spaceId);
+      return record;
+    });
   }
   function finishJoining(spaceId: string): Promise<void> {
     if (noInviteWaiting.has(spaceId)) return Promise.resolve();
@@ -611,7 +617,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     runtimes,
     findRecord,
     kindOf,
-    joinRegistry,
     requireAccount,
     ownRecords,
     accountRecords,
