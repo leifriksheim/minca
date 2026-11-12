@@ -51,13 +51,15 @@ export function App() {
   const { state } = useConnection();
   useAccountInAddress();
   // Calls sit above the workspace, so moving between spaces never touches one.
-  return state.status === 'ready' ? (
-    <CallsProvider>
-      <Workspace />
-    </CallsProvider>
-  ) : (
-    <ConnectScreen />
-  );
+  if (state.status === 'ready')
+    return (
+      <CallsProvider>
+        <Workspace />
+      </CallsProvider>
+    );
+  // A kept account opens in a moment: the sign-in page is for when there is something to do or say.
+  const openingKeptAccount = state.status === 'starting' && !state.error;
+  return openingKeptAccount ? <Loading label="Opening your account" /> : <ConnectScreen />;
 }
 
 /** Connected: your spaces for every page, notifications and automations running, and calls drawn over it all */
