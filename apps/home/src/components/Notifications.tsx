@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { OwnAutomationView, P2PNode, SpaceSummary } from '@minca/core/node';
+import type { OwnAutomationView, P2PNode, SpaceSummary } from '@minca/core';
 import { message, useAction } from '@minca/app-shared/action';
 import { Shape } from '@minca/app-shared/shapes';
 import { Toggle } from '@minca/app-shared/Toggle';

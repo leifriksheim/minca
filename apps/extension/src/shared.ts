@@ -15,7 +15,7 @@
  * The offscreen page may only use `chrome.runtime`, so everything it keeps is
  * in IndexedDB, which every page of the extension shares.
  */
-import type { CarriedSpace } from '@minca/core/node';
+import type { CarriedSpace } from '@minca/core';
 import type { CarryGrant } from '@minca/core/session';
 import type { Shown } from '@minca/app-shared/notify';
 

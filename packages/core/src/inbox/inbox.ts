@@ -49,9 +49,9 @@ import { isRecord } from '../utils/guards.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 
 /** The collection an inbox is a loose version in */
-export const INBOX_COLLECTION = 'sys.inbox';
+const INBOX_COLLECTION = 'sys.inbox';
 /** The collection a knock is a loose version in */
-export const KNOCK_COLLECTION = 'sys.knock';
+const KNOCK_COLLECTION = 'sys.knock';
 
 /** An inbox names at most this many mailboxes: enough that one going away doesn't matter */
 export const MAX_INBOX_PLACES = 3;
@@ -78,7 +78,7 @@ export interface InboxBody {
 }
 
 /** What a knock carries */
-export interface KnockBody {
+interface KnockBody {
   /** The signed invitation to the space for two (spec 03 §7.4) */
   readonly invite: Version;
   /** Its invite secret, base64url: it opens the editor role there */
@@ -115,7 +115,7 @@ const isText = (value: unknown, max: number): value is string =>
 export const inboxAuthor = (sign: string): string => publicKeyToDid(base64UrlDecode(sign), P256_MULTICODEC);
 
 /** Why an inbox's body is not one, or null */
-export function inboxProblem(body: unknown): string | null {
+function inboxProblem(body: unknown): string | null {
   if (!isRecord(body)) return 'it is not an inbox';
   for (const member of Object.keys(body))
     if (!['key', 'sign', 'gen', 'places', 'name'].includes(member)) return `it has a ${member} it shouldn't`;
@@ -193,7 +193,7 @@ export async function inboxTopic(sign: string): Promise<string> {
  * What an inbox's owner signs to clear knocks from a relay's mailbox: the
  * topic, the relay's one-time challenge, and which knocks (`*` for all).
  */
-export const purgeMessage = (topic: string, nonce: string, ids: ReadonlyArray<string> | null) =>
+const purgeMessage = (topic: string, nonce: string, ids: ReadonlyArray<string> | null) =>
   utf8Encode(`minca/inbox-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`);
 
 /** Signs a relay's purge challenge with the inbox's signing key */

@@ -19,7 +19,7 @@ const AT_REST_LABEL = 'minca/at-rest/v1';
  * The space registry's prefixes: what is sealed by default. Each ends in its
  * colon, so `space:` does not cover `spaceinvite:`.
  */
-export const DEFAULT_ENCRYPTED_PREFIXES: ReadonlyArray<string> = [
+const DEFAULT_ENCRYPTED_PREFIXES: ReadonlyArray<string> = [
   'space:',
   'spacekey:',
   'spaceinvite:',

@@ -6,7 +6,7 @@
  * holds no seed and no space key: only its own key, the carry space's key, and
  * encrypted records (`@minca/core/node`, `createCarrierNode`).
  */
-import { createCarrierNode, folderStores, indexedDBStores, type CarrierNode } from '@minca/core/node';
+import { createCarrierNode, folderStores, indexedDBStores, type CarrierNode } from '@minca/core';
 import { appKey, deleteBrowserData, forgetAppKey, type CarryGrant } from '@minca/core/session';
 import { forgetDataFolder, queryFolderPermission, recallDataFolder } from '@minca/core/storage';
 import { createNotifier } from '@minca/app-shared/notify';

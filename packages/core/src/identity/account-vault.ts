@@ -16,7 +16,7 @@ import { RECOVERY_SEED_BYTES } from './recovery-code.js';
 const SALT_BYTES = 16;
 
 /** PBKDF2 rounds for a passphrase wrap: about a quarter-second in a browser, once per unlock */
-export const PASSPHRASE_ITERATIONS = 600_000;
+const PASSPHRASE_ITERATIONS = 600_000;
 /** More rounds than this are refused: a vault file edited to a huge count would hang the page */
 const MAX_ITERATIONS = 10_000_000;
 

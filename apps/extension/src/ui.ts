@@ -2,7 +2,7 @@
  * The little the two visible pages share: building elements, and drawing the
  * carried spaces and the pod the same way in both.
  */
-import type { CarriedSpace } from '@minca/core/node';
+import type { CarriedSpace } from '@minca/core';
 import { ensureFolderPermission, recallDataFolder } from '@minca/core/storage';
 import { avatarElement } from '@minca/ui/avatar';
 import { MARK_BANDS, MARK_VIEWBOX } from '@minca/app-shared/mark';

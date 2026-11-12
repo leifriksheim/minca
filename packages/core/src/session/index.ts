@@ -32,13 +32,11 @@ export {
   grantExpired,
   usableGrant,
   watchGrant,
-  grantStore,
   grantTerms,
   requestTerms,
   GRANT_VERSION,
   appKey,
   forgetAppKey,
-  appKeyFromSeed,
   MAX_GRANT_DAYS,
 } from './connect.js';
 export type {
@@ -47,7 +45,6 @@ export type {
   ProposeRequest,
   Proposed,
   Grant,
-  KeptGrant,
   CarryGrant,
   GrantedSpace,
   IncomingRequest,
@@ -72,7 +69,6 @@ export type { Place, PodContents } from './places.js';
 export {
   createStaySignedIn,
   STAY_SIGNED_IN_CHOICES,
-  DEFAULT_STAY_SIGNED_IN,
   defaultStorage,
   guardedStorage,
   rememberedSessionKey,
@@ -88,7 +84,6 @@ export {
   connectCodeIn,
   connectCodeUrl,
   newConnectCode,
-  readConnectCode,
   receiveConnectCode,
 } from './connect-code.js';
 export type { ConnectCodeStage, CodeAsking } from './connect-code.js';

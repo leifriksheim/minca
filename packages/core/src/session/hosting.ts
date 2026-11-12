@@ -54,7 +54,7 @@ export interface SubscriptionKey {
 }
 
 /** How far a signed request's time may be from the host's, in seconds */
-export const REQUEST_WINDOW_SECONDS = 300;
+const REQUEST_WINDOW_SECONDS = 300;
 
 /** A fresh seed for a subscription key */
 export function newSubscriptionSeed(): Uint8Array {
@@ -207,7 +207,7 @@ const isCount = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
 /** The limits a host description gives, when well formed; null otherwise, and the description still stands */
-export function hostLimits(described: unknown): HostLimits | null {
+function hostLimits(described: unknown): HostLimits | null {
   if (typeof described !== 'object' || described === null) return null;
   const given: Record<string, unknown> = { ...described };
   const space: unknown = given.space;
@@ -241,7 +241,7 @@ export function hostLimits(described: unknown): HostLimits | null {
 }
 
 /** The spaces a status says are over the line, each well formed; the rest left out */
-export function overSpaces(described: unknown): ReadonlyArray<OverSpace> {
+function overSpaces(described: unknown): ReadonlyArray<OverSpace> {
   if (!Array.isArray(described)) return [];
   return described.flatMap((one: unknown): OverSpace[] => {
     if (typeof one !== 'object' || one === null) return [];

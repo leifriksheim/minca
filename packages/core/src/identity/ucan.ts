@@ -20,7 +20,7 @@ import { didToPublicKey, publicKeyToDid, P256_MULTICODEC } from './did.js';
 import { evaluatePolicy, isJson, policyProblem, type Policy } from './policy.js';
 
 /** The type tag: which profile, and which kind of token */
-export const DELEGATION_TYPE = 'minca/ucan/dlg@1';
+const DELEGATION_TYPE = 'minca/ucan/dlg@1';
 
 /** What a delegation says */
 export interface DelegationPayload {

@@ -5,7 +5,7 @@ import { isRecord, isObject } from '../utils/guards.js';
 import { LINK_FIELD_PATTERN } from '../records/links.js';
 
 /** Nested `include` beyond this is refused rather than quietly slow. */
-export const MAX_INCLUDE_DEPTH = 3;
+const MAX_INCLUDE_DEPTH = 3;
 
 /** Filters nest at most this deep: a subscription's or rule's, judged on records as they arrive */
 const MAX_FILTER_DEPTH = 16;

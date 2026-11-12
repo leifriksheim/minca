@@ -23,7 +23,7 @@ export const STAY_SIGNED_IN_CHOICES: ReadonlyArray<{ value: StaySignedIn; label:
   { value: '30d', label: '30 days' },
 ];
 
-export const DEFAULT_STAY_SIGNED_IN: StaySignedIn = '7d';
+const DEFAULT_STAY_SIGNED_IN: StaySignedIn = '7d';
 
 const DAY = 24 * 60 * 60 * 1000;
 const DURATION: Record<StaySignedIn, number> = { never: 0, '1d': DAY, '7d': 7 * DAY, '30d': 30 * DAY };

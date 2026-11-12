@@ -163,11 +163,10 @@ function parseJson(text: string): unknown {
 const MAX_WORK_BITS = 24;
 
 /** What an inbox's signing key signs, so a name leads only to an inbox whose owner chose it */
-export const bindMessage = (username: Username) =>
-  utf8Encode(`minca/name-bind/v1|${formatUsername(username)}`);
+const bindMessage = (username: Username) => utf8Encode(`minca/name-bind/v1|${formatUsername(username)}`);
 
 /** What a name key signs to claim a username, give it a new code, or (with no code) give it up */
-export const claimMessage = (username: Username, at: number, code: string | null) =>
+const claimMessage = (username: Username, at: number, code: string | null) =>
   utf8Encode(`minca/name-claim/v1|${formatUsername(username)}|${at}|${code ?? ''}`);
 
 /** The hash a claim's work is judged by */
