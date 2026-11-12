@@ -12,7 +12,6 @@ import type { ComputedResult } from '../records/contract-builder.js';
 import type {
   CollectionDef,
   CryptoProvider,
-  SigningKeyPair,
   Version,
   Link,
   SpaceGrant,
@@ -103,11 +102,10 @@ export interface NodeConfig {
   /** Seconds each session delegation lasts; renewed before it runs out. Default 3600. */
   readonly sessionTtlSeconds?: number;
   /**
-   * The key to sign with, when the signer already named it: its private half
-   * may be held elsewhere (`SigningKey`). Default: one claimed from
-   * `writerKey`, else a fresh one
+   * The key to sign with, when the signer already named it. Default: one
+   * claimed from `writerKey`, else a fresh one
    */
-  readonly sessionKey?: SigningKeyPair;
+  readonly sessionKey?: CryptoKeyPair;
   /** Where to keep a signing key across runs (`browserWriterKeys`). Without one, each run makes a new key. Ignored with `sessionKey`. */
   readonly writerKey?: WriterKeySource;
   /** How often to look for another process's writes to a folder store, ms. 0 disables. Default 2000. */

@@ -18,8 +18,8 @@
  *
  * No `CryptoKey` is ever sent to the worker: WebKit drops, without an error,
  * a message to a shared worker that holds one, and can't read one back from
- * IndexedDB there either. A session key the page keeps stays on the page and
- * signs what the node asks (`serveKey`); the worker is told its public half.
+ * IndexedDB there either. A session key reaches the worker as the seed it is
+ * derived from (`sessionKeySeed`), and the worker signs with it itself.
  */
 import type { RootSigner } from '../identity/root-signer.js';
 import type { Delegation } from '../identity/ucan.js';
@@ -27,9 +27,8 @@ import { createTransportSwitch, remoteTransport, serveTransport } from '../netwo
 import { didOf } from '../identity/did.js';
 import { isRecord } from '../utils/guards.js';
 import { createNode } from './node.js';
-import { remoteKey, remoteNode, remoteSigner, serveKey, serveNode, serveSigner } from './remote.js';
+import { remoteNode, remoteSigner, serveNode, serveSigner } from './remote.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
-import type { KeyElsewhere, SigningKeyPair } from '../types.js';
 import { workerStores, writerKeysFor, type StoreFactory, type WorkerStores } from './stores.js';
 import type { NodeConfig, NodeNetworkConfig, P2PNode } from './types.js';
 import { markStep } from '../utils/step.js';
@@ -43,19 +42,13 @@ export interface WorkerNodeConfig extends Pick<
   'accountKey' | 'contactKey' | 'contactsSpace' | 'sessionTtlSeconds' | 'cache'
 > {
   readonly stores: WorkerStores;
+  /** What the key to sign with is derived from, when the signer already named it (`NodeConfig.sessionKey`) */
+  readonly sessionKeySeed?: Uint8Array;
   readonly network?: Pick<NodeNetworkConfig, 'relays' | 'nodes' | 'hosts' | 'iceServers'>;
 }
 
-/** What the page starts a node with: the session key, if any, stays on the page */
-export type PageNodeConfig = WorkerNodeConfig & {
-  readonly signer: RootSigner;
-  readonly sessionKey?: SigningKeyPair;
-};
-
-/** What reaches the worker: no key, only the session key's public half, as did:key bytes */
-interface SentConfig extends WorkerNodeConfig {
-  readonly sessionPublicKey?: Uint8Array;
-}
+/** What the page starts a node with: the signer stays on the page */
+export type PageNodeConfig = WorkerNodeConfig & { readonly signer: RootSigner };
 
 /** What of a network config reaches the worker: plain data, never transports */
 export function workerNetwork(network: NodeNetworkConfig): NonNullable<WorkerNodeConfig['network']> {
@@ -106,26 +99,19 @@ export async function startNodeInWorker(
   config: PageNodeConfig,
   startTimeoutMs = 30_000,
 ): Promise<P2PNode> {
-  const { signer, sessionKey, ...rest } = config;
-  const provider = createP256Provider();
-  const sent: SentConfig = sessionKey
-    ? { ...rest, sessionPublicKey: await provider.exportPublicKey(sessionKey.publicKey) }
-    : rest;
+  const { signer, ...sent } = config;
   const tab = globalThis.crypto.randomUUID();
   const nodes = new MessageChannel();
   const signing = new MessageChannel();
   const connections = new MessageChannel();
-  const keying = new MessageChannel();
   const stopSigner = serveSigner(signer, signing.port1);
   const stopConnections = serveTransport(connections.port1);
-  const stopKey = sessionKey ? serveKey(sessionKey.privateKey, keying.port1, provider) : () => {};
   const letGo = await holdTabLock(tab);
 
   const stop = () => {
     stopSigner();
     stopConnections();
-    stopKey();
-    for (const port of [nodes.port1, signing.port1, connections.port1, keying.port1]) port.close();
+    for (const port of [nodes.port1, signing.port1, connections.port1]) port.close();
     letGo();
     worker.terminate?.();
   };
@@ -136,7 +122,6 @@ export async function startNodeInWorker(
     nodes.port2,
     signing.port2,
     connections.port2,
-    keying.port2,
   ]);
 
   try {
@@ -245,36 +230,8 @@ function inTurn(tabs: ReadonlyMap<string, unknown>, answered: string | null): st
 /** Why the node couldn't sign: every tab that keeps the key is closed, or frozen in the background */
 const NO_TAB_SIGNS = 'No Minca tab answered to sign. Bring a Minca tab to the front, or reload it.';
 
-/** How long the tabs have to sign, together: past it, none is answering */
-const NO_TAB_SIGNS_WITHIN_MS = 60_000;
 /** How long one tab has to sign a session note, which may wait on a passkey prompt, before the next is asked */
 const TAB_DELEGATES_WITHIN_MS = 300_000;
-
-/**
- * The session key every tab of an app holds, as one: every tab is asked at
- * once, and the first signature back is taken. Two signatures by one key over
- * the same bytes are as good as each other, and a tab the browser froze in
- * the background never makes the one in view wait.
- */
-function createKeySwitch() {
-  const keys = new Map<string, KeyElsewhere>();
-  const key: KeyElsewhere = Object.freeze({
-    async sign(data: Uint8Array): Promise<Uint8Array> {
-      const asked = [...keys.values()].map((each) => each.sign(data));
-      if (asked.length === 0) throw new Error(NO_TAB_SIGNS);
-      try {
-        return await within(Promise.any(asked), NO_TAB_SIGNS_WITHIN_MS);
-      } catch {
-        throw new Error(NO_TAB_SIGNS);
-      }
-    },
-  });
-  return {
-    key,
-    add: (tab: string, added: KeyElsewhere) => void keys.set(tab, added),
-    remove: (tab: string) => void keys.delete(tab),
-  };
-}
 
 /** `work`, or a rejection once `ms` have passed without it */
 function within<T>(work: Promise<T>, ms: number): Promise<T> {
@@ -289,7 +246,6 @@ interface Held {
   readonly node: Promise<P2PNode>;
   readonly tabs: Map<string, () => void>;
   readonly signers: ReturnType<typeof createSignerSwitch>;
-  readonly keys: ReturnType<typeof createKeySwitch>;
   readonly connections: ReturnType<typeof createTransportSwitch>;
   /** The ICE servers the mesh last asked for, which each tab's connections use */
   readonly iceServers: () => ReadonlyArray<RTCIceServer>;
@@ -316,19 +272,22 @@ export async function startPageNode(
 ): Promise<P2PNode> {
   if (options.worker && options.stores)
     throw new Error('A node in a worker opens its own stores: pass worker or stores, not both');
-  const { network, stores, ...shared } = config;
-  return options.worker
-    ? startNodeInWorker(options.worker(), {
-        ...shared,
-        stores,
-        ...(network ? { network: workerNetwork(network) } : {}),
-      })
-    : createNode({
-        ...shared,
-        stores: options.stores ?? workerStores(stores),
-        ...withWriterKey(stores),
-        ...(network ? { network } : {}),
-      });
+  const { network, ...sendable } = config;
+  if (options.worker)
+    return startNodeInWorker(options.worker(), {
+      ...sendable,
+      ...(network ? { network: workerNetwork(network) } : {}),
+    });
+  const { stores, sessionKeySeed, ...shared } = sendable;
+  return createNode({
+    ...shared,
+    ...(sessionKeySeed
+      ? { sessionKey: await createP256Provider().deriveKeyPairFromSeed(sessionKeySeed) }
+      : {}),
+    stores: options.stores ?? workerStores(stores),
+    ...withWriterKey(stores),
+    ...(network ? { network } : {}),
+  });
 }
 
 /** The account's lasting writer key, kept in this origin beside its stores, when it names an account */
@@ -360,21 +319,22 @@ export function runNodeWorker(
   const held = new Map<string, Held>();
 
   async function attach(tab: string, sent: unknown, ports: ReadonlyArray<MessagePort>): Promise<void> {
-    const [nodePort, signerPort, transportPort, keyPort] = ports;
-    if (!nodePort || !signerPort || !transportPort || !keyPort) return;
+    const [nodePort, signerPort, transportPort] = ports;
+    if (!nodePort || !signerPort || !transportPort) return;
     let entry: Held | undefined;
     try {
-      if (!isSentConfig(sent)) throw new Error('The page sent no node config');
+      if (!isWorkerNodeConfig(sent)) throw new Error('The page sent no node config');
       markStep('worker: a tab asks for the node');
       const signer = await remoteSigner(signerPort);
-      const publicKey = sent.sessionPublicKey ? await provider.importPublicKey(sent.sessionPublicKey) : null;
-      const sessionDid = publicKey ? await didOf(publicKey, provider) : undefined;
+      const sessionKey = sent.sessionKeySeed
+        ? await provider.deriveKeyPairFromSeed(sent.sessionKeySeed)
+        : null;
+      const sessionDid = sessionKey ? await didOf(sessionKey.publicKey, provider) : undefined;
       const key = nodeKey(signer.did, sent.stores, sessionDid);
       markStep(`worker: ${held.has(key) ? 'sharing the node already running' : 'starting a node'}`);
-      entry = held.get(key) ?? start(key, sent, signer, publicKey);
+      entry = held.get(key) ?? start(key, sent, signer, sessionKey);
       const own = entry;
       own.signers.add(tab, signer);
-      if (publicKey) own.keys.add(tab, remoteKey(keyPort));
       own.connections.add(tab, remoteTransport(transportPort, own.iceServers));
       own.tabs.set(tab, () => {});
       const node = await own.node;
@@ -408,22 +368,25 @@ export function runNodeWorker(
     await (await entry.node).close();
   }
 
-  function start(key: string, config: SentConfig, signer: RootSigner, publicKey: CryptoKey | null): Held {
-    const { stores, network, sessionPublicKey: _sent, ...rest } = config;
+  function start(
+    key: string,
+    config: WorkerNodeConfig,
+    signer: RootSigner,
+    sessionKey: CryptoKeyPair | null,
+  ): Held {
+    const { stores, network, sessionKeySeed: _derived, ...rest } = config;
     const signers = createSignerSwitch(signer.did);
-    const keys = createKeySwitch();
     const connections = createTransportSwitch();
     let meshIce: () => ReadonlyArray<RTCIceServer> = () => [];
     const entry: Held = {
       signers,
-      keys,
       connections,
       iceServers: () => meshIce(),
       tabs: new Map(),
       node: createNode({
         ...rest,
         signer: signers.signer,
-        ...(publicKey ? { sessionKey: { publicKey, privateKey: keys.key } } : {}),
+        ...(sessionKey ? { sessionKey } : {}),
         stores: openStores(stores),
         ...withWriterKey(stores),
         ...(network
@@ -468,14 +431,13 @@ export function runNodeWorker(
 function forgetTab(entry: Held, tab: string): void {
   entry.tabs.delete(tab);
   entry.signers.remove(tab);
-  entry.keys.remove(tab);
   entry.connections.remove(tab);
 }
 
-function isSentConfig(value: unknown): value is SentConfig {
+function isWorkerNodeConfig(value: unknown): value is WorkerNodeConfig {
   return (
     isRecord(value) &&
     isRecord(value.stores) &&
-    (value.sessionPublicKey === undefined || value.sessionPublicKey instanceof Uint8Array)
+    (value.sessionKeySeed === undefined || value.sessionKeySeed instanceof Uint8Array)
   );
 }

@@ -8,7 +8,6 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
-import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import {
   channelKeyPair,
   channelRoom,
@@ -16,7 +15,7 @@ import {
   deriveChannel,
   type Channel,
 } from '../src/identity/channel.js';
-import { checkGrant, type AppKey, type Grant } from '../src/session/connect.js';
+import { checkGrant, type Grant } from '../src/session/connect.js';
 import { bytesField, meetOnChannel } from '../src/session/channel-room.js';
 import {
   answerConnectCode,
@@ -34,7 +33,7 @@ import type { PeerTransport } from '../src/network/transport.js';
 import type { NetworkMessage } from '../src/types.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { until } from './helpers/until.js';
-import { open, person, type Person } from './helpers/person.js';
+import { open, person, type Person, newAppKey } from './helpers/person.js';
 
 /** Where the home in these tests lives */
 const ORIGIN = 'https://home.test';
@@ -94,13 +93,6 @@ async function grantFor(who: Person, audience: string, command = '/record'): Pro
     expiresAt: Math.floor(Date.now() / 1000) + 3600,
     home: 'https://home.test/connect',
   };
-}
-
-/** A program's key */
-async function programKey(who: Person): Promise<AppKey> {
-  const provider = who.manager.getProvider();
-  const keys = await provider.generateKeyPair();
-  return { keys, did: publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC) };
 }
 
 /** A home opened at a new code, whose person allows the first program that asks, with `grant` */
@@ -235,7 +227,7 @@ describe('connecting a program by code', () => {
   test('the home asks the person, and the program gets a checked records-only note for its key', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const who = await person(hub);
-    const key = await programKey(who);
+    const key = await newAppKey();
     const { network } = room(hub);
     const home = await allowing(network, async (stage) => {
       assert.equal(stage.asking.name, 'Agent on laptop');
@@ -277,7 +269,7 @@ describe('connecting a program by code', () => {
   test('a recording of the room, and the code learned later, open nothing', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const who = await person(hub);
-    const key = await programKey(who);
+    const key = await newAppKey();
     const { network, seen } = room(hub);
     const home = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
     await connectWithCode({ home: ORIGIN, code: home.code, check: home.typed, key, name: 'n', network });
@@ -305,7 +297,7 @@ describe('connecting a program by code', () => {
   test('a relay that relabels or repeats messages changes nothing', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const who = await person(hub);
-    const key = await programKey(who);
+    const key = await newAppKey();
     const { network } = room(hub, (message, send) => {
       send(message);
       // Each sealed message again, and once more as every other type.
@@ -342,7 +334,7 @@ describe('connecting a program by code', () => {
       home: ORIGIN,
       code: home.code,
       check: home.typed,
-      key: await programKey(who),
+      key: await newAppKey(),
       name: 'first',
       network,
     });
@@ -353,7 +345,7 @@ describe('connecting a program by code', () => {
         home: ORIGIN,
         code: home.code,
         check: home.typed,
-        key: await programKey(who),
+        key: await newAppKey(),
         name: 'second',
         network,
         findTimeoutMs: 300,
@@ -368,7 +360,7 @@ describe('connecting a program by code', () => {
   test('saying no reaches the program; a note for another key, or for more than records, is refused', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const who = await person(hub);
-    const key = await programKey(who);
+    const key = await newAppKey();
     const { network } = room(hub);
     const refusals: unknown[] = [];
     const code = newConnectCode();
@@ -401,9 +393,8 @@ describe('connecting a program by code', () => {
 
   test('the program asks only the home it opened, and keeps that home, whatever the answer names', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const who = await person(hub);
     const eve = await person(hub);
-    const key = await programKey(who);
+    const key = await newAppKey();
     const { network } = room(hub);
     // Eve saw the link, and answers as a home of her own: the program never asks her.
     const code = newConnectCode();
@@ -454,7 +445,7 @@ describe('connecting a program by code', () => {
   test('the program keeps its note only once the person gives the code the home shows; a point that breaks its commitment is ignored', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const who = await person(hub);
-    const key = await programKey(who);
+    const key = await newAppKey();
     const { network } = room(hub);
     const home = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
     const tried: boolean[] = [];
@@ -538,7 +529,7 @@ describe('connecting a program by code', () => {
       home: ORIGIN,
       code,
       check: async () => {},
-      key: await programKey(who),
+      key: await newAppKey(),
       name: 'n',
       network: apart,
       findTimeoutMs: 1000,

@@ -11,15 +11,13 @@ import {
   homeAddress,
   startConnectedNode,
   watchGrant,
-  type AppKey,
+  type SeededAppKey,
   type ConnectRequest,
   type Grant,
   type ProposeRequest,
 } from '../src/session/connect.js';
 import { createMincaConnection } from '../src/session/connection.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
-import { createP256Provider } from '../src/identity/crypto-p256.js';
-import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import type { NodeEvent, P2PNode } from '../src/node/types.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -38,7 +36,7 @@ import { deriveContactKeyBytes } from '../src/identity/contact-key.js';
 import { until } from './helpers/until.js';
 import { watchNotifications, type NotifyMatch } from '../src/node/watch-notifications.js';
 import { notifyOn } from '../src/space/own-automations.js';
-import { asked, testAppKey } from './helpers/person.js';
+import { asked, newAppKey, testAppKey } from './helpers/person.js';
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
@@ -78,16 +76,7 @@ async function home(hub: FakeHub, { signOutGraceMs = 300, confirmed = true } = {
   return auth;
 }
 
-async function appKey(): Promise<AppKey> {
-  const provider = createP256Provider();
-  const made = await provider.generateKeyPair();
-  return {
-    keys: { privateKey: made.privateKey, publicKey: made.publicKey },
-    did: publicKeyToDid(await provider.exportPublicKey(made.publicKey), P256_MULTICODEC),
-  };
-}
-
-async function app(hub: FakeHub, grant: Omit<Grant, 'home'>, key: AppKey): Promise<P2PNode> {
+async function app(hub: FakeHub, grant: Omit<Grant, 'home'>, key: SeededAppKey): Promise<P2PNode> {
   const node = await startConnectedNode({
     grant: { ...grant, home: 'https://home.test/connect' },
     key,
@@ -105,7 +94,7 @@ describe('connecting an app to an account home', () => {
     const { node } = auth.getState().session!;
     const groceries = await node.spaces.create({ name: 'Groceries', visibility: 'private' });
     await node.spaces.create({ name: 'Diary', visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
 
     const request: ConnectRequest = await asked(
       { v: 1, audience: key.did, name: 'Todo', access: 'write' },
@@ -132,7 +121,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub);
     const { node: homeNode, did } = auth.getState().session!;
     const groceries = await homeNode.spaces.create({ name: 'Groceries', visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
 
     const grant = await auth.grant({
       origin: 'https://todo.test',
@@ -162,7 +151,7 @@ describe('connecting an app to an account home', () => {
   test('spaces the app asked for are made by the home, in the account', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked(
@@ -193,7 +182,7 @@ describe('connecting an app to an account home', () => {
     const shared = await auth
       .getState()
       .session!.node.spaces.create({ name: 'Team', ...team, visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://viewer.test',
       request: await asked({ v: 1, audience: key.did, access: 'read' }, key),
@@ -209,7 +198,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub, { confirmed: false });
     assert.equal(auth.mayGrant(), true, 'whoever just made the account is here');
     const ask = async (extra: { scope?: 'account'; contacts?: true } = {}) => {
-      const key = await appKey();
+      const key = await newAppKey();
       return auth.grant({
         origin: 'https://browser.test',
         request: await asked({ v: 1, audience: key.did, access: 'write', ...extra }, key),
@@ -217,7 +206,7 @@ describe('connecting an app to an account home', () => {
       });
     };
     const carry = async () => {
-      const key = await appKey();
+      const key = await newAppKey();
       return auth.grantCarry({
         origin: 'chrome-extension://abcdef',
         request: await asked({ v: 1, audience: key.did, access: 'carry' }, key),
@@ -251,7 +240,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
     const diary = await homeNode.spaces.create({ name: 'Diary', visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://browser.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
@@ -285,7 +274,7 @@ describe('connecting an app to an account home', () => {
   test('disconnecting forgets the app', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
-    const key = await appKey();
+    const key = await newAppKey();
     await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'read' }, key),
@@ -439,7 +428,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
     const one = await homeNode.spaces.create({ name: 'One', ...team, visibility: 'public' });
-    const key = await appKey();
+    const key = await newAppKey();
     const whole = await auth.grant({
       origin: 'https://evil.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
@@ -501,7 +490,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
     const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
@@ -543,7 +532,7 @@ describe('connecting an app to an account home', () => {
     const { node: homeNode } = auth.getState().session!;
     const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
     const connect = async (origin: string) => {
-      const key = await appKey();
+      const key = await newAppKey();
       const grant = await auth.grant({
         origin,
         request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
@@ -575,7 +564,7 @@ describe('connecting an app to an account home', () => {
     const { node: homeNode } = auth.getState().session!;
     const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
     const other = await homeNode.spaces.create({ name: 'Other', ...team, visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
@@ -599,7 +588,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub, { signOutGraceMs: 5000 });
     const { node: homeNode } = auth.getState().session!;
     const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
@@ -633,7 +622,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
     const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
@@ -659,7 +648,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
     const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
@@ -696,7 +685,7 @@ describe('connecting an app to an account home', () => {
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
     const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
@@ -714,7 +703,7 @@ describe('connecting an app to an account home', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://browser.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
@@ -748,7 +737,7 @@ describe('connecting an app to an account home', () => {
   test('disconnecting a whole-account app revokes it in the carry spaces too: it can no longer change what a carrier keeps', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
-    const carrier = await appKey();
+    const carrier = await newAppKey();
     const { carry } = await auth.grantCarry({
       origin: 'chrome-extension://abcdef',
       request: await asked(
@@ -756,7 +745,7 @@ describe('connecting an app to an account home', () => {
         carrier,
       ),
     });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://browser.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
@@ -815,7 +804,7 @@ describe('giving an app the contacts', () => {
     await bob.contacts.ask(club.id, homeNode.did);
     await homeNode.contacts.put({ did: bob.did, name: 'Bob from book club' });
 
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://people.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', contacts: true }, key),
@@ -855,7 +844,7 @@ describe('giving an app the contacts', () => {
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
     const club = await homeNode.spaces.create({ name: 'Book club', visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
@@ -908,7 +897,7 @@ describe('an account home typed by a person', () => {
     await auth.createAccount('Ada');
     await auth.confirm({ code: auth.getState().freshCode! });
     cleanup.push(() => auth.signOut());
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: key.did, access: 'read' }, key),
@@ -963,7 +952,7 @@ describe('connecting a carrier to an account home', () => {
     const auth = await home(hub);
     const { node, did } = auth.getState().session!;
     const notes = await node.spaces.create({ name: 'Notes', visibility: 'private' });
-    const key = await appKey();
+    const key = await newAppKey();
 
     const request: ConnectRequest = await asked(
       { v: 1, audience: key.did, name: 'Minca for Chrome', access: 'carry' },
@@ -1011,22 +1000,22 @@ describe('connecting a carrier to an account home', () => {
     const origin = 'http://127.0.0.1:47830';
     const kinds = () => auth.connections().map((connection) => `${connection.access}:${connection.audience}`);
     const carriers = async () => (await node.carriers.list()).map((carrier) => carrier.did);
-    const connectApp = async (key: AppKey) =>
+    const connectApp = async (key: SeededAppKey) =>
       auth.grant({
         origin,
         request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
         spaceIds: [],
       });
-    const connectCarrier = async (key: AppKey) =>
+    const connectCarrier = async (key: SeededAppKey) =>
       auth.grantCarry({ origin, request: await asked({ v: 1, audience: key.did, access: 'carry' }, key) });
 
-    const app = await appKey();
-    const carrier = await appKey();
+    const app = await newAppKey();
+    const carrier = await newAppKey();
     await connectApp(app);
     await connectCarrier(carrier);
     assert.deepEqual(kinds().sort(), [`carry:${carrier.did}`, `write:${app.did}`].sort(), 'the app stays');
 
-    const appAgain = await appKey();
+    const appAgain = await newAppKey();
     await connectApp(appAgain);
     assert.deepEqual(
       kinds().sort(),
@@ -1035,7 +1024,7 @@ describe('connecting a carrier to an account home', () => {
     );
     assert.deepEqual(await carriers(), [carrier.did], 'and is still carrying');
 
-    const carrierAgain = await appKey();
+    const carrierAgain = await newAppKey();
     await connectCarrier(carrierAgain);
     assert.deepEqual(kinds().sort(), [`carry:${carrierAgain.did}`, `write:${appAgain.did}`].sort());
     assert.deepEqual(await carriers(), [carrierAgain.did], 'the earlier carrier is removed');
@@ -1049,7 +1038,7 @@ describe('connecting a carrier to an account home', () => {
     await auth.propose({ origin, request: { v: 2, kind: 'propose', automations: [kept] } });
     const automations = async () => (await node.automations.list()).length;
     assert.equal(await automations(), 1);
-    const other = await appKey();
+    const other = await newAppKey();
     await connectCarrier(other);
     await auth.disconnect(origin, { audience: other.did });
     assert.deepEqual(kinds(), [`write:${appAgain.did}`]);
@@ -1079,7 +1068,7 @@ describe('an app proposing automations', () => {
   ) =>
     auth.grant({
       origin: 'https://chat.test',
-      request: await asked({ v: 1, audience: (await appKey()).did, access: 'write', ...request }),
+      request: await asked({ v: 1, audience: (await newAppKey()).did, access: 'write', ...request }),
       spaceIds,
     });
 
@@ -1146,7 +1135,7 @@ describe('an app proposing automations', () => {
   test('a whole-account app is handed the automations in the answer: it holds them without ever meeting the home', async () => {
     const auth = await home(createFakeHub({ latencyMs: 1 }));
     const { node } = auth.getState().session!;
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://chat.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
@@ -1173,7 +1162,7 @@ describe('an app proposing automations', () => {
 
   test('handed-over versions are refused when they are not automations, or do not check out', async () => {
     const auth = await home(createFakeHub({ latencyMs: 1 }));
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://chat.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
@@ -1224,7 +1213,7 @@ describe('an app proposing automations', () => {
       origin: extension,
       request: await asked({
         v: 1,
-        audience: (await appKey()).did,
+        audience: (await newAppKey()).did,
         name: 'Minca for Chrome',
         access: 'carry',
       }),
@@ -1234,7 +1223,7 @@ describe('an app proposing automations', () => {
       request: await asked(
         {
           v: 1,
-          audience: (await appKey()).did,
+          audience: (await newAppKey()).did,
           access: 'write',
           scope: 'account',
           via: 'code',
@@ -1270,7 +1259,7 @@ describe('an app proposing automations', () => {
     await connect(auth, { scope: 'account' });
     await auth.grant({
       origin: 'https://todo.test',
-      request: await asked({ v: 1, audience: (await appKey()).did, access: 'write', scope: 'account' }),
+      request: await asked({ v: 1, audience: (await newAppKey()).did, access: 'write', scope: 'account' }),
       spaceIds: [],
     });
     const request = propose([
@@ -1295,7 +1284,7 @@ describe('an app proposing automations', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
     const { node } = auth.getState().session!;
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://evil.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
@@ -1348,7 +1337,7 @@ describe('an app showing its own notifications', () => {
     // Already there: never news.
     await bob.records.put(club.id, 'app.chat.message', { text: 'before', mentions: [homeNode.did] });
 
-    const key = await appKey();
+    const key = await newAppKey();
     const grant = await auth.grant({
       origin: 'https://chat.test',
       request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
@@ -1739,7 +1728,7 @@ describe('an app connected to several accounts', () => {
   const HOME = 'https://home.test/connect';
 
   /** A grant from the home to a key of the app's own */
-  async function grantFrom(auth: MincaAuth, key: AppKey, spaceIds: string[] = []): Promise<Grant> {
+  async function grantFrom(auth: MincaAuth, key: SeededAppKey, spaceIds: string[] = []): Promise<Grant> {
     const request: ConnectRequest = await asked(
       { v: 1, audience: key.did, name: 'Todo', access: 'write' },
       key,
@@ -1747,9 +1736,9 @@ describe('an app connected to several accounts', () => {
     return { ...(await auth.grant({ origin: 'https://todo.test', request, spaceIds })), home: HOME };
   }
 
-  async function granted(hub: FakeHub): Promise<{ auth: MincaAuth; grant: Grant; key: AppKey }> {
+  async function granted(hub: FakeHub): Promise<{ auth: MincaAuth; grant: Grant; key: SeededAppKey }> {
     const auth = await home(hub);
-    const key = await appKey();
+    const key = await newAppKey();
     return { auth, grant: await grantFrom(auth, key), key };
   }
 
@@ -1763,12 +1752,12 @@ describe('an app connected to several accounts', () => {
   }
 
   /** The app's keys, by name, as IndexedDB keeps them: a name asked for the first time makes one */
-  function keyStore(start: ReadonlyArray<[string, AppKey]> = []) {
+  function keyStore(start: ReadonlyArray<[string, SeededAppKey]> = []) {
     const held = new Map(start);
     return {
       held,
       get: async (name: string) => {
-        const found = held.get(name) ?? (await appKey());
+        const found = held.get(name) ?? (await newAppKey());
         held.set(name, found);
         return found;
       },
@@ -2046,7 +2035,7 @@ describe('an app connected to several accounts', () => {
     await until(() => first.getState().node === null, 2000, 'expired and put away, its node closes');
     assert.equal(first.getState().status, 'expired');
     page.show();
-    const fresh = await appKey();
+    const fresh = await newAppKey();
     grants.save(await grantFrom(a.auth, fresh), 'account-a2');
     keys.held.set('account-a2', fresh);
     const second = tab(hub, storage, keys);
@@ -2132,7 +2121,7 @@ describe('an app connected to several accounts', () => {
     // A's grant ran out, and its home let it go, revoking its key.
     grants.save({ ...a.grant, expiresAt: 1 }, 'account-a');
     await a.auth.disconnect('https://todo.test', { audience: a.key.did });
-    const bFirst = await appKey();
+    const bFirst = await newAppKey();
     grants.save(await grantFrom(b.auth, bFirst, [space.id]), 'account-b');
     const keys = keyStore([
       ['account-a', a.key],

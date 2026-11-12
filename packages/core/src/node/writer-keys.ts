@@ -14,7 +14,6 @@
  */
 import { createP256Provider } from '../identity/crypto-p256.js';
 import { idbRun, openDb } from '../identity/idb.js';
-import { isRecord } from '../utils/guards.js';
 import type { CryptoProvider } from '../types.js';
 
 /** Where a lasting key's places in its logs are kept: beside the key */
@@ -48,7 +47,8 @@ export interface WriterKeySource {
 /** How many slots one account keeps in one browser: one per tab or worker signing at once */
 const MAX_SLOTS = 32;
 const STORE = 'writer';
-const KEYS = 'keys';
+/** Where a slot keeps what its key is derived from */
+const KEY_SEED = 'seed';
 
 /** The lock for a slot, if no one holds it; held until the function returned is called */
 function tryLock(locks: LockManager, name: string): Promise<(() => void) | null> {
@@ -65,13 +65,10 @@ function tryLock(locks: LockManager, name: string): Promise<(() => void) | null>
   });
 }
 
-const isKeyPair = (value: unknown): value is CryptoKeyPair =>
-  isRecord(value) && value.privateKey instanceof CryptoKey && value.publicKey instanceof CryptoKey;
-
 /**
  * Lasting keys in this origin's IndexedDB, one database per slot, locked with
- * Web Locks across tabs and workers. The private key is non-extractable: a
- * script in the page can sign with it while it runs, never take it away.
+ * Web Locks across tabs and workers. A slot keeps the seed its key is derived
+ * from, not a `CryptoKey`, which a shared worker in WebKit can't read back.
  *
  * Gives null, so the node makes a key for one run, where there is no
  * IndexedDB or no Web Locks: a key two nodes might hold at once is worse
@@ -111,15 +108,14 @@ async function openSlot(
   provider: CryptoProvider,
 ): Promise<ClaimedWriter> {
   const run = await slotStore(dbName);
-  let keys: unknown = await run('readonly', (store) => store.get(KEYS));
-  if (!isKeyPair(keys)) {
-    const made = await provider.generateKeyPair();
-    keys = { publicKey: made.publicKey, privateKey: made.privateKey };
+  const kept: unknown = await run('readonly', (store) => store.get(KEY_SEED));
+  const seed = kept instanceof Uint8Array ? kept : globalThis.crypto.getRandomValues(new Uint8Array(32));
+  if (seed !== kept) {
     // A new key starts new lines: whatever a forgotten one left goes.
     await run('readwrite', (store) => store.clear());
-    await run('readwrite', (store) => store.put(keys, KEYS));
+    await run('readwrite', (store) => store.put(seed, KEY_SEED));
   }
-  if (!isKeyPair(keys)) throw new Error('The writer key could not be kept');
+  const keys = await provider.deriveKeyPairFromSeed(seed);
   const heads: HeadStore = {
     async get(key) {
       const value = await run('readonly', (store) => store.get(`head:${key}`));
@@ -138,7 +134,7 @@ async function openSlot(
     },
     async forget() {
       // The key only: its places stay while it may still sign, until the next claim.
-      await run('readwrite', (store) => store.delete(KEYS));
+      await run('readwrite', (store) => store.delete(KEY_SEED));
     },
   });
 }
@@ -156,7 +152,8 @@ async function slotStore(dbName: string) {
     } catch (error) {
       if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') throw error;
       db = await openDb(dbName, STORE);
-      if (!isKeyPair(await idbRun(db, STORE, 'readonly', (store) => store.get(KEYS))))
+      const kept: unknown = await idbRun(db, STORE, 'readonly', (store) => store.get(KEY_SEED));
+      if (!(kept instanceof Uint8Array))
         throw new Error('This site’s data was cleared while the page was open. Reload the page.');
       return idbRun(db, STORE, mode, fn);
     }

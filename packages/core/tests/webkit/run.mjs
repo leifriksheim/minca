@@ -1,8 +1,9 @@
 /**
  * Two tabs of an app in WebKit, the engine of Safari and of every browser on
- * an iPhone, sharing one node in a shared worker: the app's key never leaves
- * the tabs, a tab that stops answering doesn't stop the other from writing,
- * and neither waits on the other's stores.
+ * an iPhone, sharing one node in a shared worker: the worker signs with the
+ * app's key, a tab that stops answering doesn't stop the other from writing,
+ * and neither waits on the other's stores. And an account home's node there
+ * keeps its lasting writer key from one visit to the next.
  *
  *   node packages/core/tests/webkit/run.mjs     (after `npx playwright install webkit`)
  */
@@ -56,13 +57,13 @@ try {
 
   const space = await a.evaluate(() => window.tab.createSpace());
   const first = await a.evaluate((id) => window.tab.write(id, 'milk'), space);
-  assert.equal(first.author, sessionA, "signed by the app's key, kept in the tab");
+  assert.equal(first.author, sessionA, "signed by the app's key, in the worker");
   assert.deepEqual(await b.evaluate((id) => window.tab.texts(id), space), ['milk']);
   console.log(`tab A wrote in ${first.ms} ms, and tab B reads it`);
 
-  // Tab B, the newest, signs for the node now. It stops answering, as a tab an iPhone froze in
-  // the background does: it keeps its ports and its lock, and says nothing more. (Blocking its
-  // thread would block tab A's too, since they share a process here.)
+  // Tab B stops answering, as a tab an iPhone froze in the background does: it keeps its ports
+  // and its lock, and says nothing more. (Blocking its thread would block tab A's too, since
+  // they share a process here.)
   await b.evaluate(() => {
     MessagePort.prototype.postMessage = () => {};
   });
@@ -79,6 +80,18 @@ try {
   assert.equal(await c.evaluate((s) => window.tab.start(s), seed), sessionA);
   assert.deepEqual(await c.evaluate((id) => window.tab.texts(id), space), ['bread', 'eggs', 'milk']);
   console.log(`tab B frozen: a new tab opened the account in ${Date.now() - t} ms`);
+
+  // An account home's node, with no app key: the worker claims a lasting writer key, and reads
+  // it back from IndexedDB on the next visit.
+  const home = await open();
+  const homeSession = await home.evaluate((s) => window.tab.start(s, 'writer key'), seed);
+  await home.evaluate(() => window.tab.close());
+  assert.equal(
+    await home.evaluate((s) => window.tab.start(s, 'writer key'), seed),
+    homeSession,
+    'the same writer key on coming back',
+  );
+  console.log('an account home kept its writer key in the shared worker');
   console.log('ok');
 } finally {
   await browser.close();

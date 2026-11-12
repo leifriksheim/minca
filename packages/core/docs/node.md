@@ -102,22 +102,14 @@ There are three kinds:
   only session notes (command `/`, no subject, no policy) and refuses anything
   else without asking the signer behind it.
 
-An app's node signs as its session with the app's key. In a worker, that key
-stays on the page too: `serveKey` signs there what the node asks, and the
-worker is told only the key's public half. No `CryptoKey` is ever sent to a
-worker, since WebKit drops a message to a shared worker that holds one.
+An app's node signs as its session with the app's key. A node in a worker is
+handed the seed the key is derived from and signs with it there. No
+`CryptoKey` is ever sent to a worker, since WebKit drops a message to a shared
+worker that holds one.
 
-When several tabs share the node, every tab is asked to sign at once, and the
-first signature back is taken, so a tab frozen in the background never makes
-the one in view wait. With no tab answering for a minute, signing fails with
-a message saying to bring a Minca tab to the front. Signing needs a tab that
-runs: while every tab is frozen, the node keeps the connections it has but
-makes no new ones. A session note is asked of one tab at a time, the one that
-signed last first, then the newest, each for up to five minutes, long enough
-for a passkey prompt.
-
-A `CryptoProvider` of your own must sign with a key held elsewhere too: a
-`SigningKey` is a `CryptoKey`, or a `KeyElsewhere`, whose `sign` it calls.
+When several tabs share the node, a session note is asked of one tab at a
+time, the one that signed last first, then the newest, each for up to five
+minutes, long enough for a passkey prompt.
 
 ### The session note
 
@@ -254,8 +246,8 @@ or none can be locked, the node makes a key for this run instead.
 In the browser, `browserWriterKeys(name)` keeps up to 32 keys in IndexedDB,
 one database per slot (`<name>:writer:<slot>`), each claimed under a Web Lock
 of the same name. A tab that finds a slot taken tries the next. A tab that
-closes or crashes frees its slot. The private key can't be extracted: a
-script in the page can sign with it while it runs, but can't take it away.
+closes or crashes frees its slot. A slot keeps the seed its key is derived
+from, so a shared worker can read it in every browser.
 Without IndexedDB or Web Locks there are no writer keys.
 
 A node started from a store description, such as `startPageNode` or a node in
@@ -839,10 +831,12 @@ says what the app and the home send each other.
 
 ### The app's key
 
-`appKey(name = 'default')` makes the app's P-256 key once and keeps it,
-non-extractable, in the IndexedDB database `minca-app-key`, store `keys`,
+`appKey(name = 'default')` makes the app's P-256 key once and keeps the seed
+it is derived from in the IndexedDB database `minca-app-key`, store `keys`,
 under `name`. `forgetAppKey` deletes it, and the next connection makes a new
-one.
+one. A script running in the app's origin can read the seed, as it can the
+session of any web app: the grant runs out, and the person can disconnect the
+app at their account home.
 
 ### An app's node outside the page
 

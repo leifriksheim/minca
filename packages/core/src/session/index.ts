@@ -55,6 +55,7 @@ export {
   GRANT_VERSION,
   appKey,
   forgetAppKey,
+  appKeyFromSeed,
   MAX_GRANT_DAYS,
 } from './connect.js';
 export type {
@@ -68,6 +69,7 @@ export type {
   GrantedSpace,
   IncomingRequest,
   AppKey,
+  SeededAppKey,
   KeyTerms,
 } from './connect.js';
 export {

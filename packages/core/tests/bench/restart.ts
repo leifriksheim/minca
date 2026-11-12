@@ -19,7 +19,8 @@ import { time, ms } from './common.js';
 
 let reads = 0;
 
-const [S, R, E, A, L] = [2, 3, 4, 5, 6].map((at, i) => Number(process.argv[at] ?? [5, 200, 0, 0, 0][i]));
+const count = (argument: number, otherwise: number) => Number(process.argv[argument] ?? otherwise);
+const [S, R, E, A, L] = [count(2, 5), count(3, 200), count(4, 0), count(5, 0), count(6, 0)];
 
 const manager = createIdentityManager();
 const seed = generateSeed();

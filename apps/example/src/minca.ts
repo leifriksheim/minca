@@ -27,7 +27,7 @@ export const connection =
     account: accountFromAddress,
     // Checking, decrypting and syncing happen there, so the page never stutters. One shared
     // worker for every tab: one node, the only one writing the stores, so a tab the browser
-    // freezes holds nothing another waits on. The app's key stays here and signs for it.
+    // freezes holds nothing another waits on.
     // Without shared workers it runs in a worker of its own, in the tab in view; one that fails
     // to load, in the page.
     worker: () => {

@@ -825,6 +825,12 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     down ends founder status, and does nothing else", "a revoke stops the
     key…").
 - **By design** (the principle above).
+  - A browser keeps an app's key, and an account home's lasting writer key,
+    as the seed it is derived from. A script running in that origin can copy
+    the key, not only sign with it while it runs, as it can copy the session
+    token of any web app
+    (`packages/core/src/session/connect.ts`, `appKey`;
+    `packages/core/src/node/writer-keys.ts`, `browserWriterKeys`).
   - What it signed before the revoke stands. The revoke stops the key from
     then on, but for one thing: it can still end its account's founder
     status (above), and its cutoff keeps what the revoking node held of the key's
