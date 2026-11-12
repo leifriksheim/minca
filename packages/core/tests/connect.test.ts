@@ -1009,7 +1009,7 @@ describe('connecting a carrier to an account home', () => {
     assert.deepEqual(auth.connections(), []);
   });
 
-  test('a carrier and an app at one origin are two connections: connecting either again replaces only its own', async () => {
+  test('an app connecting at a carrier’s origin takes its place; a carrier connecting leaves the app', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
     const { node } = auth.getState().session!;
@@ -1033,21 +1033,18 @@ describe('connecting a carrier to an account home', () => {
 
     const appAgain = await newAppKey();
     await connectApp(appAgain);
-    assert.deepEqual(
-      kinds().sort(),
-      [`carry:${carrier.did}`, `write:${appAgain.did}`].sort(),
-      'the carrier stays',
-    );
-    assert.deepEqual(await carriers(), [carrier.did], 'and is still carrying');
+    assert.deepEqual(kinds(), [`write:${appAgain.did}`], 'the carrier’s connection goes');
+    assert.deepEqual(await carriers(), [], 'and it carries no more');
 
     const carrierAgain = await newAppKey();
     await connectCarrier(carrierAgain);
     assert.deepEqual(kinds().sort(), [`carry:${carrierAgain.did}`, `write:${appAgain.did}`].sort());
-    assert.deepEqual(await carriers(), [carrierAgain.did], 'the earlier carrier is removed');
+    assert.deepEqual(await carriers(), [carrierAgain.did]);
 
     // One key is one connection: the app's key can't be a carrier too, nor the carrier's an app.
     await assert.rejects(connectCarrier(appAgain), /already connected/);
     await assert.rejects(connectApp(carrierAgain), /already connected/);
+    assert.deepEqual(await carriers(), [carrierAgain.did], 'a request that is refused removes no carrier');
 
     // Disconnecting the carrier leaves the app, and what the app proposed.
     const kept = notifyOn('Mentioned', 'app.chat.message', { mentions: { $contains: '$me' } });

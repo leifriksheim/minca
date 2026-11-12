@@ -141,6 +141,27 @@ describe('an app showing its own notifications', () => {
     stop();
   });
 
+  test('an app hears only its own automations; one watching for every app hears another app’s too', async () => {
+    const { node, add, emit } = fakeNode();
+    const heardBy = (origin: string | null) => {
+      const heard: string[] = [];
+      const stop = watchNotifications(node, { origin, onNotify: (match) => heard.push(match.record.key) });
+      return { heard, stop };
+    };
+    const otherApp = heardBy('https://other.test');
+    const everyApp = heardBy(null);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    add(dm('hello'));
+    emit({ type: 'records', space: 'club' });
+    await until(() => everyApp.heard.length > 0, 1000, 'the message');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(everyApp.heard, ['hello']);
+    assert.deepEqual(otherApp.heard, [], 'chat.test proposed it, not other.test');
+    otherApp.stop();
+    everyApp.stop();
+  });
+
   test('a record that comes to match by what its computed fields read is news, once', async () => {
     const { node, add, emit } = fakeNode(DONE);
     const nodOn = (key: string, chore: string, by = BO) =>

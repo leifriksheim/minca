@@ -1,7 +1,7 @@
 # Minca for Chrome
 
 Keeps your Minca spaces online, and your pod up to date, while your browser is
-open — even with no Minca app open. It can't read them.
+open — even with no Minca app open.
 
 Without it, your data only moves while some app of yours is open. Write
 something, close the tab, and it waits there until that app and one of your
@@ -12,15 +12,20 @@ app is closed.
 
 ## What it holds
 
-It connects to your account home like an app does, but gets something
-different: a **pass** for each space instead of a key. A pass lets it prove to
-your other devices that it may be sent the space, and nothing more. So it keeps
-records exactly as they travel, private ones still locked, and checks each one
-the way every device does. It never gets your password, a space's key or a
-note that lets it write.
+It connects to your account home like an app you use for your whole account,
+and runs the same node an app does. So it holds the key to your list of
+spaces, the keys of the spaces on it, and a note that lets it write records
+as you. The note grants records and nothing more: it can't change who is in a
+space or what a space's collections are, and it gets no key to your contact
+requests. It never gets your password.
 
-What it can see is what a relay sees: who wrote something, when, and the name
-of the collection. Not what anything says.
+Those keys sit in this browser profile, unsealed: a browser has no keychain
+to seal them under. Whoever copies the profile can read your spaces and write
+records as you until you disconnect the extension in your account home.
+
+Its connection lasts as long as your account home gives, a year at most. Two
+weeks before it runs out the badge and a notification ask you to connect it
+again; once it has run out, it syncs nothing until you do.
 
 ## Build and load
 
@@ -57,7 +62,7 @@ the defaults too, so you only need the local one to work offline.
 | File               | Runs in            | Does                                                                                                                                                                              |
 | ------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/worker.ts`    | the service worker | Keeps the offscreen page alive (on start, install, and a one-minute alarm), sets the badge, and shows notifications. Chrome stops it after 30 quiet seconds, so it keeps nothing. |
-| `src/offscreen.ts` | a hidden page      | The carrier node (`createCarrierNode`): runs as long as Chrome does, over WebRTC. Attaches the pod when Chrome allows it.                                                         |
+| `src/offscreen.ts` | a hidden page      | An app's node (`startConnectedNode`), holding every space: runs as long as Chrome does, over WebRTC. Writes the pod when Chrome allows it.                                        |
 | `src/welcome.ts`   | a tab              | Connecting to the home, picking the pod, status, disconnecting. Connecting has to happen here: the toolbar popup closes when the home's window takes focus.                       |
 | `src/popup.ts`     | the toolbar popup  | Status at a glance, and **Resume pod sync** when Chrome wants a click.                                                                                                            |
 
@@ -73,19 +78,25 @@ app open, so it stays quiet while one does.
 
 ## Notifications
 
-What you asked an app to tell you about, while no tab has that app open. The
-carrier sees a record from outside only, so a notification says where
-something arrived and what kind ("3 new messages" in a space), never what it
-says. A burst in one space is one notification. Clicking one opens the app;
+What you asked an app to tell you about, while no tab has that app open: it
+reads your account's automations and matches them itself, as an app does
+(`watchNotifications`). A notification says where something arrived and what
+kind ("3 new messages" in a space). A burst in one space is one notification. Clicking one opens the app;
 opening the app any other way clears them, since it shows them itself. The
 toolbar badge counts the ones waiting.
 
-The design, and what is still to be checked, is in
-[06 — Nodes, sessions and apps](../../spec/06-nodes-and-sessions.md).
+## Your pod
+
+If your account home keeps your account in a folder, choose that folder in
+the extension's tab. It finds your account there and writes your spaces into
+it as they arrive, sealed as they travel. It can't open the folder's list of
+spaces, which is sealed under a key only your account home has, and needs
+none of it: it follows your list of spaces through its own node.
 
 ## Still to do
 
-- **Real Chrome.** Check:
+- **Real Chrome.** Nothing here has run in a browser since it became an app's node. Check:
+  - connecting, connecting again, and being disconnected from the account home;
   - 8+ hours of uptime across sleep;
   - the folder permission after a restart, and "Allow on every visit";
   - the `background` permission;

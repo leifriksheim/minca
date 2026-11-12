@@ -1970,8 +1970,13 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         ...(recordsOnly ? { recordsOnly: true as const } : {}),
       };
       // Connecting again replaces the old note. A program connected by code is kept by its key: connecting one replaces only that one.
-      // A carrier at the same origin is not the app, and stays (§2.10).
-      const replaced = (known: Connection) => connectionKey(known) === connectionKey(connection);
+      // A carrier at the app's origin is that program from before it held keys: it goes (§2.10).
+      const carrierItWas = (known: Connection) =>
+        !byCode && known.origin === choice.origin && known.access === 'carry';
+      for (const carrier of auth.connections().filter(carrierItWas))
+        if (carrier.carrySpace) await node.carriers.remove(carrier.carrySpace).catch(() => {});
+      const replaced = (known: Connection) =>
+        connectionKey(known) === connectionKey(connection) || carrierItWas(known);
       // A key it replaces is not revoked: this home has seen little of what it wrote, and a
       // revoke would withdraw the rest. The app forgets it; disconnecting revokes it too.
       // Only a key that could write needs revoking; one is kept once, however often it was

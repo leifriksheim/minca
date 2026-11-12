@@ -1,12 +1,11 @@
 /**
  * The little the two visible pages share: building elements, and drawing the
- * carried spaces and the pod the same way in both.
+ * spaces and the pod the same way in both.
  */
-import type { CarriedSpace } from '@minca/core';
 import { ensureFolderPermission, recallDataFolder } from '@minca/core/storage';
 import { avatarElement } from '@minca/ui/avatar';
 import { MARK_BANDS, MARK_VIEWBOX } from '@minca/app-shared/mark';
-import type { CarrierStatus, PodState } from './shared';
+import type { ExtensionStatus, PodState } from './shared';
 
 type Child = Node | string | null | false | undefined;
 type Attribute = string | number | boolean | null | undefined | ((event: Event) => void);
@@ -47,7 +46,7 @@ export function mark(): HTMLElement {
 }
 
 /** Whose spaces these are, and which home connected them — the thing to check when something looks wrong */
-export function accountLine(account: NonNullable<CarrierStatus['account']>, action?: Node): HTMLElement {
+export function accountLine(account: NonNullable<ExtensionStatus['account']>, action?: Node): HTMLElement {
   return h(
     'div',
     { class: 'account' },
@@ -62,21 +61,18 @@ export function accountLine(account: NonNullable<CarrierStatus['account']>, acti
   );
 }
 
-/** What to call a carried space — the account's own list has no name of its own worth showing */
-const nameOf = (space: CarriedSpace) =>
-  space.name === 'Account registry' ? 'Your list of spaces' : space.name;
-
-/** The spaces being carried, with whether each is reaching anyone */
-export function spaceList(status: CarrierStatus): HTMLElement {
-  const spaces = status.spaces.filter((space) => !space.carry);
-  // Every account passes on at least its list of spaces, so none at all means no device has handed them over yet.
+/** The spaces kept online, with whether each is reaching anyone */
+export function spaceList(status: ExtensionStatus): HTMLElement {
+  const { spaces } = status;
   if (spaces.length === 0) {
     return h(
       'small',
       {},
       status.state === 'starting'
         ? 'Starting…'
-        : 'Waiting to hear from one of your devices. Open Minca on any of them, and your spaces arrive here.',
+        : status.state === 'expired'
+          ? 'Nothing is syncing: its connection ran out.'
+          : 'Waiting to hear from one of your devices. Open Minca on any of them, and your spaces arrive here.',
     );
   }
   return h(
@@ -92,7 +88,7 @@ export function spaceList(status: CarrierStatus): HTMLElement {
           h('span', {
             class: `dot ${space.connection === 'connected' ? 'good' : space.connection === 'error' ? 'bad' : ''}`,
           }),
-          nameOf(space),
+          space.name,
         ),
         h(
           'span',
@@ -106,9 +102,10 @@ export function spaceList(status: CarrierStatus): HTMLElement {
   );
 }
 
-/** One line on how many spaces are carried */
-export function summary(status: CarrierStatus): string {
-  const spaces = status.spaces.filter((space) => !space.carry);
+/** One line on how many spaces are kept online */
+export function summary(status: ExtensionStatus): string {
+  const { spaces } = status;
+  if (status.state === 'expired') return 'Its connection to your account ran out.';
   const count = `${spaces.length} space${spaces.length === 1 ? '' : 's'}`;
   return spaces.some((space) => space.peers > 0)
     ? `Keeping ${count} online.`
@@ -116,13 +113,11 @@ export function summary(status: CarrierStatus): string {
 }
 
 /** How the pod is doing, in a line both pages show the same */
-export function podLine(state: Exclude<PodState, 'none'>, folder: string | null): HTMLElement {
+export function podLine(state: Exclude<PodState, 'not-picked'>, folder: string | null): HTMLElement {
   const said =
     state === 'writing'
       ? `Up to date: everything that arrives is written into “${folder}”.`
-      : state === 'needs-permission'
-        ? `Chrome wants a click before this writes to “${folder}” again. Until then, your pod catches up later.`
-        : `Your account lives in a pod, “${folder}”. Choose that folder, and this keeps it up to date while your apps are closed.`;
+      : `Chrome wants a click before this writes to “${folder}” again. Until then, your pod catches up later.`;
   return h('small', {}, h('span', { class: `dot ${state === 'writing' ? 'good' : 'warn'}` }), said);
 }
 

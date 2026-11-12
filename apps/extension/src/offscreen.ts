@@ -1,41 +1,55 @@
 /**
- * The hidden page where the carrier runs, for as long as Chrome does.
+ * The hidden page where the node runs, for as long as Chrome does.
  *
- * It starts the carrier from the stored grant, attaches the pod when Chrome
- * allows it, and reports how things are to the other pages and the badge. It
- * holds no seed and no space key: only its own key, the carry space's key, and
- * encrypted records (`@minca/core/node`, `createCarrierNode`).
+ * It starts an app's node from the stored grant: it holds the account key
+ * and the keys of the account's spaces, and a note to write records with. It
+ * writes into the pod when Chrome allows it, and reports how things are to
+ * the other pages and the badge.
  */
-import { createCarrierNode, folderStores, indexedDBStores, type CarrierNode } from '@minca/core';
-import { appKey, deleteBrowserData, forgetAppKey, type CarryGrant } from '@minca/core/session';
+import { createDirectoryBlobStore, indexedDBStores, type BlobStore, type P2PNode } from '@minca/core';
+import {
+  appKey,
+  deleteBrowserData,
+  forgetAppKey,
+  grantExpired,
+  startConnectedNode,
+  watchGrant,
+  type Grant,
+} from '@minca/core/session';
 import { forgetDataFolder, queryFolderPermission, recallDataFolder } from '@minca/core/storage';
+import { watchNotifications } from '@minca/std';
 import { createNotifier } from '@minca/app-shared/notify';
 import {
   BUILT_IN_RELAYS,
+  daysLeft,
   forgetGrant,
+  forgetPickedPod,
   KEY_NAME,
   loadGrant,
+  loadPickedPod,
   loadRemoved,
+  loadWarnedExpiry,
+  RENEW_WITHIN_DAYS,
+  saveWarnedExpiry,
   setRemoved,
   storePrefix,
-  type CarrierStatus,
-  type PodState,
+  type ExtensionStatus,
   type Request,
   type StatusChanged,
   type WorkerMessage,
 } from './shared';
 
-let carrier: CarrierNode | null = null;
-let grant: CarryGrant | null = null;
-let status: CarrierStatus = {
-  state: 'starting',
-  spaces: [],
-  pod: { state: 'none', folder: null },
-};
+const NOT_PICKED: ExtensionStatus['pod'] = { state: 'not-picked', folder: null };
+const WELCOME = chrome.runtime.getURL('welcome.html');
+
+let node: P2PNode | null = null;
+let stopWatching: (() => void) | null = null;
+let grant: Grant | null = null;
+let status: ExtensionStatus = { state: 'starting', spaces: [], pod: NOT_PICKED };
 /** Bumped by every (re)start, so a slow one that was overtaken stops */
 let generation = 0;
 
-function set(next: CarrierStatus): void {
+function set(next: ExtensionStatus): void {
   status = next;
   const changed: StatusChanged = { to: 'pages', type: 'status', status };
   const badge: WorkerMessage = { to: 'worker', type: 'badge', status };
@@ -44,15 +58,11 @@ function set(next: CarrierStatus): void {
   chrome.runtime.sendMessage(badge).catch(() => {});
 }
 
-// What the account asked to hear about, a burst in a space at a time, for the worker to show.
-const notifier = createNotifier({
-  show: (shown) =>
-    void chrome.runtime
-      .sendMessage({ to: 'worker', type: 'notify', shown } satisfies WorkerMessage)
-      .catch(() => {}),
-});
+const show = (shown: WorkerMessage & { type: 'notify' }) =>
+  void chrome.runtime.sendMessage(shown satisfies WorkerMessage).catch(() => {});
 
-const setPod = (state: PodState) => set({ ...status, pod: { state, folder: grant?.pod?.folder ?? null } });
+// What the account asked to hear about, a burst in a space at a time, for the worker to show.
+const notifier = createNotifier({ show: (shown) => show({ to: 'worker', type: 'notify', shown }) });
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 function refreshSoon(): void {
@@ -63,17 +73,55 @@ function refreshSoon(): void {
   }, 250);
 }
 
+/** The spaces it keeps syncing: a node syncs a space only while something holds it */
+const heldSpaces = new Set<string>();
+
 async function refresh(): Promise<void> {
-  const node = carrier;
-  if (!node) return;
-  const spaces = await node.spaces().catch(() => status.spaces);
-  if (node === carrier) set({ ...status, state: 'running', spaces });
+  const running = node;
+  if (!running) return;
+  const spaces = await Promise.all(
+    (await running.spaces.list()).map(async ({ id, name }) => {
+      if (!heldSpaces.has(id)) {
+        await running.spaces.hold(id);
+        heldSpaces.add(id);
+      }
+      const { connection, peers } = await running.spaces.status(id);
+      return { id, name, connection, peers: peers.length };
+    }),
+  ).catch(() => status.spaces);
+  if (running === node) set({ ...status, state: 'running', spaces });
 }
 
 async function stop(): Promise<void> {
-  const node = carrier;
-  carrier = null;
-  await node?.close().catch(() => {});
+  stopWatching?.();
+  stopWatching = null;
+  heldSpaces.clear();
+  const running = node;
+  node = null;
+  await running?.close().catch(() => {});
+}
+
+/**
+ * How the pod is doing, and where to write the account's spaces in it when
+ * Chrome lets this extension. A folder picked in the welcome tab is
+ * remembered; after a restart Chrome may want a click before it can be
+ * written again, and then the pod waits: the node's own copy goes on, and
+ * the pod catches up as soon as it is allowed.
+ */
+async function podNow(): Promise<{
+  readonly pod: ExtensionStatus['pod'];
+  readonly segments: BlobStore | null;
+}> {
+  const picked = await loadPickedPod();
+  const handle = picked && (await recallDataFolder());
+  if (!picked || !handle) return { pod: NOT_PICKED, segments: null };
+  const allowed = (await queryFolderPermission(handle).catch(() => 'denied')) === 'granted';
+  if (!allowed) return { pod: { state: 'needs-permission', folder: picked.folder }, segments: null };
+  return {
+    pod: { state: 'writing', folder: picked.folder },
+    // Its spaces only: the registry beside them is sealed under a key no app is given.
+    segments: createDirectoryBlobStore(handle, `${picked.dataPath}/spaces`),
+  };
 }
 
 async function start(): Promise<void> {
@@ -82,45 +130,34 @@ async function start(): Promise<void> {
   grant = await loadGrant();
   if (mine !== generation) return;
   if (!grant) {
-    set({
-      state: 'not-connected',
-      removed: await loadRemoved(),
-      spaces: [],
-      pod: { state: 'none', folder: null },
-    });
+    set({ state: 'not-connected', removed: await loadRemoved(), spaces: [], pod: NOT_PICKED });
     return;
   }
-
-  set({
-    state: 'starting',
+  const { pod, segments } = await podNow();
+  const connected = {
     account: { name: grant.name, did: grant.did, home: grant.home },
+    expiresAt: grant.expiresAt,
     spaces: [],
-    pod: { state: grant.pod ? 'not-picked' : 'none', folder: grant.pod?.folder ?? null },
-  });
+    pod,
+  };
+  if (grantExpired(grant)) return set({ state: 'expired', ...connected });
+
+  set({ state: 'starting', ...connected });
   try {
-    const key = await appKey(KEY_NAME);
-    const relays = [...new Set([...BUILT_IN_RELAYS, ...(grant.relays ?? [])])];
-    const node = await createCarrierNode({
-      key: key.keys,
-      account: grant.did,
-      carry: grant.carry.invite,
-      stores: indexedDBStores(storePrefix(grant.did)),
-      network: { relays },
+    const started = await startConnectedNode({
+      grant,
+      key: await appKey(KEY_NAME),
+      network: { relays: [...BUILT_IN_RELAYS] },
+      // It keeps every space whole: it is there for the account's other devices to sync with.
+      cache: false,
+      ...(segments
+        ? { stores: Object.assign(indexedDBStores(storePrefix(grant.did)), { folder: segments }) }
+        : {}),
     });
-    if (mine !== generation) return void (await node.close());
-    carrier = node;
-    node.subscribe((event) => {
-      if (event.type === 'closed') void forget({ byAccount: true });
-      else if (event.type === 'wake')
-        notifier.woke({
-          space: event.space.name,
-          collection: event.record.collection,
-          at: event.record.createdAt,
-          ...(event.wake.open ? { open: event.wake.open } : {}),
-        });
-      else refreshSoon();
-    });
-    await attachPod();
+    if (mine !== generation) return void (await started.close());
+    node = started;
+    watch(started, grant);
+    await warnBeforeExpiry();
     await refresh();
   } catch (error) {
     if (mine === generation)
@@ -128,54 +165,92 @@ async function start(): Promise<void> {
   }
 }
 
-/**
- * Writes into the pod when Chrome lets this extension. A folder picked in the
- * welcome tab is remembered; after a restart Chrome may want a click before it
- * can be written again, and then the pod waits — the carrier's own copy goes
- * on, and the pod catches up as soon as it is allowed.
- */
-async function attachPod(): Promise<void> {
-  const node = carrier;
-  if (!node || !grant?.pod) return;
-  const handle = await recallDataFolder();
-  if (!handle) {
-    await node.usePod(null);
-    return setPod('not-picked');
-  }
-  if ((await queryFolderPermission(handle).catch(() => 'denied')) !== 'granted') {
-    await node.usePod(null);
-    return setPod('needs-permission');
-  }
-  if (status.pod.state === 'writing') return;
-  await node.usePod(folderStores(handle, { basePath: grant.pod.dataPath }));
-  setPod('writing');
+function watch(started: P2PNode, under: Grant): void {
+  const unwatchGrant = watchGrant(started, under, {
+    onExpired: () => {
+      show({
+        to: 'worker',
+        type: 'notify',
+        shown: {
+          title: 'Minca stopped syncing',
+          body: 'Its connection to your account ran out. Connect it again.',
+          open: WELCOME,
+        },
+      });
+      void start();
+    },
+    onRevoked: () => void forget({ byAccount: true }),
+  });
+  const stopNotifying = watchNotifications(started, {
+    // Every app's, and the person's own: it speaks for each while no tab has it open.
+    origin: null,
+    onNotify: ({ automation, record }) =>
+      void started.spaces
+        .get(record.space)
+        .then((space) =>
+          notifier.woke({
+            space: space?.name ?? '',
+            collection: record.collection,
+            at: record.createdAt,
+            ...(automation.open ? { open: automation.open } : {}),
+          }),
+        )
+        .catch(() => {}),
+  });
+  const unsubscribe = started.subscribe((event) => {
+    if (event.type === 'status' || event.type === 'spaces') refreshSoon();
+  });
+  stopWatching = () => {
+    unwatchGrant();
+    stopNotifying();
+    unsubscribe();
+  };
 }
 
-/** Stops, and deletes the carried copy of one account's spaces and the pod it wrote to. */
-async function forgetAccount(): Promise<void> {
+/** Says once, with a while still to go, that the connection is about to run out */
+async function warnBeforeExpiry(): Promise<void> {
+  if (!node || !grant) return;
+  const left = daysLeft(grant.expiresAt);
+  if (left > RENEW_WITHIN_DAYS || (await loadWarnedExpiry()) === grant.expiresAt) return;
+  await saveWarnedExpiry(grant.expiresAt);
+  show({
+    to: 'worker',
+    type: 'notify',
+    shown: {
+      title: 'Connect Minca again soon',
+      body:
+        left < 1
+          ? 'Its connection to your account runs out today.'
+          : `Its connection to your account runs out in ${left} day${left === 1 ? '' : 's'}.`,
+      open: WELCOME,
+    },
+  });
+  set({ ...status });
+}
+
+/** Starts again when Chrome's answer about the folder changed: a node is given its stores once */
+async function followPodPermission(): Promise<void> {
+  if (!node) return;
+  const { state } = (await podNow()).pod;
+  if (state !== status.pod.state) await start();
+}
+
+/**
+ * Forgets everything: the node's copy, its key, the grant, the folder.
+ * @param options.byAccount The account disconnected it, rather than the person here
+ */
+async function forget(options: { byAccount: boolean }): Promise<void> {
   generation++;
   const did = grant?.did;
   await stop();
   if (did) await deleteBrowserData(storePrefix(did));
   await forgetDataFolder();
-}
-
-/**
- * Forgets everything: the carrier's copy, its key, the grant, the folder.
- * @param options.byAccount The account removed it, rather than the person here
- */
-async function forget(options: { byAccount: boolean }): Promise<void> {
-  await forgetAccount();
+  await forgetPickedPod();
   await forgetGrant();
   await forgetAppKey(KEY_NAME);
   await setRemoved(options.byAccount);
   grant = null;
-  set({
-    state: 'not-connected',
-    removed: options.byAccount,
-    spaces: [],
-    pod: { state: 'none', folder: null },
-  });
+  set({ state: 'not-connected', removed: options.byAccount, spaces: [], pod: NOT_PICKED });
 }
 
 chrome.runtime.onMessage.addListener((message: Request, _sender, respond) => {
@@ -184,12 +259,15 @@ chrome.runtime.onMessage.addListener((message: Request, _sender, respond) => {
   if (message.type === 'status') answer();
   else if (message.type === 'reload') void start().then(answer, answer);
   else if (message.type === 'disconnect') void forget({ byAccount: false }).then(answer, answer);
-  else if (message.type === 'forget-account') void forgetAccount().then(answer, answer);
   return message.type !== 'status';
 });
 
 // A folder's permission can come or go while running (the welcome tab asked,
-// or the person revoked it in Chrome's settings); look again now and then.
-setInterval(() => void attachPod().catch(() => {}), 60_000);
+// or the person revoked it in Chrome's settings), and a grant's end comes
+// nearer; look again now and then.
+setInterval(() => {
+  void followPodPermission().catch(() => {});
+  void warnBeforeExpiry().catch(() => {});
+}, 60_000);
 
 void start();

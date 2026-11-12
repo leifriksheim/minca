@@ -8,15 +8,15 @@
  *   quiet, so it only makes sure the offscreen page exists, sets the badge,
  *   and shows notifications.
  * - **offscreen** — a hidden page that lives as long as Chrome does. The
- *   carrier node runs here.
+ *   node runs here.
  * - **welcome** — a full tab: connecting to the account home, the pod, status.
  * - **popup** — the toolbar button: status at a glance.
  *
  * The offscreen page may only use `chrome.runtime`, so everything it keeps is
  * in IndexedDB, which every page of the extension shares.
  */
-import type { CarriedSpace } from '@minca/core';
-import type { CarryGrant } from '@minca/core/session';
+import type { P2PNode } from '@minca/core';
+import { GRANT_VERSION, MAX_GRANT_DAYS, type ConnectOptions, type Grant } from '@minca/core/session';
 import type { Shown } from '@minca/app-shared/notify';
 
 declare const __MINCA_HOME__: string;
@@ -32,28 +32,56 @@ export const BUILT_IN_RELAYS: ReadonlyArray<string> = __MINCA_RELAYS__
   .filter(Boolean);
 
 /** What the extension calls itself to the home */
-export const EXTENSION_NAME = 'Minca for Chrome';
+const EXTENSION_NAME = 'Minca for Chrome';
 
 /** The name its key is kept under (`appKey`) */
-export const KEY_NAME = 'carrier';
+export const KEY_NAME = 'app';
+
+/**
+ * What it asks the home for: every space, to write records in and nothing
+ * more, for as long as a home gives. Write, not read, so that disconnecting
+ * it revokes its key, and it hears that and forgets.
+ */
+export const CONNECT_REQUEST: ConnectOptions['request'] = {
+  name: EXTENSION_NAME,
+  access: 'write',
+  scope: 'account',
+  recordsOnly: true,
+  days: MAX_GRANT_DAYS,
+};
+
+/** With this many days left, it starts asking to be connected again */
+export const RENEW_WITHIN_DAYS = 14;
+
+/** Whole days until a grant runs out; zero or less once it has */
+export const daysLeft = (expiresAt: number) => Math.floor((expiresAt - Date.now() / 1000) / 86_400);
 
 /** How the pod is doing */
 export type PodState =
-  /** The account lives in the home's browser storage: there is no pod */
-  | 'none'
-  /** There is a pod, and no folder has been picked here yet */
+  /** No folder has been picked here */
   | 'not-picked'
   /** Picked, but Chrome wants a click before it may be written again */
   | 'needs-permission'
   /** Being kept up to date */
   | 'writing';
 
-export interface CarrierStatus {
-  readonly state: 'not-connected' | 'starting' | 'running' | 'error';
+/** A space it keeps online, and whether it reaches anyone there */
+export interface KeptSpace {
+  readonly id: string;
+  readonly name: string;
+  readonly connection: Awaited<ReturnType<P2PNode['spaces']['status']>>['connection'];
+  readonly peers: number;
+}
+
+export interface ExtensionStatus {
+  /** `expired`: its grant ran out, and it syncs nothing until it is connected again */
+  readonly state: 'not-connected' | 'starting' | 'running' | 'expired' | 'error';
   /** Set when the account stopped using this extension, until it connects again */
   readonly removed?: boolean;
   readonly account?: { readonly name: string; readonly did: string; readonly home: string };
-  readonly spaces: ReadonlyArray<CarriedSpace>;
+  /** When its grant runs out, Unix seconds */
+  readonly expiresAt?: number;
+  readonly spaces: ReadonlyArray<KeptSpace>;
   readonly pod: { readonly state: PodState; readonly folder: string | null };
   readonly error?: string;
 }
@@ -64,14 +92,12 @@ export type Request =
   /** The grant or the pod changed: start again from what is stored */
   | { readonly to: 'offscreen'; readonly type: 'reload' }
   /** Forget everything */
-  | { readonly to: 'offscreen'; readonly type: 'disconnect' }
-  /** Moving to another account: forget this one's copy and pod, keep the key */
-  | { readonly to: 'offscreen'; readonly type: 'forget-account' };
+  | { readonly to: 'offscreen'; readonly type: 'disconnect' };
 
 /** Messages to the worker */
 export type WorkerMessage =
   | { readonly to: 'worker'; readonly type: 'ensure' }
-  | { readonly to: 'worker'; readonly type: 'badge'; readonly status: CarrierStatus }
+  | { readonly to: 'worker'; readonly type: 'badge'; readonly status: ExtensionStatus }
   /** Something the account asked to hear about arrived: a burst in one space */
   | { readonly to: 'worker'; readonly type: 'notify'; readonly shown: Shown };
 
@@ -79,11 +105,11 @@ export type WorkerMessage =
 export interface StatusChanged {
   readonly to: 'pages';
   readonly type: 'status';
-  readonly status: CarrierStatus;
+  readonly status: ExtensionStatus;
 }
 
 /** Asks the offscreen page something, making sure it is running first. */
-export async function ask(request: Request): Promise<CarrierStatus> {
+export async function ask(request: Request): Promise<ExtensionStatus> {
   await chrome.runtime.sendMessage({ to: 'worker', type: 'ensure' } satisfies WorkerMessage);
   return chrome.runtime.sendMessage(request);
 }
@@ -117,9 +143,28 @@ async function kv<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => I
 }
 
 export const loadGrant = () =>
-  kv<CarryGrant | undefined>('readonly', (store) => store.get('grant')).then((grant) => grant ?? null);
-export const saveGrant = (grant: CarryGrant) => kv<void>('readwrite', (store) => store.put(grant, 'grant'));
+  kv<Grant | undefined>('readonly', (store) => store.get('grant')).then((grant) =>
+    // One kept in another format, a carrier's from before among them, connects nothing now.
+    grant?.v === GRANT_VERSION ? grant : null,
+  );
+export const saveGrant = (grant: Grant) => kv<void>('readwrite', (store) => store.put(grant, 'grant'));
 export const forgetGrant = () => kv<void>('readwrite', (store) => store.delete('grant'));
+
+/** The account's folder inside the pod the person picked: its path there, and the pod's name to show */
+export interface PickedPod {
+  readonly dataPath: string;
+  readonly folder: string;
+}
+export const loadPickedPod = () =>
+  kv<PickedPod | undefined>('readonly', (store) => store.get('pod')).then((pod) => pod ?? null);
+export const savePickedPod = (pod: PickedPod) => kv<void>('readwrite', (store) => store.put(pod, 'pod'));
+export const forgetPickedPod = () => kv<void>('readwrite', (store) => store.delete('pod'));
+
+/** Which grant's end it has already said is near, so it says so once */
+export const loadWarnedExpiry = () =>
+  kv<number | undefined>('readonly', (store) => store.get('warned')).then((at) => at ?? null);
+export const saveWarnedExpiry = (expiresAt: number) =>
+  kv<void>('readwrite', (store) => store.put(expiresAt, 'warned'));
 
 /** Whether the account removed this extension last time — shown once, until it connects again */
 export const loadRemoved = () =>
@@ -127,5 +172,5 @@ export const loadRemoved = () =>
 export const setRemoved = (removed: boolean) =>
   kv<void>('readwrite', (store) => store.put(removed, 'removed'));
 
-/** The databases the carrier keeps its copy in, for one account */
-export const storePrefix = (did: string) => `minca-carrier:${did}`;
+/** The databases its node keeps one account in: the ones `startConnectedNode` opens */
+export const storePrefix = (did: string) => `minca-app:${did}`;

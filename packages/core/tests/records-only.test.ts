@@ -51,6 +51,8 @@ import {
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
+import { createDirectoryBlobStore } from '../src/storage/blob/directory.js';
+import { folderStores, type StoreFactory } from '../src/node/stores.js';
 import { seenBy } from './helpers/as-member.js';
 import { joined } from './helpers/joined.js';
 import { stored } from './helpers/stored.js';
@@ -1409,6 +1411,7 @@ describe('an agent running a node of its own', () => {
   async function agentNode(
     who: { me: Person['me']; manager: Person['manager']; seed: Uint8Array },
     hub: FakeHub,
+    stores: StoreFactory = memoryStores(),
   ) {
     const provider = who.manager.getProvider();
     const keys = await provider.generateKeyPair();
@@ -1433,7 +1436,7 @@ describe('an agent running a node of its own', () => {
     const base = await createNode({
       signer: grantSigner(grant),
       sessionKey: keys,
-      stores: memoryStores(),
+      stores,
       accountKey: base64UrlDecode(grant.accountKey!),
       watchIntervalMs: 0,
       network: { transports: (spaceId: string, sessionDid: string) => [hub.transport(sessionDid, spaceId)] },
@@ -1457,6 +1460,55 @@ describe('an agent running a node of its own', () => {
     open.push(node);
     return { node, me, manager, stores, seed };
   }
+
+  test('beside a pod it writes the account’s spaces there as segments and nothing else, for a device that opens the pod alone', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const diary = await ada.node.spaces.create({ name: 'Diary', visibility: 'private' });
+    const entry = await ada.node.records.put(diary.id, 'app.entry', { text: 'Dear diary' });
+    const invite = await ada.node.spaces.invite(diary.id);
+
+    const pod = createMemoryDirectory();
+    const POD_PATH = 'accounts/a/stores';
+    const agent = await agentNode(
+      ada,
+      hub,
+      Object.assign(memoryStores(), { folder: createDirectoryBlobStore(pod.open(), `${POD_PATH}/spaces`) }),
+    );
+    await until(
+      async () => (await agent.base.spaces.list()).some((space) => space.id === diary.id),
+      4000,
+      'it following the account',
+    );
+    await agent.base.spaces.hold(diary.id);
+    await until(
+      () => pod.paths().some((path) => path.startsWith(`${POD_PATH}/spaces/${diary.id}/`)),
+      6000,
+      'the diary reaching the pod',
+    );
+    assert.ok(
+      pod.paths().every((path) => path.startsWith(`${POD_PATH}/spaces/`)),
+      'no registry, no key: only spaces, as they travel',
+    );
+    await agent.base.close();
+    await ada.node.close();
+
+    // A device of the account with the pod and nobody to sync with.
+    const alone = await createNode({
+      signer: createLocalRootSigner(ada.me, ada.manager.getProvider()),
+      stores: folderStores(pod.open(), { basePath: POD_PATH, local: memoryStores() }),
+      watchIntervalMs: 0,
+      network: { transports: () => [] },
+    });
+    open.push(alone);
+    await alone.spaces.join(invite);
+    await until(
+      async () => (await alone.records.get(diary.id, entry.key)) !== null,
+      4000,
+      'the entry, read from the pod',
+    );
+    assert.deepEqual((await alone.records.get(diary.id, entry.key))?.body, { text: 'Dear diary' });
+  });
 
   test("it finds the account's spaces by itself — ones made later too — and writes in them, records only", async () => {
     const hub = createFakeHub({ latencyMs: 1 });

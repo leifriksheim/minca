@@ -493,10 +493,11 @@ The home remembers each connection it grants: the app's origin, audience,
 access, scope and the spaces granted. Connecting the same origin again replaces
 its connection; a connection with `via: code` is kept by its audience, apart
 from the app's own, and connecting the same key again replaces it. A carrier
-(§4.3) is kept apart too: an app connecting replaces no carrier, and a carrier
-connecting replaces only an earlier carrier from its origin, never the app's
-connection. Disconnecting is the same: disconnecting an app leaves a carrier
-at its origin, and a carrier is disconnected by its key. The home MUST refuse
+(§4.3) is kept apart, by its key: a carrier connecting replaces only an
+earlier carrier from its origin, never the app's connection. An app
+connecting from a carrier's origin is that program now holding keys: the home
+removes the carrier (§4.2) and its connection. A carrier is disconnected by
+its key, which leaves an app at its origin. The home MUST refuse
 a request for a key already connected as the other kind, so one key is never
 both.
 
@@ -528,7 +529,7 @@ already seen of it. What the app could already read, it keeps. How the reference
 home stores connections and what the reference client does when it sees its
 key revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
-_Source: `packages/auth/src/auth.ts` (`disconnect`, `revokeConnection`, `revokeWhere`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`revokeKey`, `checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "disconnecting a whole-account app revokes it in the carry spaces too…", "connecting again with a new key revokes nothing…", "a key a connection replaced is not granted again for anything else", "a carrier and an app at one origin are two connections…")._
+_Source: `packages/auth/src/auth.ts` (`disconnect`, `revokeConnection`, `revokeWhere`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`revokeKey`, `checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "disconnecting a whole-account app revokes it in the carry spaces too…", "connecting again with a new key revokes nothing…", "a key a connection replaced is not granted again for anything else", "an app connecting at a carrier’s origin takes its place…")._
 
 ### 2.11 Proposing automations
 
@@ -1021,7 +1022,7 @@ account's own devices may show a match there itself, saying no more than it
 sees: which space, which kind of record, and the wake's `open`. None sends a
 match to another device yet: that is what the wakes are for (below).
 
-_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `packages/cli/src/carry.ts` (`runCarrier`), `apps/shared/src/notify.ts` (`createNotifier`), `apps/extension/src/worker.ts` (`notify`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
+_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/shared/src/notify.ts` (`createNotifier`), `apps/extension/src/worker.ts` (`notify`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). The account's own

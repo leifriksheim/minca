@@ -1,7 +1,7 @@
 /**
  * The service worker. Chrome stops it after about thirty quiet seconds, so the
- * carrier cannot live here; its one job is to keep the offscreen page — where
- * the carrier does live — in existence, to show how it is doing on the
+ * node cannot live here; its one job is to keep the offscreen page — where
+ * the node does live — in existence, to show how it is doing on the
  * toolbar button, and to show what the account asked to hear about while no
  * tab has the app open.
  *
@@ -11,9 +11,16 @@
  */
 import { state } from '@minca/ui/tokens';
 import type { Shown } from '@minca/app-shared/notify';
-import type { CarrierStatus, Request, WorkerMessage } from './shared';
+import {
+  daysLeft,
+  RENEW_WITHIN_DAYS,
+  type ExtensionStatus,
+  type Request,
+  type WorkerMessage,
+} from './shared';
 
 const OFFSCREEN = 'offscreen.html';
+const WELCOME = chrome.runtime.getURL('welcome.html');
 
 let creating: Promise<void> | null = null;
 
@@ -38,9 +45,10 @@ async function ensureOffscreen(): Promise<void> {
   await creating;
 }
 
-async function showBadge(status: CarrierStatus): Promise<void> {
+async function showBadge(status: ExtensionStatus): Promise<void> {
   const unread = Object.keys(await chrome.notifications.getAll()).length;
-  const podNeedsYou = status.pod.state === 'not-picked' || status.pod.state === 'needs-permission';
+  const podNeedsYou = status.pod.state === 'needs-permission';
+  const left = status.expiresAt === undefined ? Infinity : daysLeft(status.expiresAt);
   let text = '';
   let color: string = state.ink;
   let title = 'Minca';
@@ -50,16 +58,24 @@ async function showBadge(status: CarrierStatus): Promise<void> {
     text = '!';
     color = state.danger;
     title = `Minca — ${status.error ?? 'something went wrong'}`;
+  } else if (status.state === 'expired') {
+    text = '!';
+    color = state.danger;
+    title = 'Minca — its connection ran out. Open it to connect again';
+  } else if (left <= RENEW_WITHIN_DAYS) {
+    text = '!';
+    color = state.warn;
+    title = `Minca — its connection runs out in ${left} day${left === 1 ? '' : 's'}. Open it to connect again`;
   } else if (podNeedsYou) {
     text = '!';
     color = state.warn;
     title = 'Minca — your pod needs a click to keep syncing';
   } else if (status.state === 'running') {
-    // How many notifications wait, or a small green mark: carrying.
+    // How many notifications wait, or a small green mark: syncing.
     text = unread > 0 ? String(unread) : ' ';
     color = unread > 0 ? state.danger : state.good;
-    const carried = status.spaces.filter((space) => !space.carry).length;
-    title = `Minca — keeping ${carried} space${carried === 1 ? '' : 's'} online${unread > 0 ? `, ${unread} new` : ''}`;
+    const kept = status.spaces.length;
+    title = `Minca — keeping ${kept} space${kept === 1 ? '' : 's'} online${unread > 0 ? `, ${unread} new` : ''}`;
   }
   void chrome.action.setBadgeText({ text });
   void chrome.action.setBadgeBackgroundColor({ color });
@@ -94,11 +110,12 @@ async function appIsOpen(open: string): Promise<boolean> {
   return (await chrome.tabs.query({})).some((tab) => originOf(tab.url) === origin);
 }
 
-/** Where a wake leads, if it is a web page: a click opens nothing else */
-const webPage = (open: string | undefined) => (open && /^https?:\/\//.test(open) ? open : '');
+/** Where a notification leads, if it is a web page or this extension's own tab: a click opens nothing else */
+const pageToOpen = (open: string | undefined) =>
+  open && (/^https?:\/\//.test(open) || open === WELCOME) ? open : '';
 
 async function notify(shown: Shown): Promise<void> {
-  const app = webPage(shown.open);
+  const app = pageToOpen(shown.open);
   if (app && (await appIsOpen(app))) return;
   await chrome.notifications.create(idFor(app), {
     type: 'basic',
@@ -130,7 +147,7 @@ chrome.tabs.onUpdated.addListener((_tab, change) => {
 });
 
 chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') void chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+  if (details.reason === 'install') void chrome.tabs.create({ url: WELCOME });
   void ensureOffscreen();
 });
 
