@@ -7,12 +7,7 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  createMincaAuth,
-  type MincaAuth,
-  type MincaAuthConfig,
-  type MincaSession,
-} from '../src/session/auth.js';
+import { createMincaAuth, type MincaAuth, type MincaAuthConfig, type MincaSession } from '@minca/auth';
 import type { KeyValueStore } from '../src/session/stay-signed-in.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';

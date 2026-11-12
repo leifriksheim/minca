@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { AuthError } from '@minca/core/session';
+import type { AuthError } from '@minca/auth';
 import { useAuth } from '@minca/react';
 
 /* What every sign-in screen is made of, on the design system's own elements. */

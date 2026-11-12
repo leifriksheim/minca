@@ -8,9 +8,9 @@ import {
   receiveConnectRequest,
   type ConnectRequest,
   type IncomingRequest,
-  type MincaAuth,
   type ProposeRequest,
 } from '@minca/core/session';
+import { type MincaAuth } from '@minca/auth';
 import { useAccountPicture, useAuth, useSession, useMinca, useWatched } from '@minca/react';
 import { Mark, Wordmark } from '@minca/app-shared/Wordmark';
 import { Icon } from '@minca/app-shared/Icon';

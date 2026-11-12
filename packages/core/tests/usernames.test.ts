@@ -12,7 +12,7 @@ import { createRelay, MAX_MESSAGE_BYTES } from '../../relay/relay.mjs';
 import { createNames } from '../../names/names.mjs';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
-import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
+import { createMincaAuth, type MincaAuth } from '@minca/auth';
 import {
   adHocName,
   nameFromUsername,

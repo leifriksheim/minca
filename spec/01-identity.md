@@ -101,7 +101,7 @@ spellings that decode to the same seed (see the example).
 > Rationale: the code has to survive a password manager and a human copying it
 > by hand; case, spacing and the O/0, I/1/L slips are forgiven. A caller that
 > expects a particular account detects a wrong code by comparing the derived
-> DID with the one it expected (`session/auth.ts` does this).
+> DID with the one it expected (`packages/auth/src/auth.ts` does this).
 
 > **Planned: a check character.** A typo today signs in to a new, empty
 > account. The plan adds one Crockford check symbol, so a mistyped code is
@@ -1339,7 +1339,7 @@ Offering device                                       Phone
   taking the account on: the link can come from someone else, and the code
   check cannot tell a stranger's computer from your own.
 
-_Source:_ `packages/core/src/identity/channel.ts` (`deriveChannel`, `channelRoom`, `PAIRING_CHANNEL`, `CODE_CHANNEL`), `packages/core/src/identity/pairing.ts` (`pairingCode`, `pairingCommitment`), `packages/core/src/session/channel-room.ts` (`meetOnChannel`), `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`start`, `acceptPairing`).
+_Source:_ `packages/core/src/identity/channel.ts` (`deriveChannel`, `channelRoom`, `PAIRING_CHANNEL`, `CODE_CHANNEL`), `packages/core/src/identity/pairing.ts` (`pairingCode`, `pairingCommitment`), `packages/core/src/session/channel-room.ts` (`meetOnChannel`), `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/auth/src/auth.ts` (`start`, `acceptPairing`).
 _Tests:_ `packages/core/tests/take-up.test.ts` ("a pairing link opened where a sign-in is kept"), `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open", "someone who learns the secret later cannot open a recording of the exchange", "pairing and connecting by code never open each other’s messages").
 
 ---

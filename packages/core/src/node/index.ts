@@ -4,7 +4,7 @@
  */
 export { createNode, SESSION_COMMAND } from './node.js';
 export { serveNode, remoteNode, serveSigner, remoteSigner } from './remote.js';
-export { startNodeInWorker, runNodeWorker } from './worker.js';
+export { startNodeInWorker, startPageNode, runNodeWorker } from './worker.js';
 export type { PageNodeConfig, WorkerNodeConfig, WorkerLike } from './worker.js';
 export { relayRoom } from './space-peers.js';
 export { indexedDBStores, folderStores, directoryStores, workerStores } from './stores.js';

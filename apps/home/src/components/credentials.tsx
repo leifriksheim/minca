@@ -5,7 +5,7 @@ import {
   passwordStrength,
   recoveryKit,
   type MincaAuth,
-} from '@minca/core/session';
+} from '@minca/auth';
 import { useCopy } from '@minca/app-shared/action';
 import styles from './SignIn.module.css';
 

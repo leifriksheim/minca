@@ -1,30 +1,12 @@
 /**
  * @module session
- * Signing in and staying signed in, with no framework: the flow as state and
- * actions (`createMincaAuth`), and the pieces it is made of.
+ * What an app and an account home say to each other, and the pieces signing
+ * in is made of. The sign-in flow itself is `createMincaAuth` in `@minca/auth`.
  *
  * Browser-only — it reaches for IndexedDB, WebAuthn and the File System Access
  * API when used — so it lives on its own entry point, away from the
  * isomorphic core.
  */
-export { createMincaAuth, connectionKey } from './auth.js';
-export { passwordStrength } from './password-strength.js';
-export type { PasswordCheck, PasswordStrength } from './password-strength.js';
-export type {
-  MincaAuth,
-  MincaAuthConfig,
-  AuthState,
-  AuthStage,
-  AuthSetup,
-  AuthError,
-  AccountEntry,
-  MincaSession,
-  MovedToPod,
-  Connection,
-  RetiredKey,
-  GrantChoice,
-  ProposeChoice,
-} from './auth.js';
 export { createMincaConnection, openAccountHome } from './connection.js';
 export type {
   MincaConnection,
@@ -52,6 +34,7 @@ export {
   watchGrant,
   grantStore,
   grantTerms,
+  requestTerms,
   GRANT_VERSION,
   appKey,
   forgetAppKey,
@@ -79,10 +62,19 @@ export {
   listAccounts,
   inspectPod,
   storesFor,
+  describeStores,
+  podToReopen,
   deleteBrowserData,
 } from './places.js';
 export type { Place, PodContents } from './places.js';
-export { createStaySignedIn, STAY_SIGNED_IN_CHOICES, DEFAULT_STAY_SIGNED_IN } from './stay-signed-in.js';
+export {
+  createStaySignedIn,
+  STAY_SIGNED_IN_CHOICES,
+  DEFAULT_STAY_SIGNED_IN,
+  defaultStorage,
+  guardedStorage,
+  rememberedSessionKey,
+} from './stay-signed-in.js';
 export type { StaySignedIn, StaySignedInStore, KeyValueStore } from './stay-signed-in.js';
 export { offerToPhone, receiveFromDesktop, readPairingTicket, clearPairingTicket } from './pairing.js';
 export { readAccountHint, clearAccountHint } from './account-hint.js';
@@ -98,4 +90,3 @@ export {
   receiveConnectCode,
 } from './connect-code.js';
 export type { ConnectCodeStage, CodeAsking } from './connect-code.js';
-export { offerToSave, accountCredentialName, recoveryKit } from './credentials.js';

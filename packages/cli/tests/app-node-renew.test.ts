@@ -10,7 +10,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { base64UrlDecode, base64UrlEncode, createNode, directoryStores, type P2PNode } from '@minca/core';
-import { createMincaAuth } from '../../core/src/session/auth.js';
+import { createMincaAuth } from '../../auth/src/index.js';
 import { createFolderAccountStore } from '../../core/src/identity/account-store.js';
 import { team } from '../../core/src/space/presets.js';
 import { createMemoryDirectory } from '../../core/tests/helpers/memory-directory.js';

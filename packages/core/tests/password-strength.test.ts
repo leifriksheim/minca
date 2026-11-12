@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { passwordStrength } from '../src/session/password-strength.js';
+import { passwordStrength } from '@minca/auth';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { unwrapSeedWithPassphrase, wrapSeedWithPassphrase } from '../src/identity/account-vault.js';
 
