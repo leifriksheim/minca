@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { AuthError, Place, PodContents } from '@minca/core/session';
+import type { Place, PodContents } from '@minca/core/session';
+import type { AuthError } from '@minca/auth';
 import { Choices } from '@minca/app-shared/Choices';
 import { Modal } from '@minca/app-shared/Modal';
 

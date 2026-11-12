@@ -40,7 +40,7 @@ import {
   type Blueprint,
   type DraftCollection,
 } from '@minca/std';
-import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
+import { createMincaAuth, type MincaAuth } from '@minca/auth';
 import { grantSigner, isProposeRequest, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
 import {
   answerConnectCode,

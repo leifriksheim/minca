@@ -81,6 +81,7 @@ export {
 } from './identity/account-vault.js';
 export {
   deriveContactKeyBytes,
+  deriveMemberKeyBytes,
   deriveInboxKeyBytes,
   deriveInboxSignKeyBytes,
   deriveNameKeyBytes,
@@ -381,6 +382,7 @@ export {
   serveSigner,
   remoteSigner,
   startNodeInWorker,
+  startPageNode,
   SESSION_COMMAND,
   relayRoom,
   indexedDBStores,
@@ -392,7 +394,15 @@ export {
   createCarryCore,
   watchNotifications,
 } from './node/index.js';
-export { MAX_PROPOSALS, checkAppAutomation, checkOwnAutomation, ownQuery } from './space/own-automations.js';
+export {
+  MAX_PROPOSALS,
+  checkAppAutomation,
+  checkOwnAutomation,
+  ownQuery,
+  fromProposal,
+  proposalSpaces,
+  sameAutomation,
+} from './space/own-automations.js';
 export type {
   StoreFactory,
   WriterKeySource,

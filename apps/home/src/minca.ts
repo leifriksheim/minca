@@ -4,13 +4,8 @@
  * The home is the one place the seed is ever unlocked. Apps open it to ask for
  * access (`/connect`), and link to it for account settings (`/`).
  */
-import {
-  clearAccountHint,
-  clearPairingTicket,
-  connectCodeIn,
-  createMincaAuth,
-  readAccountHint,
-} from '@minca/core/session';
+import { clearAccountHint, clearPairingTicket, connectCodeIn, readAccountHint } from '@minca/core/session';
+import { createMincaAuth } from '@minca/auth';
 import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
 import { NAMES_DOMAIN } from '@minca/app-shared/usernames';
 

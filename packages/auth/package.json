@@ -1,0 +1,23 @@
+{
+  "name": "@minca/auth",
+  "private": true,
+  "type": "module",
+  "description": "Signing in to a Minca account, with no framework: the whole flow as state you read and actions you call. What an account home is built on. Browser only.",
+  "exports": {
+    ".": {
+      "@minca/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@minca/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT"
+}

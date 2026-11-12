@@ -57,7 +57,7 @@ Pass `usernames` to `createMincaAuth`, and the account is made with a
 username: the create screen asks for one.
 
 ```ts
-import { createMincaAuth } from '@minca/core/session';
+import { createMincaAuth } from '@minca/auth';
 
 const auth = createMincaAuth({ usernames: 'minca.social' });
 ```

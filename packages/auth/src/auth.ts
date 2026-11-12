@@ -1,17 +1,18 @@
 /**
- * @module session/auth
+ * @module auth/auth
  * Signing in, as one object any UI can draw: the whole flow as a state you
  * read and actions you call. The recovery code is the account (the seed,
  * written out); a passkey or password wraps the seed for every day; pairing
  * hands it to a new device. The seed stays inside this object, and signs only
  * the note that lets a session key write.
  */
-import { isObject } from '../utils/guards.js';
-import { createIdentityManager, rootFromSeed } from '../identity/identity-manager.js';
-import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
-import type { AccountStore, AccountSummary } from '../identity/account-store.js';
-import { createVault } from '../identity/account-vault.js';
 import {
+  createIdentityManager,
+  rootFromSeed,
+  accountDataPath,
+  newAccountId,
+  createBrowserAccountStore,
+  createVault,
   withWrap,
   wrapSeedWithDeviceKey,
   unwrapSeedWithDeviceKey,
@@ -21,33 +22,43 @@ import {
   CLI_PASSPHRASE_LABEL,
   deriveLocalKey,
   deriveAccountKey,
-  type AccountVault,
-  type DeviceWrap,
-  type PassphraseWrap,
-} from '../identity/account-vault.js';
-import { deriveContactKeyBytes, deriveMemberKeyBytes } from '../identity/contact-key.js';
-import { createDeviceKey, getDeviceKey, deleteDeviceKey } from '../identity/device-key.js';
-import {
+  deriveContactKeyBytes,
+  deriveMemberKeyBytes,
+  createDeviceKey,
+  getDeviceKey,
+  deleteDeviceKey,
   registerPasskey,
   authenticatePasskey,
   hasPlatformAuthenticator,
   renamePasskey,
-} from '../identity/webauthn.js';
-import {
   generateSeed,
   seedToRecoveryCode,
   recoveryCodeToSeed,
   isValidRecoveryCode,
-} from '../identity/recovery-code.js';
-import type { PairingTicket } from '../identity/pairing.js';
-import { isFolderStorageAvailable } from '../storage/directory-access.js';
-import { base64UrlEncode } from '../utils/encoding.js';
-import { startPageNode, type WorkerLike } from '../node/worker.js';
-import { copyAccountData } from '../node/copy.js';
-import { describeHost } from './hosting.js';
-import type { StoreFactory } from '../node/stores.js';
-import type { NodeNetworkConfig, P2PNode } from '../node/types.js';
-import { isProtocolError, protocolError, type ProtocolErrorCode } from '../utils/errors.js';
+  isFolderStorageAvailable,
+  base64UrlEncode,
+  startPageNode,
+  copyAccountData,
+  describeHost,
+  isProtocolError,
+  protocolError,
+  fromProposal,
+  proposalSpaces,
+  sameAutomation,
+  type AccountStore,
+  type AccountSummary,
+  type AccountVault,
+  type DeviceWrap,
+  type PassphraseWrap,
+  type PairingTicket,
+  type WorkerLike,
+  type StoreFactory,
+  type NodeNetworkConfig,
+  type P2PNode,
+  type ProtocolErrorCode,
+  type PeerTransport,
+} from '@minca/core';
+import type { Automation, AutomationApp, AutomationSpaces } from '@minca/core/schemas';
 import {
   deleteBrowserData,
   forgetPod,
@@ -59,42 +70,34 @@ import {
   rememberPod,
   describeStores,
   storesFor,
-  type Place,
-  type PodContents,
-} from './places.js';
-import {
   createStaySignedIn,
   defaultStorage,
   guardedStorage,
   rememberedSessionKey,
-  type KeyValueStore,
-  type StaySignedIn,
-} from './stay-signed-in.js';
-import {
   grantTerms,
   GRANT_VERSION,
   MAX_GRANT_DAYS,
+  checkKeyProof,
+  requestTerms,
+  clearPairingTicket,
+  receiveFromDesktop,
+  offerToPhone as offerPairing,
+  readPairingTicket,
+  type Place,
+  type PodContents,
+  type KeyValueStore,
+  type StaySignedIn,
   type CarryGrant,
   type ConnectRequest,
   type Grant,
   type GrantedSpace,
   type ProposeRequest,
   type Proposed,
-  checkKeyProof,
-  requestTerms,
-} from './connect.js';
-import { fromProposal, proposalSpaces, sameAutomation } from '../space/own-automations.js';
-import type { Automation, AutomationApp, AutomationSpaces } from '../schemas/automations.js';
-import type { PeerTransport } from '../network/transport.js';
-import {
-  clearPairingTicket,
-  receiveFromDesktop,
-  offerToPhone as offerPairing,
-  readPairingTicket,
   type Handover,
   type PairingOffer,
   type PairingStage,
-} from './pairing.js';
+} from '@minca/core/session';
+import { isObject } from './guards.js';
 
 export interface MincaAuthConfig {
   /** What passkey prompts call this app. Default "Minca". */
