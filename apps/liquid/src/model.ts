@@ -5,7 +5,7 @@
  */
 import { useMemo } from 'react';
 import { useAccess, useAccount, useCan, useLive, useNames, useQuery } from '@minca/react';
-import { profile, type Profile } from '@minca/core/schemas';
+import { profile, type Profile } from '@minca/std';
 import { ROLE_ASSIGN } from '@minca/core';
 import {
   conflict,

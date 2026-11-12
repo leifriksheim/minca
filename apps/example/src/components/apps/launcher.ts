@@ -28,19 +28,16 @@ import {
   type P2PNode,
   type SpaceAccess,
 } from '@minca/core';
+import { fragments, notifyOn, type AppAutomation } from '@minca/core/schemas';
 import {
   applyBlueprint,
   blueprint,
-  fragments,
-  notifyOn,
   positionBetween,
-  proposeCollections,
-  // Defines what a space lacks; not a React hook, whatever its name says.
+  proposeCollections, // Defines what a space lacks; not a React hook, whatever its name says.
   useSchemas as addSchemas,
   writeGuide,
-  type AppAutomation,
   type DraftCollection,
-} from '@minca/core/schemas';
+} from '@minca/std';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from '@minca/app-shared/screens';
 

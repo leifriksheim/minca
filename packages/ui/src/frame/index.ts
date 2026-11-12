@@ -8,7 +8,7 @@
  */
 import { Fragment, h, render } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks';
-import { positionBetween } from '@minca/core/schemas';
+import { positionBetween } from '@minca/std';
 import { ago } from '../time';
 import * as when from '../when';
 import { Attachments, Playable, attach, useSeen } from './attachments';

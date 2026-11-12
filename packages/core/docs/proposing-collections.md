@@ -11,7 +11,7 @@ A proposal is a **blueprint**: one `std.blueprint` record listing the
 collections. Nothing is defined yet, so it can't break anything.
 
 ```typescript
-import { proposeCollections } from '@minca/core/schemas';
+import { proposeCollections } from '@minca/std';
 
 const proposal = await proposeCollections(node, space.id, {
   title: 'Chores',
@@ -43,7 +43,7 @@ the same, with a summary in sentences worked out from its rules:
 
 ```typescript
 import type { NodeRecord } from '@minca/core';
-import { reviewBlueprint, applyBlueprint, type Blueprint } from '@minca/core/schemas';
+import { reviewBlueprint, applyBlueprint, type Blueprint } from '@minca/std';
 
 async function apply(proposal: NodeRecord<Blueprint>) {
   const review = reviewBlueprint(proposal.body!, await node.collections.list(space.id));
@@ -113,7 +113,7 @@ A definition can't say "write one rota for each week, and say in it who does
 what". A guide can, and an agent finds it through `collections_list`:
 
 ```typescript
-import { writeGuide } from '@minca/core/schemas';
+import { writeGuide } from '@minca/std';
 
 await writeGuide(node, space.id, {
   name: 'chores.how',

@@ -22,7 +22,7 @@ A blueprint is the only way such a key gets a collection. Every peer refuses a
 definition from a key whose note doesn't grant `/collection/define`.
 
 ```typescript
-import { proposeCollections, reviewBlueprint, applyBlueprint } from '@minca/core/schemas';
+import { proposeCollections, reviewBlueprint, applyBlueprint } from '@minca/std';
 
 const proposal = await proposeCollections(node, space.id, {
   title: 'Chores',
@@ -98,7 +98,7 @@ Each collection comes back as one of three:
 Each also has a `summary`: what it allows, in sentences worked out from its
 rules ([describing a collection](#describing-a-collection)). A change also
 says what would be different, and which applied blueprints it could break.
-The rest is on [`CollectionReview`](https://minca.dev/api/schemas/interfaces/CollectionReview/).
+The rest is on [`CollectionReview`](https://minca.dev/api/std/interfaces/CollectionReview/).
 
 A blueprint is `applied` once every collection in it is `same`.
 

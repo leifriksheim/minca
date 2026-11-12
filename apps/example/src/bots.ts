@@ -1,6 +1,6 @@
 // Who says they are a bot in a space: `bot: true` on their own `std.profile`, their word, not checked.
 import { useLive } from '@minca/react';
-import { profile, type Profile } from '@minca/core/schemas';
+import { profile, type Profile } from '@minca/std';
 
 export function useBots(spaceId: string): ReadonlySet<string> {
   const bots = useLive(

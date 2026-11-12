@@ -201,6 +201,8 @@ export {
 export {
   CATALOG_COLLECTION,
   checkStoredCollection,
+  isStoredCollection,
+  schemaProblem,
   checkPublishableSchema,
   validateJsonSchema,
   asStandardSchema,
@@ -504,7 +506,8 @@ export { keyKind, lineKey, ownedKey } from './records/key.js';
 export { describeCollection } from './records/describe.js';
 export type { CollectionRules } from './records/rules.js';
 export type { Contract, Condition, CollectionContract, Line } from './records/contracts.js';
-export { contractCostHints } from './records/contracts.js';
+export type { LinkDeclaration } from './records/links.js';
+export { contractCostHints, checkContractShape, runContracts } from './records/contracts.js';
 // Contracts written in TypeScript, typed from the collection's schema, built into CEL
 export { contract, storedComputed, storedContract } from './records/contract-builder.js';
 export type {

@@ -11,8 +11,8 @@ import {
   inbox,
   knock,
   spaceInvite,
-  standardGroups,
 } from '../../../packages/core/src/schemas/index.ts';
+import { standardGroups } from '@minca/std';
 
 type Schema = {
   type?: string;

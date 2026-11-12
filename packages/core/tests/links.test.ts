@@ -11,7 +11,7 @@ import { createSigner } from '../src/schema/signer.js';
 import { didToPublicKey, publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createVersion } from '../src/schema/version.js';
 import { checkLinks } from '../src/records/links.js';
-import { reaction as reactionSchema, comment as commentSchema, useSchemas } from '../src/schemas/index.js';
+import { reaction as reactionSchema, comment as commentSchema, useSchemas } from '@minca/std';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';

@@ -18,7 +18,7 @@ import { startHost } from '../src/host.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { tempDir } from './helpers/nodes.js';
 import { until } from '../../core/tests/helpers/until.js';
-import { host as hostSchema } from '../../core/src/schemas/library/community.js';
+import { host as hostSchema } from '@minca/std';
 import {
   askToConnect,
   askToDisconnect,

@@ -3,23 +3,11 @@
  * locations, recipes and meal plans, journals, measurements, workouts, and
  * the books, films and albums people get through.
  */
-import {
-  blob,
-  choice,
-  count,
-  day,
-  image,
-  markdown,
-  one,
-  placeFields,
-  point,
-  text,
-  define,
-  url,
-  when,
-  words,
-} from '../fragments.js';
-import type { BodyOf } from '../../query/types.js';
+import type { BodyOf } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
+
+const { blob, choice, count, day, image, markdown, one, placeFields, point, text, define, url, when, words } =
+  fragments;
 
 /** A place worth remembering: a café, a campsite, a friend's house. */
 export const place = define({

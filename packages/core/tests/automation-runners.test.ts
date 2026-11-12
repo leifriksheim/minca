@@ -14,8 +14,8 @@ import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { community } from '../src/space/presets.js';
-import { message } from '../src/schemas/library/publishing.js';
-import { task } from '../src/schemas/library/planning.js';
+import { message } from '@minca/std';
+import { task } from '@minca/std';
 import { checkCron, cronMatches } from '../src/schemas/cron.js';
 import {
   ACTIVITY_STALE_SECONDS,

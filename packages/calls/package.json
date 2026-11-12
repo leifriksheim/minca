@@ -20,7 +20,8 @@
     "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=4 --test-timeout=60000 --test-force-exit tests/*.test.ts"
   },
   "dependencies": {
-    "@minca/core": "*"
+    "@minca/core": "*",
+    "@minca/std": "*"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

@@ -1,0 +1,23 @@
+{
+  "name": "@minca/std",
+  "private": true,
+  "type": "module",
+  "description": "The standard library of record shapes Minca apps share: messages, tasks, events, reactions and the rest, with blueprints and guides. Ordinary collection definitions, not protocol.",
+  "exports": {
+    ".": {
+      "@minca/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@minca/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT"
+}

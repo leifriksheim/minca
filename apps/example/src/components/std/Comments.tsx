@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useAccess, useAccount, useNode, useProfiles } from '@minca/react';
 import type { NodeRecord, SpaceSummary } from '@minca/core';
-import { comment } from '@minca/core/schemas';
+import { comment } from '@minca/std';
 import { bodyOf } from '../../derive/schema-ui';
 import { ago } from '@minca/ui/time';
 import { PersonFace } from '../PersonFace';

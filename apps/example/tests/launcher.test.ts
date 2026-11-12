@@ -9,17 +9,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { compileFunction } from 'node:vm';
 
 import type { NodeRecord, P2PNode } from '@minca/core';
-import {
-  file,
-  column,
-  guide,
-  message,
-  notifyOn,
-  proposeCollections,
-  reaction,
-  task,
-  type Guide,
-} from '@minca/core/schemas';
+import { notifyOn } from '@minca/core/schemas';
+import { file, column, guide, message, proposeCollections, reaction, task, type Guide } from '@minca/std';
 import {
   addMade,
   addTemplate,

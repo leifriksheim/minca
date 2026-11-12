@@ -20,14 +20,12 @@ import { community } from '../../core/src/space/presets.js';
 import {
   activity,
   direct,
-  message,
-  profile,
   automation,
   automationRun,
   botSettings,
-  task,
   type Automation,
 } from '../../core/src/schemas/index.js';
+import { message, profile, task } from '@minca/std';
 
 /** Someone on the network, with an account of their own; with `account`, one that follows its account space, where its name is kept */
 const member = (hub: FakeHub, fill: number, options: { account?: boolean } = {}) =>

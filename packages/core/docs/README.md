@@ -80,7 +80,7 @@ in the [spec](https://github.com/leifriksheim/minca/tree/main/spec).
 - Name your collections `app.<yours>.<thing>`. `sys.*` belongs to the
   protocol and `std.*` to the standard library.
 - Before you define a reaction, comment, tag, message, task or poll, look in
-  the standard library (`@minca/core/schemas`). Using the same one is how two
+  the standard library (`@minca/std`). Using the same one is how two
   apps see each other's data.
 - Keep anything other people should see in records. Records are what syncs.
 - A refused write throws with the reason in plain words. Show it, or check

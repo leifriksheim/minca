@@ -24,6 +24,7 @@
     "@minca/actions": "*",
     "@minca/core": "*",
     "@minca/react": "*",
+    "@minca/std": "*",
     "@tailwindcss/postcss": "^4.3.4",
     "@types/mdx": "^2.0.14",
     "@types/react": "^19.0.0",

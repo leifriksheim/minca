@@ -22,8 +22,8 @@ import { joined } from './helpers/joined.js';
 import { team } from '../src/space/presets.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
-import { useSchemas } from '../src/schemas/index.js';
-import { ballot, decision, goal, goalReached, pledge, proposal } from '../src/schemas/library/community.js';
+import { useSchemas } from '@minca/std';
+import { ballot, decision, goal, goalReached, pledge, proposal } from '@minca/std';
 import { forge, person, type Person } from './helpers/person.js';
 import { runAction } from '@minca/actions';
 

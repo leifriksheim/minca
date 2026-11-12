@@ -318,7 +318,7 @@ one is how two apps agree: a poll asked in one app can be voted on in
 another.
 
 ```typescript
-import { reaction, comment, poll, vote, useSchemas } from '@minca/core/schemas';
+import { reaction, comment, poll, vote, useSchemas } from '@minca/std';
 
 await useSchemas(node, space.id, [poll, vote, reaction, comment]); // defines only what the space is missing
 ```

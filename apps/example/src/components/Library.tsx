@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNode } from '@minca/react';
 import type { NodeCollection, SpaceSummary } from '@minca/core';
 // `useSchemas` defines collections in a space; it is not a React hook, whatever its name says.
-import { standardAnnotations, useSchemas as addSchemas } from '@minca/core/schemas';
+import { standardAnnotations, useSchemas as addSchemas } from '@minca/std';
 
 const WHAT_IT_ADDS: Record<string, string> = {
   'std.reaction': 'Emoji reactions on anything — one of each per person.',

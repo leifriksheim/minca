@@ -16,13 +16,8 @@ import { joined } from '../../core/tests/helpers/joined.js';
 import { fileSpend } from '../src/agent-chat.js';
 import { community } from '../../core/src/space/presets.js';
 import { mayConfigure } from '../../core/src/schemas/connectors.js';
-import {
-  message,
-  automation,
-  automationRun,
-  botSettings,
-  type Automation,
-} from '../../core/src/schemas/index.js';
+import { automation, automationRun, botSettings, type Automation } from '../../core/src/schemas/index.js';
+import { message } from '@minca/std';
 import { personaIn } from '../src/bot-runner.js';
 
 const member = (hub: FakeHub, fill: number) => aNode(fill, { network: onHub(hub) });

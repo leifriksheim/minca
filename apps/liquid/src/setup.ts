@@ -5,7 +5,7 @@
  */
 import type { P2PNode } from '@minca/core';
 // Defines what a space lacks; not a React hook, whatever its name says.
-import { useSchemas as addSchemas } from '@minca/core/schemas';
+import { useSchemas as addSchemas } from '@minca/std';
 import { ASSEMBLY, topic } from './schema';
 
 /** Makes a space an assembly, as far as this account may; whether it is one now */

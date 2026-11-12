@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { PersonFace } from './PersonFace';
 import { useNode, useLive, useProfiles, useCan } from '@minca/react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
-import { file, reaction, comment, tag } from '@minca/core/schemas';
+import { file, reaction, comment, tag } from '@minca/std';
 import {
   belonging,
   bodyOf,

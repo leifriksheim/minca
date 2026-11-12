@@ -3,22 +3,11 @@
  * transactions, things for sale and orders. Amounts are always the `money`
  * fragment, a decimal string and a currency, never a float.
  */
-import {
-  choice,
-  count,
-  day,
-  image,
-  many,
-  money,
-  one,
-  person,
-  placeRef,
-  text,
-  define,
-  words,
-  people,
-} from '../fragments.js';
-import type { BodyOf } from '../../query/types.js';
+import type { BodyOf } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
+
+const { choice, count, day, image, many, money, one, person, placeRef, text, define, words, people } =
+  fragments;
 
 /**
  * An expense someone paid for a group, and how it splits. Every version is

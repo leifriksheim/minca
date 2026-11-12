@@ -9,7 +9,7 @@ records, and you read theirs.
 import type { NodeRecord } from '@minca/core';
 declare const post: NodeRecord;
 // ---cut---
-import { reaction, comment, useSchemas } from '@minca/core/schemas';
+import { reaction, comment, useSchemas } from '@minca/std';
 
 await useSchemas(node, space.id, [reaction, comment]);
 await node.records.put(
@@ -148,7 +148,7 @@ the space's grants. In the `community` template, members change only what
 they made, moderators change anything, and only moderators and admins write
 in the collections in `STAFF_COLLECTIONS` ([spaces](permissions.md#presets)).
 
-The tables are made from the definitions in `@minca/core/schemas` each time
+The tables are made from the definitions in `@minca/std` each time
 [minca.dev](https://minca.dev/collections/standard-library/#the-definitions)
 is built, so they always match the code.
 
@@ -446,7 +446,7 @@ import type { NodeRecord } from '@minca/core';
 declare const above: NodeRecord<{ position: string }> | undefined;
 declare const below: NodeRecord<{ position: string }> | undefined;
 // ---cut---
-import { positionBetween } from '@minca/core/schemas';
+import { positionBetween } from '@minca/std';
 
 positionBetween(above?.body?.position, below?.body?.position);
 ```

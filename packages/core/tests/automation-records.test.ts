@@ -14,7 +14,7 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
 import { checkFilter, matches } from '../src/query/filter.js';
 import { isRecord } from '../src/utils/guards.js';
-import { channel, message } from '../src/schemas/library/publishing.js';
+import { channel, message } from '@minca/std';
 import {
   IT,
   checkAutomation,

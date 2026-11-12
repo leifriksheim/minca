@@ -8,7 +8,8 @@
  * adding a table writes its first view and removing one deletes them all. This
  * is the example app's own convention, like the launcher.
  */
-import { fragments, positionBetween } from '@minca/core/schemas';
+import { fragments } from '@minca/core/schemas';
+import { positionBetween } from '@minca/std';
 import type { NodeRecord } from '@minca/core';
 import { LAYOUTS, readLook, type Look } from '../../derive/look';
 import { bodyOf } from '../../derive/schema-ui';

@@ -5,18 +5,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  aroundCell,
-  cellOf,
-  cellsAround,
-  cellsOf,
-  centreOf,
-  distanceKm,
-  geohash,
-} from '../src/schemas/geo.js';
-import { listing } from '../src/schemas/library/money.js';
-import { event } from '../src/schemas/library/planning.js';
-import { place } from '../src/schemas/library/life.js';
+import { aroundCell, cellOf, cellsAround, cellsOf, centreOf, distanceKm, geohash } from '@minca/std';
+import { listing } from '@minca/std';
+import { event } from '@minca/std';
+import { place } from '@minca/std';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { matchesRecord } from '../src/space/own-automations.js';
 import { team } from '../src/space/presets.js';

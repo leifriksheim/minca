@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNode } from '@minca/react';
 import type { FileRef, NodeRecord, SpaceSummary } from '@minca/core';
-import { file as fileCollection } from '@minca/core/schemas';
+import { file as fileCollection } from '@minca/std';
 import { bodyOf } from '../../derive/schema-ui';
 import { fileRefOf } from '../../derive/kinds';
 import { fitImage, showsThumbnail, thumbnailOf } from '@minca/ui/image';

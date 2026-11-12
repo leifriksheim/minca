@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@minca/core": "*"
+    "@minca/core": "*",
+    "@minca/std": "*"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

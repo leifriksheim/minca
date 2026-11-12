@@ -34,7 +34,7 @@
  * makes the offer.
  */
 import { bytesToHex, type P2PNode, type NodeEvent } from '@minca/core';
-import { call as callSchema } from '@minca/core/schemas';
+import { call as callSchema } from '@minca/std';
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
