@@ -328,11 +328,9 @@ export function createNodeCarriers(ctx: NodeContext) {
   /** Whether a `sys.carrier` record of the account's, live or not, is keyed by this space */
   async function isCarrySpace(spaceId: string): Promise<boolean> {
     if (!accountSpaceId) return false;
-    const versions = await (await ctx.runtime(accountSpaceId)).history(await carrierKey(spaceId));
-    return versions.some(
-      (version) =>
-        version.collection === CARRIER_COLLECTION && version.verified && version.root === config.signer.did,
-    );
+    const key = await carrierKey(spaceId);
+    const carriers = await ctx.accountRecords({ collection: CARRIER_COLLECTION, includeDeleted: true });
+    return carriers.some((carrier) => carrier.key === key);
   }
 
   const derivedCarry = new Map<string, Promise<SpaceRecord>>();

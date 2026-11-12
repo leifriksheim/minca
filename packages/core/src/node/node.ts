@@ -840,13 +840,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   });
 
   // With an account key, start following the registry at once: it is how this
-  // node learns which spaces it belongs to.
-  if (accountSpaceId) {
-    markStep('node: opening the account space');
-    await runtime(accountSpaceId);
-    markStep('node: account space open, following its list of spaces');
-    await reconcile();
-  }
+  // node learns which spaces it belongs to. Not waited for: the spaces it
+  // holds already are there to read, and `spaces` is said when the list changes them.
+  if (accountSpaceId) void reconcile();
   markStep('node: started');
 
   async function anyoneOnline(): Promise<boolean> {
