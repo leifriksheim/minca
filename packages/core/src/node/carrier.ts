@@ -527,8 +527,9 @@ export async function createCarryCore(config: CarryCoreConfig) {
       await refresh();
     },
 
-    /** The read key a space is carried with now, as a DID: null for a public space, or one not carried */
-    readKeyOf: (spaceId: string): string | null => carried.get(spaceId)?.record.read?.did ?? null,
+    /** The read key a carried space's history has as current, as a DID: null for a public space, or one not carried */
+    readKeyOf: (spaceId: string): string | null =>
+      carried.get(spaceId)?.runtime.readAccess()?.current() ?? null,
 
     /** Stops carrying for an account: its carry space, and every space nobody else still asks for */
     async removeCarry(carrySpace: string): Promise<void> {

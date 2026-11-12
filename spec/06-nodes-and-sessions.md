@@ -922,7 +922,7 @@ device waits for a refill already under way.
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `v`       | `1`                                                                                                                                        |
 | `space`   | The space's constitution (`Space`, [03](03-spaces.md)).                                                                                    |
-| `read`    | Private spaces: the read key seed (`deriveReadSeed(spaceKey)`), base64url.                                                                 |
+| `read`    | Private spaces: the read key seed (`deriveReadSeed(spaceKey)`), base64url. May be absent for a carrier devices dial.                       |
 | `readKey` | Present once the space's key has changed since it began: the read key's DID, which the space's history (not its constitution) vouches for. |
 
 Passes are written for the account registry, the contacts space, and every
@@ -931,8 +931,8 @@ without its key gets none until the key arrives). Passes for other spaces are
 deleted.
 
 A carrier MUST accept a pass only if the space hashes to its id and, for a
-private space, the read seed's DID equals `space.readKey` or the pass's
-`readKey`. Only pass records verified as written by the carried account count.
+private space whose pass has `read`, the read seed's DID equals
+`space.readKey` or the pass's `readKey` ([03](03-spaces.md) §14). Only pass records verified as written by the carried account count.
 When two accounts name one space, a pass for a later key wins over one for the
 first key.
 

@@ -129,7 +129,14 @@ describe('passes', () => {
       null,
     );
     assert.equal(await openPass({ ...pass, read: (await makePass(b)).read }, provider), null);
-    assert.equal(await openPass({ v: 1, space: pass.space }, provider), null);
+    assert.equal(await openPass({ ...pass, read: 7 }, provider), null);
+  });
+
+  test('a pass for a private space may bring no read key: it opens, with nothing to prove read with', async () => {
+    const registry = createSpaceManager(createMemoryAdapter(), provider);
+    const a = await registry.create({ name: 'A', visibility: 'private', creator: 'did:key:zCreator' });
+    const { space } = await makePass(a);
+    assert.deepEqual(await openPass({ v: 1, space }, provider), { space, read: null });
   });
 
   test("the read key from a pass is enough to join the space's peers", async () => {

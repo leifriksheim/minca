@@ -572,8 +572,9 @@ the amount plus a fraction of a cent that tells it apart (the reference host
 adds 1 to 9 999 millionths); what arrives is added in full.
 
 A host MUST check a pass as a carrier checks one from a carry space ([06](06-nodes-and-sessions.md) §4.2):
-its space must verify and hash to the id in the path, and a private space's
-read key must be one the space's history names. It carries the space while
+its space must verify and hash to the id in the path. It takes no read key
+from the pass: `read` may be absent, and the key it checks clients against is
+the one the space's history names ([03](03-spaces.md) §14). It carries the space while
 the subscription is `active` or `grace`, and drops it when it lapses unless an
 account's carry space also names it. At a host with `limits`, an account's carry space naming it
 keeps it only while it is under the free line, or before that line's `until`
@@ -583,14 +584,14 @@ For a space's own subscription, `HostStatus` also has:
 
 | Field     | Meaning                                                                                                                                                                                                                          |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `readKey` | For a private space it carries: the read key it carries it with, as a DID. Absent otherwise.                                                                                                                                     |
+| `readKey` | For a private space it carries: the read key its copy of the space's history has as current, as a DID. Absent otherwise.                                                                                                         |
 | `balance` | What is in the fund, in millionths of a dollar; below zero by what its grace (and a bot's last call) took, which the next payment pays first. Absent on a free host.                                                             |
 | `daily`   | What the fund spends a day as things go, in millionths of a dollar: the hosting rate and its bots'.                                                                                                                              |
 | `bots`    | The bots it runs in the space (§3): `[{ "bot": "<DID>", "name": "<name>", "running": true, "daily": 65000 }]`, `daily` what each took from the fund a day over the last week, in millionths of a dollar (absent on a free host). |
 
 `carrying` is whether it carries the space now, and `spaces` is 1 when it
 does. A device compares `readKey` with the space's current read key to know
-whether the host needs a newer pass, after the space's key changed. Example
+whether the host is behind on the space's key. Example
 payload:
 
 ```json
