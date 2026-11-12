@@ -31,11 +31,6 @@
       "types": "./dist/node-worker.d.ts",
       "import": "./dist/node-worker.js"
     },
-    "./node": {
-      "@minca/source": "./src/node/index.ts",
-      "types": "./dist/node/index.d.ts",
-      "import": "./dist/node/index.js"
-    },
     "./schemas": {
       "@minca/source": "./src/schemas/index.ts",
       "types": "./dist/schemas/index.d.ts",

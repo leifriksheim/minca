@@ -4,7 +4,6 @@
     "../../packages/core/src/index.ts",
     "../../packages/core/src/session/index.ts",
     "../../packages/core/src/schemas/index.ts",
-    "../../packages/core/src/node/index.ts",
     "../../packages/core/src/storage/index.ts",
     "../../packages/core/src/inbox/index.ts",
     "../../packages/std/src/index.ts",

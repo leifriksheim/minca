@@ -193,12 +193,6 @@ export type ResultFor<C, I> = QueryResult<
   ComputedIn<C>
 >;
 
-/** The result a query gives, typed from the query itself */
-export type ResultOf<Q extends Query> = ResultFor<
-  Q['collection'],
-  Q extends { readonly include: infer I } ? I : 'include' extends keyof Q ? IncludeMap : undefined
->;
-
 // -- Typed filters ------------------------------------------------------------
 
 type Meta =
@@ -257,7 +251,7 @@ type ValueOfField<C, F extends string> =
 type ItemOf<V> = V extends ReadonlyArray<infer E> ? E : V;
 
 /** Operators on a field whose value is a `V` */
-export interface OperatorsFor<V> {
+interface OperatorsFor<V> {
   readonly $eq?: V | null;
   readonly $ne?: V | null;
   readonly $gt?: Extract<NonNullable<V>, number | string>;

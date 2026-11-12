@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAsync, useSession } from '@minca/react';
 import { describeHost, type HostDescription, type OverSpace } from '@minca/core';
-import type { HostingView, P2PNode } from '@minca/core/node';
+import type { HostingView, P2PNode } from '@minca/core';
 import { DEFAULT_HOST } from '@minca/app-shared/relay';
 import { Modal } from '@minca/app-shared/Modal';
 import { Loader } from '@minca/app-shared/Loader';

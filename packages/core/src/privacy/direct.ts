@@ -11,7 +11,7 @@ import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { generateSpaceKey, spaceKeyFromRaw } from './space-encryption.js';
 
 /** How many people one direct message can be for, besides whoever wrote it */
-export const MAX_DIRECT_TO = 16;
+const MAX_DIRECT_TO = 16;
 
 /** What a direct message's body carries: who it is for, the sealed text, and a box per reader */
 export interface DirectBody {
@@ -29,7 +29,7 @@ export interface DirectContent {
  * Everyone a direct message is for, as the context names them: sorted, once
  * each, without whoever wrote it.
  */
-export function directRecipients(from: string, to: ReadonlyArray<string>): ReadonlyArray<string> {
+function directRecipients(from: string, to: ReadonlyArray<string>): ReadonlyArray<string> {
   return [...new Set(to)].filter((did) => did !== from).sort();
 }
 

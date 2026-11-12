@@ -245,13 +245,6 @@ export interface PeerInfo {
   readonly connectedAt: string;
 }
 
-/** Sync state */
-export interface SyncState {
-  readonly peerId: string;
-  readonly lastSyncedAt: string;
-  readonly remoteRoot: string; // MST root hash
-}
-
 /**
  * Where a store keeps its bytes: entries by string key, and version bodies by
  * id. Write one to keep a node's data somewhere new. The optional methods
@@ -308,4 +301,3 @@ export type Result<T, E = Error> =
   { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: E };
 
 export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
-export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });

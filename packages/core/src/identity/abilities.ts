@@ -27,11 +27,11 @@ import type { Policy } from './policy.js';
 export const ALL_COMMAND = '/';
 /** Records and nothing more */
 export const RECORDS_COMMAND = '/record';
-export const WRITE_COMMAND = '/record/write';
+const WRITE_COMMAND = '/record/write';
 export const READ_COMMAND = '/record/read';
 export const DEFINE_COMMAND = '/collection/define';
 export const ACCESS_COMMAND = '/access/change';
-export const ACCOUNT_COMMAND = '/account/write';
+const ACCOUNT_COMMAND = '/account/write';
 
 /** The prefix of a definition record's key, before the collection it defines (spec 02 §6.1) */
 const DEFINITION_KEY = 'collection:';
