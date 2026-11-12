@@ -33,7 +33,7 @@ export function useNow(): number {
 function useCarriers(status: SpaceStatus): ReadonlyArray<CarrierSummary> {
   const node = useNode();
   const [carriers, setCarriers] = useState<ReadonlyArray<CarrierSummary>>([]);
-  const carrierKeys = status.carriers.join(',');
+  const carrierKeys = status.ownCarriers.join(',');
   useEffect(() => {
     if (!carrierKeys) return;
     void node.carriers

@@ -757,7 +757,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     async status(spaceId) {
       const status = await (await runtime(spaceId)).status();
-      if (!accountSpaceId) return { ...status, own: [], carriers: [] };
+      if (!accountSpaceId) return { ...status, own: [], ownCarriers: [] };
       // A peer's key does not say whose it is. But only this account's devices
       // and apps can read the account registry, so a peer there is one of ours
       // — except a carrier, which the registry names by its key.
@@ -766,7 +766,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return {
         ...status,
         own: status.peers.filter((peer) => inRegistry.has(peer) && !carrierKeys.has(peer)),
-        carriers: status.peers.filter((peer) => carrierKeys.has(peer)),
+        ownCarriers: status.peers.filter((peer) => carrierKeys.has(peer)),
       };
     },
 
@@ -783,7 +783,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       inBackground(carrying.passAll());
       while (!closed && Date.now() < deadline) {
         // Level with a carrier: it holds the genesis, and any invite opened since.
-        for (const peer of (await spaces.status(spaceId)).carriers)
+        for (const peer of (await spaces.status(spaceId)).ownCarriers)
           if (await open.syncedWith(peer, Math.max(0, Math.min(2000, deadline - Date.now())))) return true;
         await new Promise((resolve) => unref(setTimeout(resolve, 250)));
       }

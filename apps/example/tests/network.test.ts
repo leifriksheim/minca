@@ -13,7 +13,7 @@ const status = (fields: Partial<SpaceStatus>): SpaceStatus => ({
   connection: 'connected',
   peers: [],
   own: [],
-  carriers: [],
+  ownCarriers: [],
   accounts: {},
   fingerprint: '',
   rejected: 0,
@@ -29,7 +29,7 @@ describe('groupPeers', () => {
         peers: ['laptop', 'phone', 'chrome', 'mac'],
         own: ['laptop'],
         accounts: { phone: 'did:me' },
-        carriers: ['chrome', 'mac'],
+        ownCarriers: ['chrome', 'mac'],
       }),
       'did:me',
     );

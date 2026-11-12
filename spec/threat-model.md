@@ -126,6 +126,8 @@ reference implementation, or any implementation, honestly.
     node named by whoever signed it learns the joiner's address and when it
     is online, until the space names carriers that leave it out. They are
     never passed on in the joiner's own invites (03 §7.4).
+    A space made before carriers had that name names none (03 §10), so there
+    the invite's nodes are dialled until someone who may names them again.
   - A knock's invite that reaches anyone but the person it was for, passed
     on by them, taken from a device of theirs, or opened by an app they gave
     the contact key to, lets whoever joins first be taken for them: joining

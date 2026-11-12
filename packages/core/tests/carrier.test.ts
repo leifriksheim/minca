@@ -226,7 +226,7 @@ describe('a carrier', () => {
     );
     // Connected in the space, it is named a carrier — not one of the account's devices.
     await until(
-      async () => (await laptop.spaces.status(notes.id)).carriers.includes(did),
+      async () => (await laptop.spaces.status(notes.id)).ownCarriers.includes(did),
       5000,
       'the carrier to be named',
     );

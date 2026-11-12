@@ -31,7 +31,7 @@ export function healthOf(status: SpaceStatus | undefined, network: MeshStatus): 
 export type PeerKind = 'mine' | 'person' | 'carrier' | 'server';
 
 function peerKind(peer: string, status: SpaceStatus, me: string): PeerKind {
-  if (status.carriers.includes(peer)) return 'carrier';
+  if (status.ownCarriers.includes(peer)) return 'carrier';
   if (status.own.includes(peer) || status.accounts[peer] === me) return 'mine';
   return status.accounts[peer] ? 'person' : 'server';
 }
@@ -52,7 +52,7 @@ const GROUP_ORDER: ReadonlyArray<PeerKind> = ['mine', 'person', 'carrier', 'serv
  */
 export function onlineAccounts(status: SpaceStatus, me: string): ReadonlySet<string> {
   const accounts = status.peers
-    .filter((peer) => !status.carriers.includes(peer))
+    .filter((peer) => !status.ownCarriers.includes(peer))
     .map((peer) => status.accounts[peer])
     .filter((account): account is string => !!account);
   return new Set([me, ...accounts]);

@@ -1789,15 +1789,22 @@ names some, members meet on relays they learn elsewhere, such as the invite
 that brought them (§7.4).
 
 **`sys.carriers`** at `carriers:space`: `{ carriers: [{ did, name }] }`
-— the carriers every member of the space may count on: nodes that hold every
-record of it without reading it (§14 is how an account hands its own carriers
-the space). Valid (`checkCarriers`) when there are at most 16 carriers, each
+— the nodes that whoever may set it says hold every record of the space
+(§14 is how an account hands its own carriers the space). A peer checks
+nothing about them but the list. Valid (`checkCarriers`) when there are at most 16 carriers, each
 `did` starts with `did:key:` and is at most 200 characters, each `name` a
 string of at most 80 characters, and no `did` twice. Only someone granted
 `/space/carriers` may set it.
 What carriers do is in [05 — Sync and storage](05-sync-and-storage.md).
 
-_Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkCarriers`, `MAX_RELAYS`, `MAX_CARRIERS`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/node/space-membership.ts` (`setRelays`, `setCarriers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named a carrier…")._
+> **Known defect:** a space made while this record was `sys.keepers` and its
+> grant `/space/keepers` names no carriers: the old record is not read, and
+> a founding role granted the old command may not set the new one. Where the
+> space lets nobody redefine that role, only a successor space (§2.7)
+> restores it. Until carriers are named again, nodes hold the space whole,
+> and a joiner dials every node its invite names (§7.4).
+
+_Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkCarriers`, `MAX_RELAYS`, `MAX_CARRIERS`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/node/space-membership.ts` (`setRelays`, `setCarriers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named among the carriers of the spaces the account manages…")._
 
 ---
 

@@ -418,7 +418,7 @@ export interface SpaceStatus {
   /** Of `peers`, this account's own other devices and apps, not counting carriers. Empty without an account key. */
   readonly own: ReadonlyArray<string>;
   /** Of `peers`, carriers the account uses */
-  readonly carriers: ReadonlyArray<string>;
+  readonly ownCarriers: ReadonlyArray<string>;
   /** The account each peer acts for, by session DID: only peers that showed a valid note */
   readonly accounts: Readonly<Record<string, string>>;
   /** A fingerprint of every version kept here: equal on two nodes means identical data */

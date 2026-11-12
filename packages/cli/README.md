@@ -342,7 +342,7 @@ own network, besides those its operator gives it (`MINCA_NODES`,
 node is level with them there (it waits up to 15 seconds, then says to try
 again): a node behind would miss records, and could start a line of payments
 that already has one. A call that writes is done once the space's carriers
-(06 `sys.carriers`; your hosts, named by your home) have what it wrote;
+(03 `sys.carriers`; your hosts, named by your home) have what it wrote;
 otherwise the app is told, and should read it back before writing it again.
 In a space that names no carriers, where every member's device is a copy, a
 write is done once a device of the space online now has it, your open tab or

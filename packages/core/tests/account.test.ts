@@ -322,7 +322,7 @@ describe('who is connected', () => {
     );
     const status = await laptop.spaces.status(trip.id);
     assert.deepEqual(status.own, [phone.sessionDid]);
-    assert.deepEqual(status.carriers, []);
+    assert.deepEqual(status.ownCarriers, []);
     assert.ok(status.peers.includes(theirs.sessionDid));
   });
 });
