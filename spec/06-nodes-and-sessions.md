@@ -151,9 +151,8 @@ from the account to a key of its own, signed at the person's **account home**.
 
 ### 2.1 The app's key
 
-An app MUST make its own P-256 key and keep the private half non-extractable.
-The key's DID is the grant's audience, and the app's node signs with this key,
-not a fresh one. An app that acts for more than one account MUST use a
+An app MUST make its own P-256 key. The key's DID is the grant's audience,
+and the app's node signs with this key, not a fresh one. An app that acts for more than one account MUST use a
 different key for each: one key in two accounts' spaces would tell their
 peers the accounts are one person's. The home chooses the account, not the
 app, so an app MUST NOT ask with a key that holds one account's note and then

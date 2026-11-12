@@ -9,8 +9,8 @@ import { createIdentityManager } from '../../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../src/identity/root-signer.js';
 import { createP256Provider } from '../../src/identity/crypto-p256.js';
 import { generateSeed } from '../../src/identity/recovery-code.js';
-import { didOf, publicKeyToDid, P256_MULTICODEC } from '../../src/identity/did.js';
-import { keyProof, requestTerms } from '../../src/session/connect.js';
+import { publicKeyToDid, P256_MULTICODEC } from '../../src/identity/did.js';
+import { appKeyFromSeed, keyProof, requestTerms, type SeededAppKey } from '../../src/session/connect.js';
 import { deriveAccountKey } from '../../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../../src/identity/contact-key.js';
 import { createSigner } from '../../src/schema/signer.js';
@@ -122,20 +122,21 @@ export async function makeKey() {
   return { did, privateKey: pair.privateKey, publicKey: pair.publicKey };
 }
 
-const namedKeys = new Map<string, Promise<{ keys: CryptoKeyPair; did: string }>>();
+const namedKeys = new Map<string, Promise<SeededAppKey>>();
 
 /** A real key for a name a test uses as an app's or a program's key, the same one each time */
-export function testAppKey(name: string): Promise<{ keys: CryptoKeyPair; did: string }> {
+export function testAppKey(name: string): Promise<SeededAppKey> {
   let key = namedKeys.get(name);
   if (!key) {
-    key = (async () => {
-      const keys = await createP256Provider().generateKeyPair();
-      return { keys, did: await didOf(keys.publicKey) };
-    })();
+    key = newAppKey();
     namedKeys.set(name, key);
   }
   return key;
 }
+
+/** An app key of its own, as `appKey` makes one where there is an IndexedDB to keep its seed */
+export const newAppKey = (): Promise<SeededAppKey> =>
+  appKeyFromSeed(globalThis.crypto.getRandomValues(new Uint8Array(32)));
 
 /**
  * A connect request as an app would send it: the named key swapped for a real

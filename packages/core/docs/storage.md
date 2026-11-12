@@ -371,11 +371,9 @@ When another writer changes the same store, the node reads all of it again
 - **Tabs in one browser.** The app in this repository runs one node for all
   of a site's tabs in a `SharedWorker`, one per account and key. Its stores
   have that one writer, so there's nothing to tell, and a tab the browser
-  freezes holds nothing another waits on. The app's key stays in the tabs
-  ([the node](node.md#the-session-note)).
-- **Elsewhere** each tab runs its node in a worker of its own: the account
-  home, which keeps lasting writer keys a shared worker in WebKit can't
-  store, and a browser without shared workers. Tabs tell each other through a
+  freezes holds nothing another waits on. The account home does the same.
+- **In a browser without shared workers** each tab runs its node in a worker
+  of its own. Tabs tell each other through a
   `BroadcastChannel` named `minca-node:<root DID>:<space id>`. Only the tab
   in view runs its node, one at a time per account, so a frozen tab holds no
   store another is waiting on.

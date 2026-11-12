@@ -13,9 +13,6 @@
 export type {
   CryptoProvider,
   CryptoKeyPairResult,
-  KeyElsewhere,
-  SigningKey,
-  SigningKeyPair,
   StandardSchemaV1,
   StandardJSONSchemaV1,
   StandardSchemaResult,

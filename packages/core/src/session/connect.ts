@@ -327,26 +327,30 @@ export interface AppKey {
   readonly did: string;
 }
 
+/** An app key with what it is derived from: what a node in a worker is handed, since a `CryptoKey` can't be */
+export interface SeededAppKey extends AppKey {
+  readonly seed: Uint8Array;
+}
+
 const KEY_DB = 'minca-app-key';
 
 /**
- * This app's key: made once, kept in this site's IndexedDB, and never
- * exportable — a script that gets into the page can sign with it while it is
- * there, but cannot carry it off.
+ * This app's key: derived from a seed made once and kept in this site's
+ * IndexedDB. A script that gets into the page can read the seed, as it can
+ * the session of any web app; the grant made out to the key runs out, and
+ * the account home can take it back sooner.
  */
-export async function appKey(name = 'default'): Promise<AppKey> {
+export async function appKey(name = 'default'): Promise<SeededAppKey> {
   const stored = await idbOnce(KEY_DB, 'keys', 'readonly', (store) => store.get(name));
-  let keys = isKeyPair(stored) ? stored : null;
-  if (!keys) {
-    const { privateKey, publicKey } = await createP256Provider().generateKeyPair();
-    keys = { privateKey, publicKey };
-    await idbOnce(KEY_DB, 'keys', 'readwrite', (store) => store.put(keys, name));
-  }
-  return { keys, did: await didOf(keys.publicKey) };
+  const seed = stored instanceof Uint8Array ? stored : globalThis.crypto.getRandomValues(new Uint8Array(32));
+  if (seed !== stored) await idbOnce(KEY_DB, 'keys', 'readwrite', (store) => store.put(seed, name));
+  return appKeyFromSeed(seed);
 }
 
-function isKeyPair(value: unknown): value is CryptoKeyPair {
-  return isObject(value) && value.privateKey instanceof CryptoKey && value.publicKey instanceof CryptoKey;
+/** The app key a seed stands for */
+export async function appKeyFromSeed(seed: Uint8Array): Promise<SeededAppKey> {
+  const keys = await createP256Provider().deriveKeyPairFromSeed(seed);
+  return { keys, did: await didOf(keys.publicKey), seed };
 }
 
 /** Forgets this app's key. The next connection makes a new one. */
@@ -590,10 +594,12 @@ export function grantSigner(grant: Grant | (() => Grant | null)): RootSigner {
     get did() {
       return current()?.did ?? '';
     },
-    async delegate() {
+    async delegate({ audience }) {
       const now = current();
       if (!now || grantExpired(now))
         throw new Error('Access has run out. Connect to your account home again.');
+      if (now.note.payload.aud !== audience)
+        throw new Error('The key this app was connected with is gone. Connect to your account home again.');
       return now.note;
     },
   };
@@ -647,7 +653,7 @@ export const usableGrant = (grant: Grant | null): boolean =>
  */
 export async function startConnectedNode(params: {
   readonly grant: Grant;
-  readonly key?: AppKey;
+  readonly key?: SeededAppKey;
   readonly network?: NodeNetworkConfig;
   readonly stores?: StoreFactory;
   readonly cache?: CacheConfig | false;
@@ -660,7 +666,7 @@ export async function startConnectedNode(params: {
   const node = await startPageNode(
     {
       signer: grantSigner(params.grant),
-      sessionKey: key.keys,
+      sessionKeySeed: key.seed,
       stores: { indexedDB: `minca-app:${params.grant.did}` },
       ...(network ? { network } : {}),
       ...(params.cache === false ? {} : { cache: params.cache ?? {} }),

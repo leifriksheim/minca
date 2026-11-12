@@ -15,29 +15,11 @@ export interface CryptoProvider {
    * Owns the whole KDF: callers pass the raw seed, at least 16 uniform bytes.
    */
   deriveKeyPairFromSeed(seed: Uint8Array): Promise<CryptoKeyPairResult>;
-  sign(privateKey: SigningKey, data: Uint8Array): Promise<Uint8Array>;
+  sign(privateKey: CryptoKey, data: Uint8Array): Promise<Uint8Array>;
   verify(publicKey: CryptoKey, signature: Uint8Array, data: Uint8Array): Promise<boolean>;
   exportPublicKey(key: CryptoKey): Promise<Uint8Array>;
   importPublicKey(bytes: Uint8Array): Promise<CryptoKey>;
   importPrivateKey(bytes: Uint8Array): Promise<CryptoKey>;
-}
-
-/**
- * A private key to sign with: a `CryptoKey`, or a key held elsewhere that
- * signs when asked. A node in a shared worker signs this way with the key its
- * tabs keep, since WebKit can't hand a shared worker a `CryptoKey`.
- */
-export type SigningKey = CryptoKey | KeyElsewhere;
-
-/** A private key held elsewhere: it signs bytes it is given, as the key itself would */
-export interface KeyElsewhere {
-  sign(data: Uint8Array): Promise<Uint8Array>;
-}
-
-/** A key pair whose private half may be held elsewhere */
-export interface SigningKeyPair {
-  readonly publicKey: CryptoKey;
-  readonly privateKey: SigningKey;
 }
 
 export interface CryptoKeyPairResult {

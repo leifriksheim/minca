@@ -15,8 +15,7 @@ import { team } from '../src/space/presets.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { until } from './helpers/until.js';
 import { isRecord } from '../src/utils/guards.js';
-import { createP256Provider } from '../src/identity/crypto-p256.js';
-import { didOf } from '../src/identity/did.js';
+import { newAppKey } from './helpers/person.js';
 
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
@@ -231,33 +230,32 @@ describe('a node shared by the tabs of a site', () => {
   test('a tab signing with another key gets a node of its own, so an app connected again never signs with the old one', async () => {
     const shared = fakeSharedWorker();
     const me = await signer();
-    const provider = createP256Provider();
-    const [oldKey, newKey] = [await provider.generateKeyPair(), await provider.generateKeyPair()];
+    const [oldKey, newKey] = [await newAppKey(), await newAppKey()];
     const before = await startNodeInWorker(shared.connect(), {
       signer: me,
-      sessionKey: oldKey,
+      sessionKeySeed: oldKey.seed,
       stores: { indexedDB: 'minca-app:me' },
     });
     const after = await startNodeInWorker(shared.connect(), {
       signer: me,
-      sessionKey: newKey,
+      sessionKeySeed: newKey.seed,
       stores: { indexedDB: 'minca-app:me' },
     });
     cleanup.push(
       () => before.close(),
       () => after.close(),
     );
-    assert.equal(before.sessionDid, await didOf(oldKey.publicKey));
-    assert.equal(after.sessionDid, await didOf(newKey.publicKey));
+    assert.equal(before.sessionDid, oldKey.did);
+    assert.equal(after.sessionDid, newKey.did);
   });
 
-  test("an app's key stays on the page: the worker is sent no CryptoKey, and the page signs as the session", async () => {
+  test("an app's key reaches the worker as its seed: the worker is sent no CryptoKey, and signs as the session", async () => {
     const shared = fakeSharedWorker();
     const me = await signer();
-    const appKey = await createP256Provider().generateKeyPair();
+    const appKey = await newAppKey();
     const node = await startNodeInWorker(shared.connect(), {
       signer: me,
-      sessionKey: appKey,
+      sessionKeySeed: appKey.seed,
       stores: { indexedDB: 'minca-app:me' },
     });
     cleanup.push(() => node.close());
@@ -265,20 +263,20 @@ describe('a node shared by the tabs of a site', () => {
       !shared.posted.some((message) => holdsCryptoKey(message)),
       'nothing posted to the worker holds a CryptoKey',
     );
-    assert.equal(node.sessionDid, await didOf(appKey.publicKey));
+    assert.equal(node.sessionDid, appKey.did);
     const { id: space } = await node.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
     const written = await node.records.put(space, 'app.todo.item', { text: 'Milk' });
-    assert.equal(written.author, await didOf(appKey.publicKey), 'signed by the key the page keeps');
+    assert.equal(written.author, appKey.did, 'signed by the key the seed stands for');
   });
 
-  test("tabs of one app share its key: one closing, the next signs; none left, the node can't", async () => {
+  test('tabs of one app share its node: one closing, the node signs on for the next', async () => {
     const shared = fakeSharedWorker();
     const me = await signer();
-    const appKey = await createP256Provider().generateKeyPair();
+    const appKey = await newAppKey();
     const open = () =>
       startNodeInWorker(shared.connect(), {
         signer: me,
-        sessionKey: appKey,
+        sessionKeySeed: appKey.seed,
         stores: { indexedDB: 'minca-app:me' },
       });
     const first = await open();
@@ -288,36 +286,7 @@ describe('a node shared by the tabs of a site', () => {
     const { id: space } = await second.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
     await first.close();
     const written = await second.records.put(space, 'app.todo.item', { text: 'Eggs' });
-    assert.equal(written.author, await didOf(appKey.publicKey));
-  });
-
-  test("tabs frozen in the background don't make the tab in view wait to sign", async () => {
-    const shared = fakeSharedWorker();
-    const me = await signer();
-    const appKey = await createP256Provider().generateKeyPair();
-    // The same key in three more tabs, each frozen: asked to sign, it never answers.
-    const frozen = {
-      publicKey: appKey.publicKey,
-      privateKey: { sign: () => new Promise<Uint8Array>(() => {}) },
-    };
-    const inView = await startNodeInWorker(shared.connect(), {
-      signer: me,
-      sessionKey: appKey,
-      stores: { indexedDB: 'minca-app:me' },
-    });
-    cleanup.push(() => inView.close());
-    for (let i = 0; i < 3; i++) {
-      const tab = await startNodeInWorker(shared.connect(), {
-        signer: me,
-        sessionKey: frozen,
-        stores: { indexedDB: 'minca-app:me' },
-      });
-      cleanup.push(() => tab.close());
-    }
-    const { id: space } = await inView.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
-    const started = Date.now();
-    await inView.records.put(space, 'app.todo.item', { text: 'Milk' });
-    assert.ok(Date.now() - started < 1000, `signed at once, in ${Date.now() - started} ms`);
+    assert.equal(written.author, appKey.did);
   });
 
   test('the node outlives a tab that closes it, and closes with the last', async () => {

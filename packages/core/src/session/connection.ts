@@ -40,7 +40,7 @@ import {
   grantExpired,
   type ConnectRequest,
   type Grant,
-  type AppKey,
+  type SeededAppKey,
   type KeptGrant,
   type Proposed,
 } from './connect.js';
@@ -70,7 +70,7 @@ export interface MincaConnectionConfig {
   readonly worker?: () => WorkerLike;
   /** Where the app's keys are kept, one per account, by name. Default: this site's IndexedDB (`appKey`). */
   readonly keys?: {
-    get(name: string): Promise<AppKey>;
+    get(name: string): Promise<SeededAppKey>;
     forget(name: string): Promise<void>;
   };
   /**
