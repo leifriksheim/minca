@@ -99,7 +99,7 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           files=$(git diff --name-only "$BASE"...HEAD 2>/dev/null) || files=apps/desktop/
-          if grep -qE '^(apps/(desktop|example|shared)|packages/(core|cli)|package-lock\.json|\.github/workflows/build\.yml)' <<<"$files"; then
+          if grep -qE '^(apps/(desktop|example|shared)|packages/(core|cli|std|actions|auth)|package-lock\.json|\.github/workflows/build\.yml)' <<<"$files"; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           fi
 

@@ -35,6 +35,8 @@ implement and less to get wrong, not more.
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `spec/`                                       | The protocol specification, `README.md` plus parts 01–07 (normative), and its threat model.    |
 | `packages/core`                               | `@minca/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`)          |
+| `packages/auth`                               | `@minca/auth`: signing in to an account, what an account home is built on                      |
+| `packages/std`, `packages/actions`            | `@minca/std`: the standard collections; `@minca/actions`: a node's named operations            |
 | `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
 | `packages/relay`                              | The Minca relay: a mailbox peers meet through, and inboxes and short links wait in             |
 | `packages/names`                              | The name service: usernames at a domain (`leif@minca.social`) that lead to inbox codes         |
@@ -135,8 +137,9 @@ two implementations must read it the same way.
 Tests show a change does what its author meant. They don't show it can't be
 turned against someone, so they aren't enough. A protocol change is one to
 `spec/`, or to code or tests any spec _Source:_ line cites
-(`packages/core/src`, `packages/core/tests`, `packages/relay`, the protocol
-parts of `packages/cli`, the grant in `apps/home`). Before one is called done
+(`packages/core/src`, `packages/core/tests`, `packages/relay`,
+`packages/auth`, the protocol parts of `packages/cli`, `packages/std` and
+`packages/actions`, the grant in `apps/home`). Before one is called done
 or merged:
 
 1. Run the `protocol-reviewer` agent (`.claude/agents/protocol-reviewer.md`)
