@@ -238,7 +238,10 @@ collection" form; an agent can do the same over WebMCP.
 It starts empty: a table is a collection the space already keeps, or a new
 one made there with a name, notes and a status. Each table has views, a
 table, a board or cards, with their fields, filters and order, and plain
-cells change in place; "+" at the end of a table adds a column. A view is a
+cells change in place; "+" at the end of a table adds a column. Links show
+as columns too (`relations.ts`): one for each way a table's records may link
+out, and one for each collection whose links name it, so a place shows its
+organization and an organization its places. A view is a
 `sheets.view` record (`views.ts`), so everyone in the space sees the same
 sheet, and a table is in it while it has a view. The app draws Sheets itself
 rather than in a screen, since a screen sees only its app's collections.

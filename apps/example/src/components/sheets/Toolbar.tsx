@@ -8,6 +8,7 @@ import type { People } from '../../derive/people';
 import type { Look } from '../../derive/look';
 import { ClauseList } from '../automations/parts';
 import { cellEditOf, fieldMark } from './fields';
+import type { Column } from './relations';
 import { Popover } from './Popover';
 import styles from './Sheets.module.css';
 
@@ -28,9 +29,9 @@ export function Toolbar({
   /** What this person is searching for, which only they see; null when the table has no text to search */
   search: string | null;
   onSearch: (search: string) => void;
-  /** Every field the table has */
-  all: ReadonlyArray<Field>;
-  shown: ReadonlyArray<Field>;
+  /** Every column the table has */
+  all: ReadonlyArray<Column>;
+  shown: ReadonlyArray<Column>;
   groupable: ReadonlyArray<Field>;
   schema: Parameters<typeof withComputed>[0];
   people: People;

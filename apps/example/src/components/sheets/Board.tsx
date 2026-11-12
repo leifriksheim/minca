@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { QueryRecord } from '@minca/core';
 import { bodyOf, choicesOf, recordLabel, titleField, valueOf, type Field } from '../../derive/schema-ui';
-import { CellValue, isBlank, Pill } from './Cell';
+import { CellValue, isBlank, Pill, RelatedRecords } from './Cell';
 import { hueOf } from './fields';
 import { NewRow } from './NewRow';
+import { relatedRecords, type Column } from './relations';
 import type { LayoutProps } from './layout';
 import styles from './Sheets.module.css';
 
@@ -75,19 +76,22 @@ export function Card({
   record,
   fields,
   schema,
+  collections,
   people,
   onOpen,
   hide,
   draggable = false,
-}: Pick<LayoutProps, 'fields' | 'schema' | 'people' | 'onOpen'> & {
+}: Pick<LayoutProps, 'fields' | 'schema' | 'collections' | 'people' | 'onOpen'> & {
   record: QueryRecord;
   /** A field the card leaves out, as a board does the one its lanes say */
   hide?: string;
   draggable?: boolean;
 }) {
   const title = titleField(schema);
+  const valueIn = (column: Column) =>
+    column.related ? relatedRecords(record, column) : valueOf(record, column);
   const details = fields
-    .filter((f) => f.name !== title && f.name !== hide && !isBlank(valueOf(record, f)))
+    .filter((f) => f.name !== title && f.name !== hide && !isBlank(valueIn(f)))
     .slice(0, DETAILS_ON_A_CARD);
   return (
     <button
@@ -100,7 +104,11 @@ export function Card({
       <strong>{recordLabel(record, schema)}</strong>
       {details.map((field) => (
         <span key={field.name} className={styles.detail}>
-          <CellValue field={field} value={valueOf(record, field)} people={people} />
+          {field.related ? (
+            <RelatedRecords records={relatedRecords(record, field)} collections={collections} />
+          ) : (
+            <CellValue field={field} value={valueOf(record, field)} people={people} />
+          )}
         </span>
       ))}
     </button>

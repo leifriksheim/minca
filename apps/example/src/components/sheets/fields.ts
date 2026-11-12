@@ -11,18 +11,24 @@ import {
   valueKindOf,
   type Field,
 } from '../../derive/schema-ui';
+import { linksInColumns, linksOutColumns, type Column } from './relations';
 
-/** Every field a table can show, its title first: the ones written, then the ones worked out on this device */
+/**
+ * Every column a table can show, its title first: the fields written and the records they link to, then the
+ * fields worked out on this device and the records that link here
+ */
 export function tableFields(
   collection: NodeCollection,
   collections: ReadonlyArray<NodeCollection>,
-): ReadonlyArray<Field> {
+): ReadonlyArray<Column> {
   const title = titleField(collection.schema);
   const written = fieldsOf(collection.schema);
   return [
     ...written.filter((f) => f.name === title),
     ...written.filter((f) => f.name !== title),
+    ...linksOutColumns(collection),
     ...computedFieldsOf(collection, collections),
+    ...linksInColumns(collection, collections),
   ];
 }
 
@@ -31,14 +37,15 @@ const isPosition = (field: Field): boolean =>
   valueKindOf(field.schema) === 'position' || field.name === 'position';
 
 /** The fields a view shows: those it picked, in its order, or else every one but where a record sorts */
-export function shownFields(all: ReadonlyArray<Field>, picked: ReadonlyArray<string> | undefined) {
+export function shownFields(all: ReadonlyArray<Column>, picked: ReadonlyArray<string> | undefined) {
   if (!picked) return all.filter((f) => !isPosition(f));
   return picked.flatMap((name) => all.filter((f) => f.name === name));
 }
 
-/** The small mark in a column's head that says what kind of field it is: Aa, #, ◉; a row's title is always Aa */
-export function fieldMark(field: Field, schema: NodeCollection['schema']): string {
+/** The small mark in a column's head that says what kind it is: Aa, #, ◉, an arrow the way a link points; a row's title is always Aa */
+export function fieldMark(field: Column, schema: NodeCollection['schema']): string {
   if (field.name === titleField(schema)) return FIELD_TYPE_INFO.text.mark;
+  if (field.related) return field.related.direction === 'out' ? '→' : '←';
   if (isComputed(field)) return 'ƒ';
   const type = fieldTypeOf(field.schema);
   return type ? FIELD_TYPE_INFO[type].mark : '•';

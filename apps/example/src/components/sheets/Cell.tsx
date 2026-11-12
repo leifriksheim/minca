@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { choicesOf, textOf, valueKindOf, itemKindOf, type Field } from '../../derive/schema-ui';
+import type { NodeCollection, QueryRecord } from '@minca/core';
+import { choicesOf, recordLabel, textOf, valueKindOf, itemKindOf, type Field } from '../../derive/schema-ui';
 import { moneyText, safeHref, whenText } from '../../derive/kinds';
 import { nameOf, type People } from '../../derive/people';
 import { PersonFace } from '../PersonFace';
@@ -55,6 +56,41 @@ export function Pill({ hue, children }: { hue: number; children: ReactNode }) {
   return (
     <span className={styles.pill} data-hue={hue}>
       {children}
+    </span>
+  );
+}
+
+/** The records a row is linked with, each a pill by its title in the hue it always has; pressed, it opens */
+export function RelatedRecords({
+  records,
+  collections,
+  onOpen,
+}: {
+  records: ReadonlyArray<QueryRecord>;
+  collections: ReadonlyArray<NodeCollection>;
+  /** None where the pills sit inside something already pressable, like a card */
+  onOpen?: (record: QueryRecord) => void;
+}) {
+  const titleOf = (record: QueryRecord) =>
+    recordLabel(record, collections.find((c) => c.name === record.collection)?.schema ?? null);
+  return (
+    <span className={styles.values}>
+      {records.map((record) =>
+        onOpen ? (
+          <button
+            key={record.key}
+            className={styles.pill}
+            data-hue={hueOfText(record.key)}
+            onClick={() => onOpen(record)}
+          >
+            {titleOf(record)}
+          </button>
+        ) : (
+          <Pill key={record.key} hue={hueOfText(record.key)}>
+            {titleOf(record)}
+          </Pill>
+        ),
+      )}
     </span>
   );
 }

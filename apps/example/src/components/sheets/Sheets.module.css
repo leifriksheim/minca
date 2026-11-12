@@ -379,6 +379,16 @@ form.newRow {
   white-space: nowrap;
 }
 
+button.pill {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in oklab, var(--hue, var(--color-hue-1)) 40%, var(--color-surface));
+  }
+}
+
 .values {
   display: inline-flex;
   flex-wrap: nowrap;

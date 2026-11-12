@@ -1,5 +1,5 @@
 import { useDeferredValue, useState } from 'react';
-import type { Filter, NodeCollection, NodeRecord, QueryRecord, SpaceSummary } from '@minca/core';
+import type { Filter, Include, NodeCollection, NodeRecord, QueryRecord, SpaceSummary } from '@minca/core';
 import { useAccount, useLive, useNode, useProfiles } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
 import { Icon, type IconName } from '@minca/app-shared/Icon';
@@ -19,6 +19,7 @@ import { Gallery } from './Gallery';
 import { Grid } from './Grid';
 import { cellEditOf, groupableFields, shownFields, tableFields } from './fields';
 import type { LayoutProps } from './layout';
+import { includesOf } from './relations';
 import { Toolbar } from './Toolbar';
 import { Panel } from './Popover';
 import { newViewBody, sheetView, type SheetView } from './views';
@@ -63,7 +64,7 @@ export function SheetTable({
   const group = groupable.find((f) => f.name === look.groupBy) ?? groupable[0] ?? null;
   const searchableFields = fields.filter((f) => cellEditOf(f) === 'text');
   const searchWhere = searchFilterOf(useDeferredValue(search), searchableFields);
-  const { rows, more, showMore } = useRows(space.id, collection.name, look, searchWhere);
+  const { rows, more, showMore } = useRows(space.id, collection.name, look, searchWhere, includesOf(fields));
 
   const saveLook = (next: Look) => {
     if (view)
@@ -95,6 +96,7 @@ export function SheetTable({
     rows: rows ?? [],
     fields,
     schema: collection.schema,
+    collections,
     people,
     mayEdit: space.writable,
     onSave: save,
@@ -196,15 +198,27 @@ function searchFilterOf(search: string, fields: ReadonlyArray<Field>): Filter | 
   return { $or: fields.map((f) => ({ [f.name]: { $contains: words } })) };
 }
 
-/** A view's records as its filters, the search and its order pick them, kept current; a page at a time */
-function useRows(spaceId: string, collection: string, look: Look, searchWhere: Filter | undefined) {
+/** A view's records as its filters, the search and its order pick them, each with its linked records, kept current; a page at a time */
+function useRows(
+  spaceId: string,
+  collection: string,
+  look: Look,
+  searchWhere: Filter | undefined,
+  include: Readonly<Record<string, Include>>,
+) {
   const { did } = useAccount();
   const [limit, setLimit] = useState(PAGE);
   const filterWhere = whereOf(look.filters ?? [], did);
   const where =
     filterWhere && searchWhere ? { $and: [filterWhere, searchWhere] } : (filterWhere ?? searchWhere);
   const sort = look.sort ?? NEWEST_FIRST;
-  const query = { collection, ...(where ? { where } : {}), sort: { [sort.field]: sort.direction }, limit };
+  const query = {
+    collection,
+    ...(where ? { where } : {}),
+    include,
+    sort: { [sort.field]: sort.direction },
+    limit,
+  };
   const page = useLive(spaceId, (node) => node.records.query(spaceId, query), [JSON.stringify(query)]);
   return {
     rows: page?.records ?? null,

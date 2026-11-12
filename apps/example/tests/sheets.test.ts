@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 
 import { FIRST_LOOK, readLook, type Look } from '../src/derive/look';
 import { newViewBody, readViews, sheetView, tablesOf } from '../src/components/sheets/views';
+import { shownFields, tableFields } from '../src/components/sheets/fields';
+import { includesOf, relatedRecords } from '../src/components/sheets/relations';
 import { addTemplate, type Template } from '../src/components/apps/launcher';
 import { setup } from './helpers';
 
@@ -59,4 +61,60 @@ describe('Sheets', () => {
     );
     assert.deepEqual(views[0]?.look, board);
   });
+
+  test('a table has a column for the records its rows link to, and one for the records that link to them', async () => {
+    const { alice, space } = await setup();
+    const named = { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } as const;
+    await alice.node.collections.define(space, {
+      name: 'app.organization',
+      title: 'Organizations',
+      schema: named,
+    });
+    await alice.node.collections.define(space, {
+      name: 'app.place',
+      title: 'Places',
+      schema: named,
+      links: { organization: { to: ['app.organization'], cardinality: 'one' } },
+    });
+    const co_op = await alice.node.records.put(space, 'app.organization', { name: 'The co-op' });
+    await alice.node.records.put(space, 'app.organization', { name: 'Nobody yet' });
+    const linked = { links: [{ rel: 'organization', to: co_op.key }] };
+    await alice.node.records.put(space, 'app.place', { name: 'Bakery' }, linked);
+    await alice.node.records.put(space, 'app.place', { name: 'Garden' }, linked);
+    await alice.node.records.put(space, 'app.place', { name: 'Shed' });
+
+    const collections = await alice.node.collections.list(space);
+    const columnsOf = (name: string) =>
+      shownFields(
+        tableFields(
+          collections.find((c) => c.name === name)!,
+          collections,
+        ),
+        undefined,
+      );
+    const titlesByRow = async (name: string, column: string) => {
+      const columns = columnsOf(name);
+      const { records } = await alice.node.records.query(space, {
+        collection: name,
+        include: includesOf(columns),
+        sort: { name: 'asc' },
+      });
+      const shown = columns.find((c) => c.label === column)!;
+      return records.map((row) => relatedRecords(row, shown).map((r) => bodyNameOf(r.body)));
+    };
+
+    assert.deepEqual(
+      columnsOf('app.place').map((c) => c.label),
+      ['Name', 'Organization'],
+    );
+    assert.deepEqual(await titlesByRow('app.place', 'Organization'), [['The co-op'], ['The co-op'], []]);
+    assert.deepEqual(
+      columnsOf('app.organization').map((c) => c.label),
+      ['Name', 'Places'],
+    );
+    assert.deepEqual(await titlesByRow('app.organization', 'Places'), [[], ['Bakery', 'Garden']]);
+  });
 });
+
+const bodyNameOf = (body: unknown): unknown =>
+  typeof body === 'object' && body !== null && 'name' in body ? body.name : undefined;
