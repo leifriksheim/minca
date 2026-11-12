@@ -4,7 +4,7 @@
  * action, from NODE_ACTIONS. scripts/sync.mjs runs this and puts each where a
  * page says `<!-- catalogue: name -->`. Prints them as JSON.
  */
-import { NODE_ACTIONS } from '../../../packages/core/src/node/actions.ts';
+import { NODE_ACTIONS } from '@minca/actions';
 import {
   contact,
   contactRequest,

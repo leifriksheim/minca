@@ -13,7 +13,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { BetaMessageParam, BetaTool } from '@anthropic-ai/sdk/resources/beta/messages/messages';
 import { createNode } from '../../core/src/node/node.js';
-import { callAction, offeredActions } from '../../core/src/node/actions.js';
+import { callAction, offeredActions } from '@minca/actions';
 import { createIdentityManager } from '../../core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { deriveAccountKey } from '../../core/src/identity/account-vault.js';

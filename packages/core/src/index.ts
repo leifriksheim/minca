@@ -386,13 +386,6 @@ export {
   directoryStores,
   browserWriterKeys,
   copyAccountData,
-  NODE_ACTIONS,
-  runAction,
-  callAction,
-  offeredActions,
-  PEER_CONTENT_NOTE,
-  PERSON_ONLY,
-  checkActionInput,
   createCarrierNode,
   createCarryCore,
   watchNotifications,
@@ -406,8 +399,6 @@ export type {
   StoreOptions,
   CopyAccountParams,
   CopyResult,
-  NodeAction,
-  ActionSchema,
   P2PNode,
   NodeConfig,
   WorkerNodeConfig,
@@ -501,6 +492,7 @@ export type {
   BodyOf,
   IncludedOf,
   ResultOf,
+  AnyIncluded,
 } from './query/types.js';
 export { plainQuery } from './query/types.js';
 
@@ -514,7 +506,7 @@ export type { CollectionRules } from './records/rules.js';
 export type { Contract, Condition, CollectionContract, Line } from './records/contracts.js';
 export { contractCostHints } from './records/contracts.js';
 // Contracts written in TypeScript, typed from the collection's schema, built into CEL
-export { contract } from './records/contract-builder.js';
+export { contract, storedComputed, storedContract } from './records/contract-builder.js';
 export type {
   CelExpr,
   CelInt,

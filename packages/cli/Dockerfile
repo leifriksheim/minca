@@ -13,6 +13,7 @@ WORKDIR /repo
 # place, so all of them come first (and installs cache apart from source).
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
+COPY packages/actions/package.json packages/actions/
 COPY packages/relay/package.json packages/relay/
 COPY packages/cli/package.json packages/cli/
 COPY apps/home/package.json apps/home/
@@ -20,6 +21,7 @@ COPY apps/example/package.json apps/example/
 COPY apps/extension/package.json apps/extension/
 RUN npm ci --ignore-scripts --workspace @minca/cli
 COPY packages/core packages/core
+COPY packages/actions packages/actions
 COPY packages/relay packages/relay
 COPY packages/cli packages/cli
 RUN npm run bundle -w @minca/cli

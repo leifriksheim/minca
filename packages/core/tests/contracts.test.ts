@@ -25,7 +25,7 @@ import { until } from './helpers/until.js';
 import { useSchemas } from '../src/schemas/index.js';
 import { ballot, decision, goal, goalReached, pledge, proposal } from '../src/schemas/library/community.js';
 import { forge, person, type Person } from './helpers/person.js';
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 
 // ─── The language, alone ───────────────────────────────────────────
 

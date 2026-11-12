@@ -5,7 +5,8 @@
  * descriptions and input schemas the CLI uses, so what an agent may do is
  * exactly what its note lets it, through the same gates.
  */
-import { offeredActions, type NodeAction, type P2PNode } from '@minca/core';
+import { type P2PNode } from '@minca/core';
+import { offeredActions, type NodeAction } from '@minca/actions';
 
 export interface McpOptions {
   /** Serving an agent's node (`minca connect`), not the account itself */

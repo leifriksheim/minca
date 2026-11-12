@@ -5,7 +5,8 @@
  * there to allow deleting or overwriting, so those are refused. What someone
  * set off is counted against them, so nobody can spend the day for everyone.
  */
-import { PEER_CONTENT_NOTE, type P2PNode } from '@minca/core';
+import { type P2PNode } from '@minca/core';
+import { PEER_CONTENT_NOTE } from '@minca/actions';
 import {
   BOT_INSTRUCTIONS_MAX,
   botSettings,

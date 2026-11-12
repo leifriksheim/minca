@@ -3,7 +3,8 @@
  * off. Which automations it runs, what sets them off and what never does is
  * `startAutomations` in `@minca/core/schemas`; this is only the words.
  */
-import { runAction, type P2PNode } from '@minca/core';
+import { type P2PNode } from '@minca/core';
+import { runAction } from '@minca/actions';
 import { mayConfigure, type AutomationTrigger } from '@minca/core/schemas';
 
 /**

@@ -6,7 +6,8 @@
  * to look, so an agent is never left waiting.
  */
 import { ROLE_ASSIGN } from '@minca/core';
-import type { NodeAction, P2PNode } from '@minca/core';
+import type { P2PNode } from '@minca/core';
+import type { NodeAction } from '@minca/actions';
 import * as ask from './ask.js';
 import { isRecord } from './json.js';
 

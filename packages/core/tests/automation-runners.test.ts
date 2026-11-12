@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import * as z from 'zod';
 
 import { createNode } from '../src/node/node.js';
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';

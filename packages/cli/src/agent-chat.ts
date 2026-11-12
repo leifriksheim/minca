@@ -22,7 +22,8 @@ import type {
   BetaToolResultBlockParam,
   MessageCreateParamsBase,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages';
-import { callAction, offeredActions, type P2PNode } from '@minca/core';
+import { type P2PNode } from '@minca/core';
+import { callAction, offeredActions } from '@minca/actions';
 import { toolDescription, toolInstructions } from './mcp.js';
 import { writeWhole } from './fs-directory.js';
 import { errorCode, isRecord, messageOf } from './json.js';

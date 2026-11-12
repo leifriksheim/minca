@@ -9,14 +9,14 @@ from this one list, so an agent sees the same tools wherever it runs.
 Run one by name with `runAction`:
 
 ```ts
-import { runAction } from '@minca/core/node';
+import { runAction } from '@minca/actions';
 
 const spaces = await runAction(node, 'spaces_list', {});
 const messages = await runAction(node, 'records_query', { space, collection: 'std.message', limit: 10 });
 ```
 
 `NODE_ACTIONS` lists them all. Each is a
-[`NodeAction`](https://minca.dev/api/core/interfaces/NodeAction/): a name,
+[`NodeAction`](https://minca.dev/api/actions/interfaces/NodeAction/): a name,
 words for people and models, a JSON Schema for its input, flags that say how
 careful a front end should be, and `run`.
 
