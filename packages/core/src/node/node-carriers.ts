@@ -41,13 +41,12 @@ import {
 import { CARRY_CLOSED_KEY, makePass, PASS_COLLECTION, passKey, type SpacePass } from '../space/pass.js';
 import {
   checkOwnAutomation,
-  linkedWakes,
   OWN_AUTOMATIONS,
   WAKE_COLLECTION,
   wakeFor,
+  type OwnAutomation,
   type WakeSpace,
 } from '../space/own-automations.js';
-import type { Automation } from '../schemas/automations.js';
 import { base64UrlDecode, bytesToHex, hexToBytes } from '../utils/encoding.js';
 import { base32Encode } from '../utils/hash.js';
 import { unref } from '../utils/guards.js';
@@ -407,7 +406,6 @@ export function createNodeCarriers(ctx: NodeContext) {
       key: record.key,
       visibility: record.space.visibility,
       topics: (collection) => declared.get(collection)?.topics ?? [],
-      computed: (collection) => declared.get(collection)?.computed,
     };
   }
 
@@ -417,12 +415,7 @@ export function createNodeCarriers(ctx: NodeContext) {
     spaces: ReadonlyArray<WakeSpace>,
   ): Promise<Map<string, unknown>> {
     const wakes = new Map<string, unknown>();
-    for (const own of owned) {
-      const wake = await wakeFor(own, spaces, config.signer.did);
-      wakes.set(`wake:${own.id}`, wake);
-      // A computed field the automation names reads wakes too: a 👍 can make a todo done.
-      for (const also of linkedWakes(own, wake, spaces)) wakes.set(`wake:${own.id}:${also.collection}`, also);
-    }
+    for (const own of owned) wakes.set(`wake:${own.id}`, await wakeFor(own, spaces, config.signer.did));
     return wakes;
   }
 
@@ -448,7 +441,7 @@ export function createNodeCarriers(ctx: NodeContext) {
 
   /** The account's own automations, as it made them */
   async function ownAutomations(): Promise<ReadonlyArray<OwnAutomationView>> {
-    const found = await ctx.accountRecords<Automation>(
+    const found = await ctx.accountRecords<OwnAutomation>(
       { collection: OWN_AUTOMATIONS },
       (record) => record.key.startsWith('automation:') && checkOwnAutomation(record.body) === null,
     );
@@ -500,12 +493,12 @@ export function createNodeCarriers(ctx: NodeContext) {
   );
 
   /** Writes one of the account's own automations, checked, and hands every carrier the wakes as they are now */
-  async function writeOwn(id: string, body: Automation): Promise<OwnAutomationView> {
+  async function writeOwn(id: string, body: OwnAutomation): Promise<OwnAutomationView> {
     const registryRt = await ctx.requireAccount('Making an automation');
     const problem = checkOwnAutomation(body);
     if (problem) throw new Error(problem);
     // A system collection: nothing defines it, so no other key of the account can make it final.
-    await registryRt.upsertSystem<Automation>(OWN_AUTOMATIONS, id, body);
+    await registryRt.upsertSystem<OwnAutomation>(OWN_AUTOMATIONS, id, body);
     // Every carrier gets the wakes as they are now, in the background (`carriers.settled`).
     inBackground(passAll());
     return { ...body, id };

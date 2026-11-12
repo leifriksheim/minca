@@ -4,7 +4,7 @@
  */
 import { useCollections, useLive, useNode } from '@minca/react';
 import { useMayDefine } from '@minca/app-shared/may';
-import { activity, automation, automationOf } from '@minca/core/schemas';
+import { activity, automation, automationOf } from '@minca/std';
 
 /** Whether a space whose automations ask an agent or bot lacks `std.activity`, and a way to add it; never done on opening. */
 export function useActivityOff(

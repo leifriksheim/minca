@@ -22,23 +22,31 @@
  * Not protocol: a peer that has never heard of automations syncs and judges these
  * records like any other. See `packages/core/docs/automations.md`.
  */
-import type { NodeRecord, P2PNode, SpaceAccess } from '../node/types.js';
 import {
+  causeOf,
+  checkFilter,
+  checkQuery,
+  matches,
   nameOf,
+  namedComputed,
   plainQuery,
+  quickAddBody,
+  schemaProblem,
   type BodyOf,
   type Filter,
+  type FilterSubject,
+  type JsonSchema,
+  type NodeRecord,
+  type P2PNode,
   type Query,
   type QueryRecord,
-} from '../query/types.js';
-import { checkFilter, checkQuery, matches, type FilterSubject } from '../query/filter.js';
-import { causeOf, namedComputed } from '../query/computed.js';
-import { quickAddBody } from '../schema/quick-add.js';
-import { schemaProblem, type JsonSchema } from '../schema/collection-def.js';
-import { isObject } from '../utils/guards.js';
+  type SpaceAccess,
+} from '@minca/core';
+import { asRunner, definedNames, fragments } from '@minca/core/schemas';
 import { checkCron, cronMatches } from './cron.js';
-import { definedNames } from './defined.js';
-import { about, define, one, person, text, typed, when as moment, words } from './fragments.js';
+import { isObject } from './guards.js';
+
+const { about, define, one, person, text, typed, when: moment, words } = fragments;
 
 /** A link an automation's new record carries: to a record by key, or to `$it`, the record the automation holds for */
 export interface AutomationLink {
@@ -76,17 +84,7 @@ export interface AutomationWhen {
   readonly others?: boolean;
 }
 
-/** The spaces an account's own automation looks at: every space of the account, or these */
-export type AutomationSpaces = 'all' | ReadonlyArray<string>;
-
-/** The app that proposed an account's own automation, by the origin the browser reported */
-export interface AutomationApp {
-  readonly origin: string;
-  /** What the app called itself. Shown, never trusted. */
-  readonly name?: string;
-}
-
-/** The body of a `std.automation` record, or of an account's own automation */
+/** The body of a `std.automation` record */
 export interface Automation {
   /** What people call it */
   readonly name: string;
@@ -104,15 +102,6 @@ export interface Automation {
   readonly paused?: boolean;
   /** Nothing that came to hold before this sets it off */
   readonly since: string;
-  /**
-   * The spaces it looks at, for one kept in the account's registry rather
-   * than in a space (`space/own-automations.ts`)
-   */
-  readonly spaces?: AutomationSpaces;
-  /** Where clicking its notification goes: an app's `https://` address. Default: the account home. */
-  readonly open?: string;
-  /** The app that proposed it. Absent: the person made it themselves. */
-  readonly app?: AutomationApp;
 }
 
 export type AutomationRun = BodyOf<typeof automationRun>;
@@ -132,13 +121,6 @@ export const automation = typed<Automation>()({
       picked: { type: 'object' },
       paused: { type: 'boolean' },
       since: moment('Nothing that came to hold before this sets it off'),
-      spaces: { description: 'Every space of the account ("all"), or a list of their ids' },
-      open: words(2000),
-      app: {
-        type: 'object',
-        properties: { origin: words(200), name: words(80) },
-        required: ['origin'],
-      },
     },
     required: ['name', 'then', 'since'],
   },
@@ -229,9 +211,6 @@ export async function setActivity(
 /** In an action, the record the automation holds for */
 export const IT = '$it';
 
-/** In an automation's query or condition, whoever runs it: its maker, or the bot named in `by` */
-export const ME = '$me';
-
 /**
  * The command a maker needs a grant of in a space for a bot there to run
  * their rules: a library command, which no peer checks (docs/automations.md)
@@ -272,9 +251,6 @@ const AUTOMATION: JsonSchema = {
       type: 'object',
       properties: { from: { type: 'array', items: named }, others: { type: 'boolean' } },
     },
-    spaces: {
-      anyOf: [{ const: 'all' }, { type: 'array', minItems: 1, maxItems: 256, items: { type: 'string' } }],
-    },
   },
 };
 
@@ -304,35 +280,7 @@ export function checkAutomation(value: unknown): string | null {
     return 'An automation that changes a record needs a when';
   if (typeof value.since !== 'string' || !Number.isFinite(Date.parse(value.since)))
     return 'since must be a date';
-  if (value.open !== undefined && !isWebAddress(value.open)) return 'open must be an https:// address';
-  if (isObject(value.app) && !isOrigin(value.app.origin)) return 'app.origin must be a web origin';
   return null;
-}
-
-/** An https:// address, or http:// on this machine */
-function isWebAddress(value: unknown): boolean {
-  const url = parseUrl(value);
-  return url?.protocol === 'https:' || (url?.protocol === 'http:' && LOCAL_HOSTS.includes(url.hostname));
-}
-
-const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
-
-/** A browser extension's origin, which `URL` gives none */
-const EXTENSION_ORIGIN = /^(chrome|moz|safari-web)-extension:\/\/[a-z0-9-]{1,64}$/i;
-
-/** `https://chat.example`, nothing after it: what a browser reports as a message's origin */
-function isOrigin(value: unknown): boolean {
-  if (typeof value !== 'string') return false;
-  return EXTENSION_ORIGIN.test(value) || parseUrl(value)?.origin === value;
-}
-
-function parseUrl(value: unknown): URL | null {
-  if (typeof value !== 'string') return null;
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
 }
 
 const isAutomation = (value: unknown): value is Automation => checkAutomation(value) === null;
@@ -340,12 +288,6 @@ const isAutomation = (value: unknown): value is Automation => checkAutomation(va
 /** An automation record's body, when it is one */
 export const automationOf = (record: { readonly body: unknown }): Automation | null =>
   isAutomation(record.body) ? record.body : null;
-
-/** `$me` wherever it is a value, as the account running the automation */
-export function asRunner<T>(value: T, me: string): T {
-  // eslint-disable-next-line typescript/consistent-type-assertions -- the same shape, with one string swapped for another
-  return JSON.parse(JSON.stringify(value), (_key, found: unknown) => (found === ME ? me : found)) as T;
-}
 
 /** One record an automation holds for now */
 export interface AutomationMatch {

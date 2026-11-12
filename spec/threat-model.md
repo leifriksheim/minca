@@ -482,7 +482,7 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     enough records ahead hides real matches from them until those dates
     pass, and one who edits a record that made a match hold dates it again
     (`recentKeys` and `triggerOf` in
-    `packages/core/src/node/watch-notifications.ts`)
+    `packages/std/src/watch-notifications.ts`)
     ([#397](https://github.com/leifriksheim/minca/issues/397)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's keys, or the order it runs checks in ([#10](https://github.com/leifriksheim/minca/issues/10)).
@@ -1391,12 +1391,7 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     length, is refused").
   - From the account's wakes it learns a collection, spaces, topic tags,
     whether only others' records wake, since when, whether paused, and which
-    app's address a click leads to; for a `where` on a computed field, also
-    the collections that field reads, in the spaces whose definition reads
-    them, untagged, and from the keys (`wake:<id>:<collection>`) that they
-    belong to one automation (`packages/core/tests/computed.test.ts`, "a
-    wake for a filter on a computed field also wakes on what that field
-    reads"); never the values behind a private
+    app's address a click leads to; never the values behind a private
     space's tags nor the person's words for what they want to hear about
     (03 §15; `packages/core/tests/carrier.test.ts`, "a carrier gets tags,
     never the values it matches"). Any `where` condition on a field declared

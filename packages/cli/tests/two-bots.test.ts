@@ -17,7 +17,7 @@ import { hold } from '../../core/tests/helpers/hold.js';
 import { joined } from '../../core/tests/helpers/joined.js';
 import { fileSpend } from '../src/agent-chat.js';
 import { community } from '../../core/src/space/presets.js';
-import { automation, automationRun, botSettings } from '../../core/src/schemas/index.js';
+import { automation, automationRun, botSettings } from '@minca/std';
 import { message } from '@minca/std';
 
 test('bot B, steered once, gets nothing from bot A: no outside writes for its automation, no instructions', async () => {

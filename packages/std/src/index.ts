@@ -77,6 +77,57 @@ export {
 export type { BlueprintReview, CollectionReview, ContractExample, ReviewContext } from './blueprints.js';
 export { CHOOSING, lookalikes } from './choosing.js';
 export { guidesOf, writeGuide } from './guides.js';
+export {
+  automation,
+  automationRun,
+  activity,
+  ACTIVITY_STATES,
+  ACTIVITY_STALE_SECONDS,
+  activeNow,
+  setActivity,
+  IT,
+  INSTRUCT,
+  checkAutomation,
+  automationOf,
+  matching,
+  act,
+  runAutomations,
+  startAutomations,
+  automationsFor,
+  suggestedAutomations,
+  fillAutomationText,
+} from './automations.js';
+export type {
+  ActiveAutomation,
+  Automation,
+  AutomationAction,
+  AutomationLink,
+  AutomationMatch,
+  AutomationRun,
+  Activity,
+  ActivityState,
+  AutomationTrigger,
+  AutomationWhen,
+  AutomationNotifier,
+  RunAutomationsOptions,
+  StartAutomationsOptions,
+} from './automations.js';
+export {
+  connect,
+  connector,
+  CONNECT_REQUEST_SECONDS,
+  askToConnect,
+  askToDisconnect,
+  connectPage,
+  botSettings,
+  BOT_INSTRUCTIONS_MAX,
+  mayConfigure,
+  holdsBotRoles,
+} from './connectors.js';
+export type { BotSettings, Connect, ConnectAsk, Connector } from './connectors.js';
+export { checkCron, cronMatches, SCHEDULES } from './cron.js';
+export { watchNotifications } from './watch-notifications.js';
+export type { ActivityMatch, NotifyMatch, WatchNotificationsOptions } from './watch-notifications.js';
 
 const DIGITS = '0123456789abcdefghijklmnopqrstuvwxyz';
 

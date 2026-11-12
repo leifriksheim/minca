@@ -12,8 +12,6 @@ export { browserWriterKeys } from './writer-keys.js';
 export type { ClaimedWriter, HeadStore, WriterKeySource } from './writer-keys.js';
 export { copyAccountData } from './copy.js';
 export { createCarrierNode, createCarryCore } from './carrier.js';
-export { watchNotifications } from './watch-notifications.js';
-export type { ActivityMatch, NotifyMatch, WatchNotificationsOptions } from './watch-notifications.js';
 export type {
   CarrierConfig,
   CarrierNode,
@@ -22,7 +20,15 @@ export type {
   CarrierEvent,
   WakeView,
 } from './carrier.js';
-export type { AutomationProposal, AppAutomation, Wake } from '../space/own-automations.js';
+export type {
+  AutomationProposal,
+  AppAutomation,
+  OwnAutomation,
+  OwnQuery,
+  ReadableRecord,
+  Trigger,
+  Wake,
+} from '../space/own-automations.js';
 export type { CopyAccountParams, CopyResult } from './copy.js';
 export type { StoreFactory, StoreOptions, WorkerStores } from './stores.js';
 export type { Keeper } from '../space/roles.js';

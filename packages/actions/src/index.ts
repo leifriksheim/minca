@@ -25,7 +25,7 @@ import {
   type P2PNode,
   type Query,
 } from '@minca/core';
-import { ACTIVITY_STATES, setActivity } from '@minca/core/schemas';
+import { ACTIVITY_STATES, setActivity } from '@minca/std';
 import {
   CHOOSING,
   applyBlueprint,

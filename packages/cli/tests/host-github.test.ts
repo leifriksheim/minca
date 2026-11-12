@@ -19,13 +19,7 @@ import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { tempDir } from './helpers/nodes.js';
 import { until } from '../../core/tests/helpers/until.js';
 import { host as hostSchema } from '@minca/std';
-import {
-  askToConnect,
-  askToDisconnect,
-  connect,
-  connectPage,
-  connector,
-} from '../../core/src/schemas/connectors.js';
+import { askToConnect, askToDisconnect, connect, connectPage, connector } from '@minca/std';
 import { verifierOf } from '../src/host-connect.js';
 import type { GitHubApp } from '../src/connectors/github.js';
 import { githubConnector } from '../src/connectors/github-connector.js';

@@ -17,14 +17,8 @@ import { joined } from '../../core/tests/helpers/joined.js';
 import { fileSpend, spendFor } from '../src/agent-chat.js';
 import { discloseBot, nameBot } from '../src/agent.js';
 import { community } from '../../core/src/space/presets.js';
-import {
-  activity,
-  direct,
-  automation,
-  automationRun,
-  botSettings,
-  type Automation,
-} from '../../core/src/schemas/index.js';
+import { direct } from '../../core/src/schemas/index.js';
+import { activity, automation, automationRun, botSettings, type Automation } from '@minca/std';
 import { message, profile, task } from '@minca/std';
 
 /** Someone on the network, with an account of their own; with `account`, one that follows its account space, where its name is kept */

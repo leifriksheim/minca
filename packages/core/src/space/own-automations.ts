@@ -2,10 +2,11 @@
  * The account's own automations: "let me know when…", across its spaces,
  * noticed by nodes that can't read.
  *
- * Kept in the account registry (`sys.automation`) rather than a space, the
- * body of a `std.automation` is the account's alone, and looks at the spaces
- * it names, or all of them. For now it only notifies. Not protocol
- * (docs/automations.md).
+ * Kept in the account registry (`sys.automation`) rather than a space, one
+ * is the account's alone, and looks at the spaces it names, or all of them.
+ * It only notifies: new records of one collection, perhaps only those a
+ * filter matches. Automations that act in a space are `std.automation`, in
+ * `@minca/std`, and nothing here knows them.
  *
  * The account's carriers are the ones online to notice, and they can't read.
  * So every device holding the account key copies each automation into each
@@ -14,30 +15,28 @@
  * is protocol (spec 03 §15).
  *
  * Only an app proposes them (`AutomationProposal`), when the person asks; the
- * home writes them into the registry once the person says yes. The app that
- * asked shows the notifications (`matchesRecord`,
- * `node/watch-notifications.ts`).
+ * home writes them into the registry once the person says yes.
  */
 import type { Version, Link } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
 import { parseDelegation } from '../identity/ucan.js';
 import { topicKey, topicTag } from '../records/topics.js';
 import { checkFilter, matches } from '../query/filter.js';
-import { nameOf, type Filter } from '../query/types.js';
-import { canonicalize } from '../schema/version.js';
+import type { Filter } from '../query/types.js';
 import { COLLECTION_NAME, schemaProblem, type JsonSchema } from '../schema/collection-def.js';
-import {
-  asRunner,
-  checkAutomation,
-  type Automation,
-  type AutomationApp,
-  type AutomationSpaces,
-} from '../schemas/automations.js';
 import { isObject } from '../utils/guards.js';
-import { linkedReads, namedComputed, type ComputedFields } from '../query/computed.js';
 
-/** Wakes, as a carrier holds them in its carry space: key `wake:<the automation's key>`, and `wake:<that key>:<collection>` for what a computed field reads */
+/** Wakes, as a carrier holds them in its carry space, at `wake:<the automation's key>` */
 export const WAKE_COLLECTION = 'sys.wake';
+
+/** In a filter, whoever it is read for: the account, for one of its own automations */
+export const ME = '$me';
+
+/** `$me` wherever it is a value, as the account the filter is read for */
+export function asRunner<T>(value: T, me: string): T {
+  // eslint-disable-next-line typescript/consistent-type-assertions -- the same shape, with one string swapped for another
+  return JSON.parse(JSON.stringify(value), (_key, found: unknown) => (found === ME ? me : found)) as T;
+}
 
 /** The record fields an account's own automation may read besides the body: what an app sees of any record */
 const WHERE_FIELDS = ['@key', '@collection', '@createdBy', '@createdAt'];
@@ -48,18 +47,79 @@ export interface OwnQuery {
   readonly where?: Filter;
 }
 
+/** Every space of the account, or these */
+export type AutomationSpaces = 'all' | ReadonlyArray<string>;
+
+/** The app that proposed an account's own automation, by the origin the browser reported */
+export interface AutomationApp {
+  readonly origin: string;
+  /** What the app called itself. Shown, never trusted. */
+  readonly name?: string;
+}
+
+/** One of the account's own automations, as its registry keeps it */
+export interface OwnAutomation {
+  /** What people call it */
+  readonly name: string;
+  /** The records that set it off; with `others`, only ones someone else wrote */
+  readonly when: { readonly query: OwnQuery; readonly others?: boolean };
+  /** What the notification says */
+  readonly then: { readonly kind: 'notify'; readonly text: string };
+  /** The spaces it looks at */
+  readonly spaces: AutomationSpaces;
+  /** Where clicking its notification goes: an app's `https://` address. Default: the account home. */
+  readonly open?: string;
+  /** The app that proposed it. Absent: the person made it themselves. */
+  readonly app?: AutomationApp;
+  /** Kept, but not on */
+  readonly paused?: boolean;
+  /** Nothing written before this sets it off */
+  readonly since: string;
+}
+
+const said = (max: number): JsonSchema => ({ type: 'string', pattern: '\\S', maxLength: max });
+
+const OWN_AUTOMATION: JsonSchema = {
+  type: 'object',
+  properties: {
+    name: said(120),
+    when: {
+      type: 'object',
+      properties: { query: { type: 'object' }, others: { type: 'boolean' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    then: {
+      type: 'object',
+      properties: { kind: { const: 'notify' }, text: said(500) },
+      required: ['kind', 'text'],
+      additionalProperties: false,
+    },
+    spaces: {
+      anyOf: [{ const: 'all' }, { type: 'array', minItems: 1, maxItems: 256, items: { type: 'string' } }],
+    },
+    open: { type: 'string', maxLength: 2000 },
+    app: {
+      type: 'object',
+      properties: { origin: { type: 'string', maxLength: 200 }, name: said(80) },
+      required: ['origin'],
+      additionalProperties: false,
+    },
+    paused: { type: 'boolean' },
+    since: { type: 'string' },
+  },
+  required: ['name', 'when', 'then', 'spaces', 'since'],
+  additionalProperties: false,
+};
+
 /** Why this can't be one of the account's own automations, or null */
 export function checkOwnAutomation(value: unknown): string | null {
-  const problem = checkAutomation(value);
-  if (problem) return problem;
-  if (!isObject(value) || !isObject(value.when) || !isObject(value.then)) return 'An automation needs a when';
-  if (value.then.kind !== 'notify') return 'An automation of the account’s own only notifies, for now';
-  if (value.every !== undefined || value.by !== undefined)
-    return 'An automation of the account’s own runs on new records, by the account';
-  if (value.spaces === undefined) return 'spaces must be "all" or a list of spaces';
-  if (value.when.holds !== undefined || value.when.from !== undefined)
-    return 'An automation of the account’s own reads each record alone: no holds, no from';
-  return checkOwnQuery(value.when.query);
+  const shape = schemaProblem(OWN_AUTOMATION, value, 'automation');
+  if (shape || !isObject(value)) return shape ?? 'An automation must be an object';
+  if (!Number.isFinite(Date.parse(String(value.since)))) return 'since must be a date';
+  if (value.open !== undefined && !isWebAddress(value.open)) return 'open must be an https:// address';
+  if (isObject(value.app) && !isOrigin(value.app.origin)) return 'app.origin must be a web origin';
+  return checkOwnQuery(isObject(value.when) ? value.when.query : undefined);
 }
 
 /** Why a query can't be an account's own automation's, or null: one collection, and a filter over each record alone */
@@ -76,13 +136,30 @@ function checkOwnQuery(query: unknown): string | null {
   return checkFilter(query.where, 'when.query.where', { meta: WHERE_FIELDS });
 }
 
-/** The collection and filter an account's own automation reads */
-export function ownQuery(own: Automation): OwnQuery {
-  const query = own.when?.query;
-  return {
-    collection: query ? nameOf(query.collection) : '',
-    ...(query?.where !== undefined ? { where: query.where } : {}),
-  };
+/** An https:// address, or http:// on this machine */
+function isWebAddress(value: unknown): boolean {
+  const url = parseUrl(value);
+  return url?.protocol === 'https:' || (url?.protocol === 'http:' && LOCAL_HOSTS.includes(url.hostname));
+}
+
+const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
+
+/** A browser extension's origin, which `URL` gives none */
+const EXTENSION_ORIGIN = /^(chrome|moz|safari-web)-extension:\/\/[a-z0-9-]{1,64}$/i;
+
+/** `https://chat.example`, nothing after it: what a browser reports as a message's origin */
+function isOrigin(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  return EXTENSION_ORIGIN.test(value) || parseUrl(value)?.origin === value;
+}
+
+function parseUrl(value: unknown): URL | null {
+  if (typeof value !== 'string') return null;
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -118,35 +195,8 @@ export function notifyOn(name: string, collection: string, where?: Filter): AppA
   return { name, when: { query: { collection, ...(where ? { where } : {}) } } };
 }
 
-/** Whether an offered automation is about records that name the person: its `where` reads `$me` */
-export const namesTheRunner = (own: Pick<AppAutomation, 'when'>): boolean =>
-  JSON.stringify(own.when.query.where ?? null).includes('"$me"');
-
-/** At most this many proposals in one request */
+/** How many automations an app may propose at once */
 export const MAX_PROPOSALS = 8;
-
-const PROPOSAL: JsonSchema = {
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    when: {
-      type: 'object',
-      properties: { query: { type: 'object' }, others: { type: 'boolean' } },
-      required: ['query'],
-      additionalProperties: false,
-    },
-    then: {
-      type: 'object',
-      properties: { kind: { const: 'notify' }, text: { type: 'string' } },
-      required: ['kind', 'text'],
-      additionalProperties: false,
-    },
-    spaces: { type: 'array', items: { type: 'string' } },
-    open: { type: 'string' },
-  },
-  required: ['name', 'when'],
-  additionalProperties: false,
-};
 
 /** Why an app's offered automation can't be offered, or null */
 export function checkAppAutomation(value: unknown): string | null {
@@ -162,76 +212,32 @@ export function checkAppAutomation(value: unknown): string | null {
  * Without it, only what the proposal says is checked.
  */
 export function checkProposal(proposal: unknown, origin?: string): string | null {
-  const shape = schemaProblem(PROPOSAL, proposal, 'proposal');
-  if (shape || !isObject(proposal)) return shape ?? 'A proposed automation must be an object';
+  if (!isObject(proposal)) return 'A proposed automation must be an object';
+  const stray = Object.keys(proposal).find((field) => !PROPOSAL_FIELDS.includes(field));
+  if (stray !== undefined) return `proposal.${stray}: a proposal has name, when, then, spaces and open`;
+  if (proposal.spaces !== undefined && !Array.isArray(proposal.spaces))
+    return 'proposal.spaces must be a list';
+  const problem = checkOwnAutomation(withDefaults(proposal));
+  if (problem) return problem;
   const { open } = proposal;
+  if (origin === undefined || typeof open !== 'string') return null;
+  return new URL(open).origin === origin ? null : 'open must be an address on the app’s own site';
+}
+
+const PROPOSAL_FIELDS = ['name', 'when', 'then', 'spaces', 'open'];
+
+/** A proposal as the automation it would become, with what it leaves out filled in */
+function withDefaults(proposal: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const name = typeof proposal.name === 'string' ? proposal.name.trim() : proposal.name;
   const when = isObject(proposal.when) ? proposal.when : {};
-  const name = trimmed(proposal.name);
-  // What it would become, with the defaults the home fills in: checked as the account's own.
-  const candidate = {
+  return {
     name,
-    when: { query: when.query, others: when.others ?? true },
+    when: { ...when, others: when.others ?? true },
     then: proposal.then ?? { kind: 'notify', text: name },
     spaces: proposal.spaces ?? 'all',
-    ...(open !== undefined ? { open } : {}),
+    ...(proposal.open !== undefined ? { open: proposal.open } : {}),
     since: new Date(0).toISOString(),
   };
-  const problem = checkOwnAutomation(candidate);
-  if (problem) return problem;
-  if (origin === undefined || open === undefined) return null;
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- checkOwnAutomation has passed it as a web address, the way URL reads it
-  return new URL(String(open)).origin === origin ? null : 'open must be an address on the app’s own site';
-}
-
-/** A name with its ends trimmed, when it is text */
-function trimmed<T>(name: T): T | string {
-  return typeof name === 'string' ? name.trim() : name;
-}
-
-/**
- * The spaces a proposal looks at, given the ones the app may reach; null when
- * it names one outside them.
- */
-export function proposalSpaces(
-  proposal: AutomationProposal,
-  reach: AutomationSpaces,
-): AutomationSpaces | null {
-  if (!proposal.spaces) return reach;
-  if (reach !== 'all' && proposal.spaces.some((id) => !reach.includes(id))) return null;
-  return [...new Set(proposal.spaces)];
-}
-
-/** The automation a proposal becomes, once the person says yes to it */
-export function fromProposal(
-  proposal: AutomationProposal,
-  context: { readonly app: AutomationApp; readonly spaces: AutomationSpaces; readonly since?: string },
-): Automation {
-  const name = trimmed(proposal.name);
-  const own: Automation = {
-    name,
-    when: { query: proposal.when?.query, others: proposal.when?.others ?? true },
-    then: proposal.then ?? { kind: 'notify', text: name },
-    spaces: context.spaces,
-    open: proposal.open ?? `${context.app.origin}/`,
-    since: context.since ?? new Date().toISOString(),
-    app: context.app,
-  };
-  // An app on plain http elsewhere than this machine: a click goes to the home instead.
-  if (checkOwnAutomation(own) === null || proposal.open !== undefined) return own;
-  const { open: _open, ...rest } = own;
-  return rest;
-}
-
-/** Whether two of the account's automations ask about the same thing: an app connecting again adds nothing twice */
-export function sameAutomation(a: Automation, b: Automation): boolean {
-  const spaces = (s: AutomationSpaces | undefined) =>
-    s === undefined || s === 'all' ? 'all' : [...s].sort().join(',');
-  return (
-    canonicalize(ownQuery(a)) === canonicalize(ownQuery(b)) &&
-    spaces(a.spaces) === spaces(b.spaces) &&
-    (a.when?.others ?? false) === (b.when?.others ?? false) &&
-    canonicalize(a.then) === canonicalize(b.then)
-  );
 }
 
 /** A space the account follows, as far as a wake needs: its id, its current key when private, and the topics it declares */
@@ -241,8 +247,6 @@ export interface WakeSpace {
   readonly visibility: 'public' | 'private';
   /** The topic fields a collection declares in this space */
   readonly topics: (collection: string) => ReadonlyArray<string>;
-  /** A collection's computed fields in this space, when it has any */
-  readonly computed?: (collection: string) => ComputedFields | undefined;
 }
 
 /** At most this many tags a wake holds for one space; a `where` that names more values wakes on any record there */
@@ -298,8 +302,8 @@ const isScalar = (v: unknown): v is string | number | boolean =>
   typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
 
 /** The spaces an automation looks at, of those given */
-function lookedAt(own: Automation, spaces: ReadonlyArray<WakeSpace>): ReadonlyArray<WakeSpace> {
-  const only = own.spaces ?? 'all';
+function lookedAt(own: OwnAutomation, spaces: ReadonlyArray<WakeSpace>): ReadonlyArray<WakeSpace> {
+  const only = own.spaces;
   return only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id));
 }
 
@@ -311,11 +315,11 @@ function lookedAt(own: Automation, spaces: ReadonlyArray<WakeSpace>): ReadonlyAr
  * new record wakes, and the app turns down what `where` doesn't match.
  */
 export async function wakeFor(
-  own: Automation,
+  own: OwnAutomation,
   spaces: ReadonlyArray<WakeSpace>,
   account: string,
 ): Promise<Wake> {
-  const { collection, where } = ownQuery(own);
+  const { collection, where } = own.when.query;
   const resolved = where === undefined ? undefined : asRunner(where, account);
   const tags: Record<string, string[]> = {};
   for (const space of lookedAt(own, spaces)) {
@@ -325,9 +329,9 @@ export async function wakeFor(
   return {
     v: 1,
     collection,
-    spaces: own.spaces ?? 'all',
+    spaces: own.spaces,
     ...(Object.keys(tags).length > 0 ? { tags } : {}),
-    others: own.when?.others ?? false,
+    others: own.when.others ?? false,
     ...(own.open ? { open: own.open } : {}),
     paused: own.paused ?? false,
     since: own.since,
@@ -382,53 +386,6 @@ export function readWake(body: unknown): Wake | null {
     return null;
   // eslint-disable-next-line typescript/consistent-type-assertions -- checked against WAKE just above
   return body as unknown as Wake;
-}
-
-/** At most this many collections an automation's computed fields wake on besides its own; past it, none */
-const MAX_LINKED_WAKES = 4;
-/** At most this many spaces a wake names (spec 03 §15) */
-const MAX_WAKE_SPACES = 256;
-
-/**
- * The wakes an automation needs besides its own, made from it: when its
- * `where` names a computed field, one for each collection that field reads
- * in the spaces it looks at, since a new 👍 can make a todo done. Their tags
- * would be the todo's, so they keep only the spaces they must stay quiet in;
- * any new record elsewhere wakes, and the app judges. A filter whose fields
- * read more than four collections gets none: whoever defines the collection
- * could otherwise have every member's devices write a wake per name.
- */
-export function linkedWakes(
-  own: Automation,
-  wake: Wake,
-  spaces: ReadonlyArray<WakeSpace>,
-): ReadonlyArray<Wake> {
-  const { collection, where } = ownQuery(own);
-  // Each collection read, and the spaces whose definition reads it: a definer in one space can't widen the others.
-  const read = new Map<string, string[]>();
-  for (const space of lookedAt(own, spaces)) {
-    const named = namedComputed(space.computed?.(collection) ?? {}, where);
-    for (const { collection: from } of linkedReads(named)) {
-      if (from.startsWith('sys.') || from === collection) continue;
-      const ids = read.get(from) ?? [];
-      if (!ids.includes(space.id)) ids.push(space.id);
-      read.set(from, ids);
-    }
-  }
-  if (read.size > MAX_LINKED_WAKES) return [];
-  const { tags, ...rest } = wake;
-  return [...read]
-    .filter(([, ids]) => ids.length <= MAX_WAKE_SPACES)
-    .map(([from, ids]) => {
-      // Its tags are the automation's collection's; only the spaces it must stay quiet in carry over.
-      const quiet = ids.filter((id) => tags?.[id]?.length === 0);
-      return {
-        ...rest,
-        collection: from,
-        spaces: ids,
-        ...(quiet.length > 0 ? { tags: Object.fromEntries(quiet.map((id) => [id, []])) } : {}),
-      };
-    });
 }
 
 /** Who a version was written for: the account that issued its note, else its own key */
@@ -501,8 +458,8 @@ export interface Trigger {
  * can read, so this is judged on the body: never fewer records than a
  * carrier's wake lets through, only fewer.
  */
-export function holdsFor(own: Automation, record: ReadableRecord, account: string): boolean {
-  const { collection, where } = ownQuery(own);
+export function holdsFor(own: OwnAutomation, record: ReadableRecord, account: string): boolean {
+  const { collection, where } = own.when.query;
   if (!record.verified || record.deleted || record.collection !== collection) return false;
   if (where === undefined) return true;
   return matches(
@@ -525,19 +482,19 @@ export function holdsFor(own: Automation, record: ReadableRecord, account: strin
  * `others`, someone else's. A carrier checks the same of a record's outside.
  */
 export function setsOff(
-  own: Automation,
+  own: OwnAutomation,
   space: string,
   trigger: Trigger,
   account: string,
   now = Date.now(),
 ): boolean {
   if (!inWindow(own, space, trigger.createdAt, now)) return false;
-  return !(own.when?.others && trigger.createdBy === account);
+  return !(own.when.others && trigger.createdBy === account);
 }
 
 /** Whether a new record an app just saw is one an automation of the account's own asks about */
 export function matchesRecord(
-  own: Automation,
+  own: OwnAutomation,
   record: ReadableRecord,
   account: string,
   now = Date.now(),

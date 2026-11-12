@@ -15,8 +15,8 @@ import { hold } from '../../core/tests/helpers/hold.js';
 import { joined } from '../../core/tests/helpers/joined.js';
 import { fileSpend } from '../src/agent-chat.js';
 import { community } from '../../core/src/space/presets.js';
-import { mayConfigure } from '../../core/src/schemas/connectors.js';
-import { automation, automationRun, botSettings, type Automation } from '../../core/src/schemas/index.js';
+import { mayConfigure } from '@minca/std';
+import { automation, automationRun, botSettings, type Automation } from '@minca/std';
 import { message } from '@minca/std';
 import { personaIn } from '../src/bot-runner.js';
 

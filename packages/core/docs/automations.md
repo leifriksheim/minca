@@ -36,7 +36,7 @@ found, and the newest record its computed fields read.
 You save an automation like any other record:
 
 ```ts
-import { automation } from '@minca/core/schemas';
+import { automation } from '@minca/std';
 
 await node.records.put(space.id, automation, {
   name: 'Mentioned',
@@ -253,9 +253,9 @@ every device off, run `minca agent --no-chat`, or a bot on a host.
 ### Fields
 
 Every field of an automation is listed under
-[`Automation`](https://minca.dev/api/schemas/interfaces/Automation/), and how
+[`Automation`](https://minca.dev/api/std/interfaces/Automation/), and how
 a runner is set up under
-[`startAutomations`](https://minca.dev/api/schemas/functions/startAutomations/).
+[`startAutomations`](https://minca.dev/api/std/functions/startAutomations/).
 
 ## The account's own
 
@@ -278,9 +278,11 @@ else sees it, and it looks at the spaces it names. For now it only notifies:
 }
 ```
 
-It is a `std.automation` body with three more fields: `spaces`, the spaces it
-looks at, `open`, where its notification leads, and `app`, the app that
-proposed it ([`Automation`](https://minca.dev/api/schemas/interfaces/Automation/)).
+It is a small shape of its own
+([`OwnAutomation`](https://minca.dev/api/core/interfaces/OwnAutomation/)): a
+`name`, `when` and `then` as below, `spaces`, the spaces it looks at, `open`,
+where its notification leads, `app`, the app that proposed it, `paused` and
+`since`. It has no other fields.
 
 It is kept as `sys.automation` at `automation:<id>`. A system collection has
 no definition, so no key of the account can redefine it to stop the person
@@ -288,12 +290,11 @@ pausing or removing one. That includes an app given all of it.
 
 It must pass `checkOwnAutomation`:
 
-- `then.kind` is `notify`.
-- No `every` and no `by`: the account runs it as records are written.
-- `when.query` names one collection, with no `include`. It may have a `where`
-  over each record alone: its body, its [computed fields](computed.md),
-  `link:<role>`, `@key`, `@collection`, `@createdBy` and `@createdAt`.
-- No `holds` and no `from`. `$me` is the account.
+- `then` is `{ kind: 'notify', text }`.
+- `when` is `{ query, others? }`, and `query` is one `collection` with an
+  optional `where` over each record alone: its body, its
+  [computed fields](computed.md), `link:<role>`, `@key`, `@collection`,
+  `@createdBy` and `@createdAt`. `$me` is the account.
 
 It notifies about a record when the record **comes to match**. That is when
 the record is written, or, for a `where` that names a computed field, when
@@ -359,13 +360,10 @@ So "near me" as `{ "place.cells": { "$in": [nine cells] } }` is nine tags.
 - A private space whose key the device lacks gets an empty list, and wakes
   nothing.
 
-A `where` that names a computed field changes when what the field reads is
-written. So each device also writes a wake for each collection that field
-reads (`wake:<id>:<collection>`), with no tags. Any new 👍 in those spaces
-wakes the app, which works the field out and judges. Only the fields the
-`where` names count. A filter whose fields read more than four collections
-gets no more wakes than its own, so a definition can't make every member's
-devices write a wake per name it lists.
+A wake is for the automation's own collection only. A `where` that names a
+computed field changes when what the field reads is written, like a 👍 that
+makes a to-do done: an app that is running notices that, and a carrier does
+not.
 
 A wake can only let through more than the app would, never less, with one
 exception. `$contains` on a text field matches part of it, and a tag only a

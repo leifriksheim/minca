@@ -249,7 +249,7 @@ the one it had.
 import type { NodeRecord } from '@minca/core';
 declare const message: NodeRecord;
 // ---cut---
-import { setActivity, activeNow } from '@minca/core/schemas';
+import { setActivity, activeNow } from '@minca/std';
 
 await setActivity(node, space.id, message.key, 'working', 'Reading the thread');
 ```

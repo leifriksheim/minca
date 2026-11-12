@@ -5,7 +5,7 @@
  */
 import { type P2PNode } from '@minca/core';
 import { runAction } from '@minca/actions';
-import { mayConfigure, type AutomationTrigger } from '@minca/core/schemas';
+import { mayConfigure, type AutomationTrigger } from '@minca/std';
 
 /**
  * What the model is told when an automation asks it: the automation's own words, which are

@@ -13,10 +13,19 @@
  * worked out from the records, so every device of the account lists the same,
  * whether or not it was open when they arrived.
  */
-import { holdsFor, ownQuery, setsOff, type Trigger } from '../space/own-automations.js';
-import { causeOf, linkedReads, namedComputed, type ComputedFields } from '../query/computed.js';
-import type { NodeRecord, OwnAutomationView, P2PNode } from './types.js';
-import { serial } from '../utils/serial.js';
+import {
+  causeOf,
+  holdsFor,
+  linkedReads,
+  namedComputed,
+  serial,
+  setsOff,
+  type ComputedFields,
+  type NodeRecord,
+  type OwnAutomationView,
+  type P2PNode,
+  type Trigger,
+} from '@minca/core';
 
 /** A record one of the app's automations asks about */
 export interface NotifyMatch {
@@ -75,7 +84,7 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
     const first = !holding.has(at);
     const held = holding.get(at) ?? new Set<string>();
     holding.set(at, held);
-    const { collection, where } = ownQuery(own);
+    const { collection, where } = own.when.query;
     const fields = (await node.collections.list(space)).find((c) => c.name === collection)?.computed ?? {};
     // Only the fields the filter names: what the others read can't change whether it holds.
     const named = namedComputed(fields, where);
@@ -187,4 +196,4 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
 }
 
 /** Whether an automation asks about some records of its collection, not all: the one to list a match under */
-const particular = (match: ActivityMatch) => ownQuery(match.automation).where !== undefined;
+const particular = (match: ActivityMatch) => match.automation.when.query.where !== undefined;

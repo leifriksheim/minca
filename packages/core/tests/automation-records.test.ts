@@ -23,7 +23,7 @@ import {
   automationRun,
   runAutomations,
   type Automation,
-} from '../src/schemas/automations.js';
+} from '@minca/std';
 
 const open: P2PNode[] = [];
 afterEach(async () => {

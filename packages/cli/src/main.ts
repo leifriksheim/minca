@@ -16,7 +16,7 @@ import { createInterface as createPromiseInterface } from 'node:readline/promise
 import { parseArgs } from 'node:util';
 import { isValidRecoveryCode, type P2PNode } from '@minca/core';
 import { NODE_ACTIONS, PEER_CONTENT_NOTE, runAction, type NodeAction } from '@minca/actions';
-import { suggestedAutomations } from '@minca/core/schemas';
+import { suggestedAutomations } from '@minca/std';
 import { homeAddress } from '@minca/core/session';
 import { runCarrier } from './carry.js';
 import { runAppNode, stdinLines } from './app-node.js';

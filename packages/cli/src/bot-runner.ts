@@ -15,7 +15,7 @@ import {
   startAutomations,
   type ActivityState,
   type AutomationTrigger,
-} from '@minca/core/schemas';
+} from '@minca/std';
 import {
   createAgentChat,
   spendFor,

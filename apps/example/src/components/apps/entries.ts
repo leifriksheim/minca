@@ -1,6 +1,6 @@
 import { matches, type NodeCollection, type NodeRecord, type P2PNode, type SpaceSummary } from '@minca/core';
 import { useAccess, useLive } from '@minca/react';
-import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@minca/core/schemas';
+import { asRunner, notifyOn, type AppAutomation } from '@minca/core/schemas';
 import {
   addTemplate,
   iconOf,
@@ -41,7 +41,8 @@ export function madeNotify(body: LauncherApp): ReadonlyArray<AppAutomation> {
 }
 
 /** An entry about records that name the person — "Mentions me", "A seat on my trip" */
-const isForMe = (notify: AppAutomation): boolean => namesTheRunner(notify);
+const isForMe = (notify: AppAutomation): boolean =>
+  JSON.stringify(notify.when.query.where ?? null).includes('"$me"');
 
 /** Whether a record is one of an app's "…me" entries is about: its `where` holds, with the person as `$me` */
 export function namesMe(

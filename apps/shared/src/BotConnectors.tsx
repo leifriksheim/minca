@@ -13,7 +13,7 @@ import {
   mayConfigure,
   type BotSettings,
   type Connector,
-} from '@minca/core/schemas';
+} from '@minca/std';
 import { useMay } from './may';
 import { useAction } from './action';
 import { popupFeatures } from '@minca/core/session';

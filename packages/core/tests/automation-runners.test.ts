@@ -16,7 +16,7 @@ import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { community } from '../src/space/presets.js';
 import { message } from '@minca/std';
 import { task } from '@minca/std';
-import { checkCron, cronMatches } from '../src/schemas/cron.js';
+import { checkCron, cronMatches } from '@minca/std';
 import {
   ACTIVITY_STALE_SECONDS,
   activeNow,
@@ -29,7 +29,7 @@ import {
   type Automation,
   type AutomationTrigger,
   type StartAutomationsOptions,
-} from '../src/schemas/automations.js';
+} from '@minca/std';
 import { memoryStores } from './helpers/memory-stores.js';
 import { until } from './helpers/until.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';

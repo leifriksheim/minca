@@ -8,7 +8,7 @@ import {
   automationOf,
   automationRun as runCollection,
   type AutomationRun,
-} from '@minca/core/schemas';
+} from '@minca/std';
 import { ideas, ruleWords, type PickedRule } from '../../automations';
 import { Person, usePeopleHere } from '../Person';
 import { Icon } from '@minca/app-shared/Icon';

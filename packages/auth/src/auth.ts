@@ -42,9 +42,6 @@ import {
   describeHost,
   isProtocolError,
   protocolError,
-  fromProposal,
-  proposalSpaces,
-  sameAutomation,
   type AccountStore,
   type AccountSummary,
   type AccountVault,
@@ -57,8 +54,10 @@ import {
   type P2PNode,
   type ProtocolErrorCode,
   type PeerTransport,
+  type OwnAutomation,
 } from '@minca/core';
-import type { Automation, AutomationApp, AutomationSpaces } from '@minca/core/schemas';
+import type { AutomationApp, AutomationSpaces } from '@minca/core/schemas';
+import { fromProposal, proposalSpaces, sameAutomation } from './proposals.js';
 import {
   deleteBrowserData,
   forgetPod,
@@ -610,8 +609,8 @@ function automationsFrom(
   proposals: ProposeRequest['automations'],
   kept: ReadonlyArray<number> | undefined,
   context: { readonly app: AutomationApp; readonly reach: AutomationSpaces },
-): Automation[] {
-  const made: Automation[] = [];
+): OwnAutomation[] {
+  const made: OwnAutomation[] = [];
   for (const [index, proposal] of proposals.entries()) {
     if (kept && !kept.includes(index)) continue;
     const spaces = proposalSpaces(proposal, context.reach);
@@ -625,7 +624,7 @@ function automationsFrom(
 async function addAutomations(
   node: P2PNode,
   origin: string,
-  automations: ReadonlyArray<Automation>,
+  automations: ReadonlyArray<OwnAutomation>,
 ): Promise<Array<{ id: string; name: string }>> {
   if (automations.length === 0) return [];
   const existing = (await node.automations.list()).filter((own) => own.app?.origin === origin);

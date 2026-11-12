@@ -17,7 +17,7 @@
  * reaches, never widen it.
  */
 import type { NodeRecord, P2PNode, StorageAdapter } from '@minca/core';
-import { CONNECT_REQUEST_SECONDS, connector, mayConfigure, type Connect } from '@minca/core/schemas';
+import { CONNECT_REQUEST_SECONDS, connector, mayConfigure, type Connect } from '@minca/std';
 import type { IncomingMessage } from 'node:http';
 import { isRecord } from './json.js';
 import type { Connected, HostConnector } from './connectors/connector.js';

@@ -30,7 +30,7 @@ import type { StoreFactory } from './stores.js';
 import type { FileLimits } from '../files/space-files.js';
 import type { JsonSchema, SchemaIssue } from '../schema/collection-def.js';
 import type { Keeper } from '../space/roles.js';
-import type { Automation } from '../schemas/automations.js';
+import type { OwnAutomation } from '../space/own-automations.js';
 import type {
   FundOffer,
   FundPayment,
@@ -688,7 +688,7 @@ export interface NodeCarriers {
 }
 
 /** One of the account's own automations, kept in its registry (`space/own-automations.ts`) */
-export interface OwnAutomationView extends Automation {
+export interface OwnAutomationView extends OwnAutomation {
   /** Its record key in the registry */
   readonly id: string;
 }
@@ -697,7 +697,7 @@ export interface OwnAutomationView extends Automation {
 export interface NodeAutomations {
   list(): Promise<ReadonlyArray<OwnAutomationView>>;
   /** Starts one: `when.query` is a collection and a `where` over each new record, `$me` the account */
-  add(own: Omit<Automation, 'since'> & { readonly since?: string }): Promise<OwnAutomationView>;
+  add(own: Omit<OwnAutomation, 'since'> & { readonly since?: string }): Promise<OwnAutomationView>;
   /** Renames it, pauses or resumes it */
   update(
     id: string,
