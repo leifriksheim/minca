@@ -537,7 +537,10 @@ _Source: `packages/auth/src/auth.ts` (`disconnect`, `revokeConnection`, `revokeW
 wants to hear about, kept in its registry. Only an app offers one, and only
 when the person asks it to: never while connecting (§2.4), never a carrier or
 a program connected by code, and never the home on its own. The home lets the
-person pause and remove what they kept, not add to it. The app uses the
+person pause and remove what they kept, not add to it. Nothing but an app
+that is running shows a match: the app itself, or one given the whole account
+that runs for the others. An app with `scope: spaces` cannot read the
+registry, so it shows none of its own. The app uses the
 exchange of §2.3 with a `ProposeRequest` in place of the `ConnectRequest`:
 
 | Field         | Type                   | Meaning                                                      |
@@ -964,7 +967,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back"._
 
 ### 4.3 Connecting a carrier through the account home
 
@@ -1004,7 +1007,7 @@ or a while has passed (the reference home waits at most 30 s in all). Once level
 holds its passes and its own record, and hands both to the account's other
 devices as they come online.
 
-_Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/auth/src/auth.ts` (`grantCarry`), `packages/core/src/node/node-carriers.ts` (`carriers.reached`, `carriers.settled`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`, `ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
+_Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/auth/src/auth.ts` (`grantCarry`), `packages/core/src/node/node-carriers.ts` (`carriers.reached`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
 
 ## 5. Calls
 

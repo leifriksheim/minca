@@ -38,7 +38,7 @@ test('a burst in one space is one notification; another space has its own', asyn
   assert.deepEqual(shown, [{ title: 'Team', body: '2 new messages' }]);
 });
 
-test('a notification leads where its wake says: the app that asked for it', async () => {
+test('a notification leads to the app that asked for it', async () => {
   const shown: Shown[] = [];
   const notifier = createNotifier({ show: (it) => shown.push(it), gatherMs: 20 });
   notifier.matched({ space: 'Team', collection: 'app.chat.message', at, open: 'https://app.minca.social/' });

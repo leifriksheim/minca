@@ -1035,8 +1035,7 @@ returns that one.
 Carry spaces aren't kept in the node's list. Each is derived again from its
 record. When the node starts, or the registry changes, it refills every carry
 space in the background. That opens every space the account holds, which is
-slow from a data folder, so signing in doesn't wait for it, and nor does
-adding an automation. Adding a carrier writes its passes before it returns.
+slow from a data folder, so signing in doesn't wait for it. Adding a carrier writes its passes before it returns.
 
 - `carriers.settled(waitMs)` waits for the refill under way, and says whether
   it finished. Use it before a window closes.

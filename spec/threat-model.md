@@ -1400,6 +1400,10 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     (05 §16.6; `packages/core/tests/files.test.ts`, "a chunk that is not the
     one its list names is dropped…", "a list of inner hashes, or of the wrong
     length, is refused").
+  - From a record's tags (02 §8) it learns which records of a private space
+    share a topic value, and how often, never the value. In a public space a
+    tag can be worked out from the space id, so a guessed value can be
+    checked against it (02 §8.2).
   - A host with limits that stops carrying a space over its free line takes
     nothing from its members: their copies, and their syncing with each
     other, are as before, and an account's subscription still names the

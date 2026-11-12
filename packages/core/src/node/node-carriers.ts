@@ -515,9 +515,7 @@ export function createNodeCarriers(ctx: NodeContext) {
           version.space === accountSpaceId,
       );
       if (mine.length === 0) return 0;
-      const taken = await (await ctx.runtime(accountSpaceId)).take(mine);
-      if (taken > 0) inBackground(passAll());
-      return taken;
+      return (await ctx.runtime(accountSpaceId)).take(mine);
     },
   });
 

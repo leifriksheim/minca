@@ -283,8 +283,7 @@ go 1 s later, so the goodbye gets out first.
 > **Planned:** not settled.
 >
 > - **Ringing with the app closed.** A ring reaches only devices with the
->   space open. Reaching a closed browser or a phone needs Web Push from a
->   carrier ([spec 06 §4.4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+>   space open. Reaching a closed browser or a phone needs Web Push.
 >   Not designed yet.
 > - **Big calls.** Past about six video streams, a full mesh runs out of
 >   upload. A forwarding server with end-to-end encryption on top could fix
