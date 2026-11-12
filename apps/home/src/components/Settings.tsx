@@ -660,7 +660,7 @@ function appDetail(app: Connection): ReadonlyArray<string> {
   });
   return [
     app.via === 'code' ? `By code, via ${host}${app.recordsOnly ? ', records only' : ''}` : host,
-    `${app.access === 'write' ? 'Reads and changes' : 'Reads'} ${what}`,
+    `${app.access !== 'write' ? 'Reads' : app.recordsOnly ? 'Reads, and writes records in,' : 'Reads and changes'} ${what}`,
     expired
       ? app.access === 'write'
         ? 'Stopped syncing; can still change things until disconnected'

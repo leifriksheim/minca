@@ -250,7 +250,11 @@ function connectionLine(): string {
   if (status?.state === 'expired' || left < 0)
     return 'Its connection to your account ran out, so nothing is syncing. Connect again to go on.';
   const lasts = left < 1 ? 'runs out today' : `lasts ${left} more day${left === 1 ? '' : 's'}`;
-  return `Its connection to your account ${lasts}. Connecting again renews it. To use another account here, disconnect first.`;
+  const reach =
+    grant.scope === 'account'
+      ? ''
+      : ' You gave it only some spaces: it keeps those online, and can’t tell you what arrives. Connect again and choose every space for the rest.';
+  return `Its connection to your account ${lasts}. Connecting again renews it. To use another account here, disconnect first.${reach}`;
 }
 
 /** Renews the connection, with the key it has. Another account needs a key of its own: disconnect first. */
