@@ -333,11 +333,8 @@ export function createNodeCarriers(ctx: NodeContext) {
   }
 
   const derivedCarry = new Map<string, Promise<SpaceRecord>>();
-  /** A carrier's carry space: derived, or for one added before they were, the one its invite names */
+  /** A carrier's carry space, derived; null on a node without the account key */
   async function carrySpaceOf(carrier: Carrier): Promise<SpaceRecord | null> {
-    // Through the registry alone: this runs while the space's runtime opens, which a join through the node would wait on.
-    if (carrier.invite && carrier.space)
-      return (await registry.get(carrier.space)) ?? registry.join(carrier.invite).catch(() => null);
     const { accountKey } = config;
     if (!accountKey) return null;
     const gen = carrier.gen ?? 0;
@@ -618,7 +615,6 @@ export function createNodeCarriers(ctx: NodeContext) {
       await inCarryTurn(async () => {
         const live = await liveCarriers();
         const did = live.find(({ carry }) => carry.space.id === spaceId)?.body.did;
-        // Every carry space it has: one added on two devices at once, before they were derived, has two.
         for (const { key, body, carry } of live.filter((one) => one.body.did === did)) {
           const rt = await ctx.runtime(carry.space.id);
           // Passes gone first, then the word to forget everything, then the carrier's record.
