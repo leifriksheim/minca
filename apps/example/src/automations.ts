@@ -2,15 +2,15 @@
 import { useEffect } from 'react';
 import { useAccount, useNode } from '@minca/react';
 import type { Filter, NodeCollection, QueryRecord } from '@minca/core';
+import { ME } from '@minca/core/schemas';
 import {
   IT,
-  ME,
   SCHEDULES,
   startAutomations,
   type Automation,
   type AutomationAction,
   type AutomationWhen,
-} from '@minca/core/schemas';
+} from '@minca/std';
 import { attachable, isObject, quickAddBody } from './derive/schema-ui';
 import {
   clausesWords,

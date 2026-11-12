@@ -1,14 +1,8 @@
 /** Notifications: each app's `notify` offered through the account home, then matched and shown by this app while it is open. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, useConnection, useNode, useWatched } from '@minca/react';
-import {
-  MAX_PROPOSALS,
-  ownQuery,
-  watchNotifications,
-  type AutomationProposal,
-  type OwnAutomationView,
-  type P2PNode,
-} from '@minca/core';
+import { MAX_PROPOSALS, type AutomationProposal, type OwnAutomationView, type P2PNode } from '@minca/core';
+import { watchNotifications } from '@minca/std';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
 import { TEMPLATES } from './components/apps/templates';
 import { madeNotify } from './components/apps/entries';
@@ -50,7 +44,7 @@ const lookingFor = (own: Pick<AppAutomation, 'when'>) =>
   `${own.when.query.collection} ${JSON.stringify(own.when.query.where ?? null)}`;
 
 /** The same, for one the account keeps */
-const keptFor = (own: OwnAutomationView) => lookingFor({ when: { query: ownQuery(own) } });
+const keptFor = (own: OwnAutomationView) => lookingFor({ when: { query: own.when.query } });
 
 /** This app's automations, as the account keeps them */
 export function useOwnAutomations(): ReadonlyArray<OwnAutomationView> {

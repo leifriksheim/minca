@@ -27,7 +27,7 @@ import {
   automationRun as runCollection,
   type Automation,
   type AutomationAction,
-} from '@minca/core/schemas';
+} from '@minca/std';
 import { profile } from '@minca/std';
 import {
   ACTIONS,

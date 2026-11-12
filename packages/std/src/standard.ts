@@ -3,7 +3,8 @@
  * shows an agent, and what a `std.*` name means.
  */
 import type { DefineCollection } from '@minca/core';
-import { activity, automation, automationRun, botSettings, connect, connector } from '@minca/core/schemas';
+import { activity, automation, automationRun } from './automations.js';
+import { botSettings, connect, connector } from './connectors.js';
 import { annotationGroups } from './library/annotations.js';
 import { socialGroups } from './library/social.js';
 import { publishingGroups } from './library/publishing.js';

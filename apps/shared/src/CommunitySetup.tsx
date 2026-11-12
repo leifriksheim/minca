@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { COLLECTION_DEFINE, SPACE_KEEPERS, type SpaceHostingView } from '@minca/core';
 import { useCollections, useNode } from '@minca/react';
 import { useAssignable, useMay } from './may';
-import { activity, INSTRUCT } from '@minca/core/schemas';
+import { activity, INSTRUCT } from '@minca/std';
 import { profile } from '@minca/std';
 import { Modal } from './Modal';
 import { Icon } from './Icon';

@@ -11,7 +11,7 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { deriveAccountRegistry } from '../src/space/account-registry.js';
-import { automation } from '../src/schemas/automations.js';
+import { automation } from '@minca/std';
 import { notifyOn } from '../src/space/own-automations.js';
 import { memoryStores } from './helpers/memory-stores.js';
 

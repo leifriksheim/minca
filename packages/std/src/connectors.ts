@@ -12,13 +12,12 @@
  * judges these records like any other. What a host checks of a `std.connect`
  * is in spec/08-hosting.md §3; see `packages/core/docs/bots.md`.
  */
-import type { BodyOf } from '../query/types.js';
-import type { P2PNode } from '../node/types.js';
-import { base64UrlEncode, utf8Encode } from '../utils/encoding.js';
-import { sha256 } from '../utils/hash.js';
-import { isObject } from '../utils/guards.js';
-import { define, person, text, when, words } from './fragments.js';
+import { base64UrlEncode, sha256, utf8Encode, type BodyOf, type P2PNode } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
 import { INSTRUCT } from './automations.js';
+import { isObject } from './guards.js';
+
+const { define, person, text, when, words } = fragments;
 
 /**
  * Whether `who` may configure `bot` in a space: tell it what to do, give it

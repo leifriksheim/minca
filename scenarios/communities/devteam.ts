@@ -9,7 +9,7 @@
 import { community } from '../../packages/core/src/space/presets.js';
 import { hold } from '../../packages/core/tests/helpers/hold.js';
 import { person } from '../../packages/core/tests/helpers/person.js';
-import { mayConfigure } from '../../packages/core/src/schemas/connectors.js';
+import { mayConfigure } from '../../packages/std/src/connectors.js';
 
 /** The team: a founder, an admin, a moderator, a member, and the bot, each with the role a test gives it */
 export async function devTeam(botRole: 'member' | 'moderator' | 'admin') {

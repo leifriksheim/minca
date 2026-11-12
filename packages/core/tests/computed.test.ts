@@ -18,8 +18,7 @@ import { hold } from './helpers/hold.js';
 import { until } from './helpers/until.js';
 import { person } from './helpers/person.js';
 import { team } from '../src/space/presets.js';
-import { automation, automationRun, runAutomations } from '../src/schemas/automations.js';
-import { linkedWakes, wakeFor, wakes } from '../src/space/own-automations.js';
+import { automation, automationRun, runAutomations } from '@minca/std';
 import { runAction } from '@minca/actions';
 import { usableComputed } from '../src/query/computed.js';
 import { remoteNode, serveNode } from '../src/node/remote.js';
@@ -400,47 +399,6 @@ describe('computed: what watches a filter on them', () => {
     await run();
     assert.deepEqual(told, ['Dishes is done'], 'once, and never Laundry, done before it was made');
   });
-
-  test('a wake for a filter on a computed field also wakes on what that field reads', async () => {
-    const own = {
-      name: 'Done',
-      when: { query: { collection: 'app.chore', where: { done: true } } },
-      then: { kind: 'notify' as const, text: 'Done' },
-      spaces: 'all' as const,
-      since: new Date().toISOString(),
-    };
-    const computed = (name: string) => (name === 'app.chore' ? storedComputed(chore) : undefined);
-    const spaces = [
-      { id: 'home', key: null, visibility: 'public' as const, topics: () => [], computed },
-      { id: 'locked', key: null, visibility: 'private' as const, topics: () => [], computed },
-    ];
-    const wake = await wakeFor(own, spaces, 'did:key:zMe');
-    const [also, ...more] = linkedWakes(own, wake, spaces);
-    assert.equal(more.length, 0);
-    assert.equal(also?.collection, 'app.nod');
-    assert.deepEqual(also?.tags, { locked: [] }, 'still quiet where this device has no key');
-    const version = {
-      id: 'x',
-      author: 'did:key:zAnna',
-      collection: 'app.nod',
-      createdAt: new Date().toISOString(),
-      body: {},
-      key: 'k',
-      seq: 0,
-      signature: 's',
-    };
-    assert.equal(wakes(also, 'home', version, 'did:key:zMe'), true, 'a new nod wakes the app, which judges');
-    assert.equal(wakes(also, 'locked', version, 'did:key:zMe'), false);
-    assert.deepEqual(
-      linkedWakes(
-        { ...own, when: { query: { collection: 'app.chore', where: { text: 'x' } } } },
-        wake,
-        spaces,
-      ),
-      [],
-      'a filter on the body alone needs no more',
-    );
-  });
 });
 
 describe('computed: an agent, through the actions', () => {
@@ -499,29 +457,6 @@ describe('computed: an agent, through the actions', () => {
 
 /** Found by adversarial review: each test fails without its fix */
 describe('computed: what review found', () => {
-  test('a wake is made only for the fields a filter names, and none past four collections', async () => {
-    const reads = (n: number, from = 0) =>
-      `[${Array.from({ length: n }, (_, i) => `linked("std.z${from + i}", "o")`).join(', ')}].size() > 0`;
-    const fields = { done: 'linked("app.nod", "on").size() >= 2', noise: reads(12) };
-    const own = (field: string) => ({
-      name: 'Done',
-      when: { query: { collection: 'app.chore', where: { [field]: true } } },
-      then: { kind: 'notify' as const, text: 'Done' },
-      spaces: 'all' as const,
-      since: new Date().toISOString(),
-    });
-    const spaces = [
-      { id: 'home', key: null, visibility: 'public' as const, topics: () => [], computed: () => fields },
-    ];
-    const wake = await wakeFor(own('done'), spaces, 'did:key:zMe');
-    assert.deepEqual(
-      linkedWakes(own('done'), wake, spaces).map((w) => w.collection),
-      ['app.nod'],
-      'what the other fields read is no reason to wake',
-    );
-    assert.deepEqual(linkedWakes(own('noise'), wake, spaces), [], 'twelve collections: no wakes but its own');
-  });
-
   test("linked()'s arguments count towards the limit on parts", () => {
     const calls = (from: number) =>
       `[${Array.from({ length: 160 }, (_, i) => `linked("std.z${from + i}", "o")`).join(',')}].size() > 0`;
@@ -666,24 +601,5 @@ describe('computed: what review found', () => {
         'the laundry was done before: for none, whatever came after',
       ].join('; '),
     );
-  });
-
-  test('an extra wake looks only at the spaces whose definition reads that collection', async () => {
-    const own = {
-      name: 'Done',
-      when: { query: { collection: 'app.chore', where: { done: true } } },
-      then: { kind: 'notify' as const, text: 'Done' },
-      spaces: 'all' as const,
-      since: new Date().toISOString(),
-    };
-    const reads = (name: string) =>
-      name === 'app.chore' ? { done: 'linked("std.message", "on").size() > 0' } : undefined;
-    const spaces = [
-      { id: 'club', key: null, visibility: 'public' as const, topics: () => [], computed: reads },
-      { id: 'family', key: null, visibility: 'public' as const, topics: () => [], computed: () => undefined },
-    ];
-    const wake = await wakeFor(own, spaces, 'did:key:zMe');
-    const [also] = linkedWakes(own, wake, spaces);
-    assert.deepEqual(also?.spaces, ['club'], 'a message in the family space wakes nothing');
   });
 });

@@ -4,7 +4,7 @@
  * read is how far, kept with the rest of what you have seen (`seen.ts`).
  */
 import { useEffect, useSyncExternalStore } from 'react';
-import type { ActivityMatch } from '@minca/core';
+import type { ActivityMatch } from '@minca/std';
 import { useAsync, useNode } from '@minca/react';
 import { MARK_BANDS } from '@minca/app-shared/mark';
 import { state } from '@minca/ui/tokens';

@@ -34,7 +34,7 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../src/identity/contact-key.js';
 import { until } from './helpers/until.js';
-import { watchNotifications, type NotifyMatch } from '../src/node/watch-notifications.js';
+import { watchNotifications, type NotifyMatch } from '@minca/std';
 import { notifyOn } from '../src/space/own-automations.js';
 import { asked, newAppKey, testAppKey } from './helpers/person.js';
 

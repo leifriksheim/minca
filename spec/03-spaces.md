@@ -1977,7 +1977,6 @@ every carry space (§14), one record each:
 
 ```
 sys.wake at wake:<id>                  ; <id>: the key of the automation it is made from
-sys.wake at wake:<id>:<collection>     ; made from the same one, waking on another collection
 Wake = { v: 1, collection, spaces: "all" | spaceId[], tags?: { <spaceId>: [tag] },
          others: boolean, open?: url, paused: boolean, since: ISO date }
 ```
@@ -2018,11 +2017,7 @@ entry lets any version through; an empty entry lets none through.
 
 What a wake is made from, and how a device works out its tags, is the
 library's: it keeps the account's own automations in the registry
-(`sys.automation`, §13.2) and makes one wake from each, at `wake:<id>`.
-When its `where` names a computed field, it makes one more for each
-collection that field reads, other than its own and `sys.*` ones, at
-`wake:<id>:<collection>`, naming only the spaces whose definition reads it,
-and none when they would be more than four
+(`sys.automation`, §13.2) and makes one wake from each, at `wake:<id>`
 ([automations](../packages/core/docs/automations.md#the-accounts-own)).
 A carrier treats every wake alike, whatever its key. A
 wake carries no words of the person's and no topic values, only their tags,
@@ -2032,7 +2027,7 @@ A carrier on one of the account's own devices may show a match there itself,
 as the Chrome extension's does; a wake is also what a carrier needs to wake an app
 that is closed ([06](06-nodes-and-sessions.md) §4.4).
 
-_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`, `linkedWakes`), `packages/core/src/node/node-carriers.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/shared/src/notify.ts`, `apps/extension/src/worker.ts` (`notify`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `packages/core/tests/computed.test.ts` ("a wake for a filter on a computed field also wakes on what that field reads"), `apps/desktop/tests/notify.test.ts`._
+_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`), `packages/core/src/node/node-carriers.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/shared/src/notify.ts`, `apps/extension/src/worker.ts` (`notify`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `apps/desktop/tests/notify.test.ts`._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). Delivery moves to

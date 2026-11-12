@@ -389,16 +389,14 @@ export {
   copyAccountData,
   createCarrierNode,
   createCarryCore,
-  watchNotifications,
 } from './node/index.js';
 export {
   MAX_PROPOSALS,
   checkAppAutomation,
   checkOwnAutomation,
-  ownQuery,
-  fromProposal,
-  proposalSpaces,
-  sameAutomation,
+  holdsFor,
+  setsOff,
+  matchesRecord,
 } from './space/own-automations.js';
 export type {
   StoreFactory,
@@ -457,18 +455,20 @@ export type {
   CacheConfig,
   NodeAutomations,
   OwnAutomationView,
+  OwnAutomation,
+  OwnQuery,
+  ReadableRecord,
+  Trigger,
   AutomationProposal,
   AppAutomation,
   Wake,
   WakeView,
-  ActivityMatch,
-  NotifyMatch,
-  WatchNotificationsOptions,
 } from './node/index.js';
 
 // Queries: plain-data filters, sorting, paging and includes over a space
 export { runQuery } from './query/engine.js';
-export { checkComputed, computedSchemas } from './query/computed.js';
+export { checkComputed, computedSchemas, causeOf, linkedReads, namedComputed } from './query/computed.js';
+export { serial } from './utils/serial.js';
 export type { ComputedFields, ComputedValues } from './query/computed.js';
 export type {
   ComputedIn,
@@ -503,7 +503,7 @@ export type {
   ResultOf,
   AnyIncluded,
 } from './query/types.js';
-export { plainQuery } from './query/types.js';
+export { plainQuery, nameOf } from './query/types.js';
 
 // Rules: who may create, edit and delete a collection's records, what must be unique,
 // and the conditions a version must meet, with the versions it cites

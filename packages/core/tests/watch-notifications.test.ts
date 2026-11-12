@@ -6,9 +6,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { watchNotifications, type ActivityMatch, type NotifyMatch } from '../src/node/watch-notifications.js';
+import { watchNotifications, type ActivityMatch, type NotifyMatch } from '@minca/std';
 import type { NodeEvent, NodeRecord, OwnAutomationView, P2PNode } from '../src/node/types.js';
 import type { Query } from '../src/query/types.js';
+import type { OwnQuery } from '../src/space/own-automations.js';
 import { until } from './helpers/until.js';
 import { isRecord } from '../src/utils/guards.js';
 
@@ -44,11 +45,11 @@ const written = (
 /** A message to me, from someone else */
 const dm = (key: string, ago = 0) => written(key, 'std.direct', { to: [ME] }, { ago });
 
-const DM: { readonly query: Query } = {
+const DM: { readonly query: OwnQuery } = {
   query: { collection: 'std.direct', where: { to: { $contains: '$me' } } },
 };
 /** A chore is done once it has two nods */
-const DONE: { readonly query: Query } = { query: { collection: 'app.chore', where: { done: true } } };
+const DONE: { readonly query: OwnQuery } = { query: { collection: 'app.chore', where: { done: true } } };
 
 /** Just enough of a node: one space, its records, a chore's computed field, and events to send by hand */
 function fakeNode(when = DM, others = false) {

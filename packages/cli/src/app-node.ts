@@ -30,10 +30,10 @@ import {
   openValue,
   sealValue,
   serveNode,
-  watchNotifications,
   type P2PNode,
   type RootSigner,
 } from '@minca/core';
+import { watchNotifications } from '@minca/std';
 import {
   checkGrant,
   connectToHome,

@@ -8,12 +8,7 @@
  */
 import * as z from 'zod';
 import { collection } from '../../packages/core/src/schema/collection-def.js';
-import {
-  automation,
-  automationRun,
-  matching,
-  runAutomations,
-} from '../../packages/core/src/schemas/automations.js';
+import { automation, automationRun, matching, runAutomations } from '../../packages/std/src/automations.js';
 import type { Version } from '../../packages/core/src/types.js';
 import { communityNode } from '../../packages/core/tests/helpers/community.js';
 import type { Person } from '../../packages/core/tests/helpers/person.js';

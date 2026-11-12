@@ -19,7 +19,7 @@ hold the grant.
 Ask with `mayConfigure`:
 
 ```ts
-import { mayConfigure } from '@minca/core/schemas';
+import { mayConfigure } from '@minca/std';
 
 async function openSettings(bot: string, person: string) {
   if (await mayConfigure(node, space.id, bot, person)) {
@@ -93,7 +93,7 @@ needs each service's id and name.
 
 ```ts
 import type { SpaceHostingView } from '@minca/core';
-import { askToConnect, connectPage } from '@minca/core/schemas';
+import { askToConnect, connectPage } from '@minca/std';
 
 async function connect(host: SpaceHostingView, bot: string) {
   // Opened in the click, before any await, or the browser blocks it.
@@ -114,7 +114,7 @@ and the bot deletes its `std.connector`.
 
 ```ts
 import type { SpaceHostingView } from '@minca/core';
-import { askToConnect, askToDisconnect } from '@minca/core/schemas';
+import { askToConnect, askToDisconnect } from '@minca/std';
 
 async function disconnect(host: SpaceHostingView, bot: string) {
   const ask = await askToConnect(node, space.id, bot, 'github', { disconnect: true });

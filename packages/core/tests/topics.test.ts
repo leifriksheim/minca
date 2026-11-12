@@ -27,11 +27,15 @@ import {
   matchesRecord,
   notifyOn,
   wakeFor,
+  type OwnAutomation,
 } from '../src/space/own-automations.js';
-import type { Automation } from '../src/schemas/automations.js';
 
 /** One of the account's own automations: new records of a collection that `where` matches */
-const own = (collection: string, where: Record<string, unknown> | undefined, since: string): Automation => ({
+const own = (
+  collection: string,
+  where: Record<string, unknown> | undefined,
+  since: string,
+): OwnAutomation => ({
   name: 'x',
   when: { query: { collection, ...(where ? { where } : {}) } },
   then: { kind: 'notify', text: 'x' },
@@ -654,14 +658,37 @@ describe('an automation of the account’s own: its where', () => {
   test('only notifies, by the account, on one collection read record by record', () => {
     const since = new Date().toISOString();
     const base = own('std.task', undefined, since);
-    assert.match(checkOwnAutomation({ ...base, then: { kind: 'ask', text: 'x' } })!, /only notifies/);
-    assert.match(checkOwnAutomation({ ...base, by: 'did:key:zBot' })!, /by the account/);
+    assert.equal(checkOwnAutomation(base), null);
     const { spaces: _spaces, ...nowhere } = base;
-    assert.match(checkOwnAutomation(nowhere)!, /spaces/);
-    assert.match(
-      checkOwnAutomation({ ...base, when: { query: { collection: 'std.task', include: {} } } })!,
-      /only collection and where/,
-    );
+    const query = base.when.query;
+    // Everything an automation in a space may say and this one may not.
+    const refused: ReadonlyArray<readonly [string, unknown, RegExp]> = [
+      ['asks an agent', { ...base, then: { kind: 'ask', text: 'x' } }, /then\.kind/],
+      ['adds a record', { ...base, then: { kind: 'add', collection: 'std.task', text: 'x' } }, /then/],
+      ['changes the record', { ...base, then: { kind: 'set', field: 'done', value: true } }, /then/],
+      ['runs as a bot', { ...base, by: 'did:key:zBot' }, /by/],
+      ['runs at set times', { ...base, every: '0 9 * * *' }, /every/],
+      ['looks nowhere', nowhere, /spaces/],
+      [
+        'reads what a query included',
+        { ...base, when: { query: { ...query, include: {} } } },
+        /only collection and where/,
+      ],
+      ['holds over what was found', { ...base, when: { query, holds: { done: true } } }, /holds/],
+      ['reads other spaces’ records', { ...base, when: { query, from: ['std.message'] } }, /from/],
+      ['carries what a builder picked', { ...base, picked: {} }, /picked/],
+      ['has a blank name', { ...base, name: ' ' }, /name/],
+      ['says nothing', { ...base, then: { kind: 'notify', text: '' } }, /text/],
+      ['is not dated', { ...base, since: 'soon' }, /since/],
+    ];
+    for (const [what, body, why] of refused) assert.match(checkOwnAutomation(body) ?? '', why, what);
+  });
+
+  test('keeps whatever an app called itself, blank included: a name is shown, never trusted', () => {
+    const base = own('std.task', undefined, new Date().toISOString());
+    const app = { origin: 'https://chat.example', name: '   ' };
+    assert.equal(checkOwnAutomation({ ...base, app }), null);
+    assert.match(checkOwnAutomation({ ...base, app: { ...app, name: 'x'.repeat(81) } }) ?? '', /app\.name/);
   });
 
   test('names a collection the way a definition must: every segment starts with a letter', () => {
