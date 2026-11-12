@@ -101,7 +101,7 @@ const OWN_AUTOMATION: JsonSchema = {
     open: { type: 'string', maxLength: 2000 },
     app: {
       type: 'object',
-      properties: { origin: { type: 'string', maxLength: 200 }, name: said(80) },
+      properties: { origin: { type: 'string', maxLength: 200 }, name: { type: 'string', maxLength: 80 } },
       required: ['origin'],
       additionalProperties: false,
     },

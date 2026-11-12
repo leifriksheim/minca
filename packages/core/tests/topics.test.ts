@@ -684,6 +684,13 @@ describe('an automation of the account’s own: its where', () => {
     for (const [what, body, why] of refused) assert.match(checkOwnAutomation(body) ?? '', why, what);
   });
 
+  test('keeps whatever an app called itself, blank included: a name is shown, never trusted', () => {
+    const base = own('std.task', undefined, new Date().toISOString());
+    const app = { origin: 'https://chat.example', name: '   ' };
+    assert.equal(checkOwnAutomation({ ...base, app }), null);
+    assert.match(checkOwnAutomation({ ...base, app: { ...app, name: 'x'.repeat(81) } }) ?? '', /app\.name/);
+  });
+
   test('names a collection the way a definition must: every segment starts with a letter', () => {
     const since = new Date().toISOString();
     assert.equal(checkOwnAutomation(own('app.chat-2.message', undefined, since)), null);

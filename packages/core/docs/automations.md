@@ -297,8 +297,9 @@ It must pass `checkOwnAutomation`:
   `@createdBy` and `@createdAt`. `$me` is the account.
 
 It notifies about a record when the record **comes to match**. That is when
-the record is written, or, for a `where` that names a computed field, when
-something the field reads is written, the way a 👍 can make a to-do done. It
+the record is written, or, for a `where` that names a computed field and an
+app that is running, when something the field reads is written, the way a 👍
+can make a to-do done. It
 notifies once per record. A record edited out of matching and back in is not
 news again, so nobody can notify the account over and over with one record.
 
@@ -365,9 +366,9 @@ computed field changes when what the field reads is written, like a 👍 that
 makes a to-do done: an app that is running notices that, and a carrier does
 not.
 
-A wake can only let through more than the app would, never less, with one
-exception. `$contains` on a text field matches part of it, and a tag only a
-whole value. Mark as topics only fields that hold whole values: people,
+A wake can only let through more than the app would, never less, with two
+exceptions. One is the computed field above. The other is `$contains` on a
+text field, which matches part of it, where a tag matches only a whole value. Mark as topics only fields that hold whole values: people,
 links, cells.
 
 [Spec 03 §15](../../../spec/03-spaces.md).

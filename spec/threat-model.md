@@ -459,9 +459,7 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or
     sorts on them, and that grow with every record a member links to it.
-    Each automation of an account's own that names one makes up to four more
-    wakes for its carriers to check, in the spaces whose definition reads
-    them. A `computed` member that is malformed, too large or named like a
+    A `computed` member that is malformed, too large or named like a
     field of the body's schema is read as having none, however it arrived;
     one that misreads the schemas, which `define` also refuses, is used, and
     gives null
