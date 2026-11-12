@@ -6,7 +6,7 @@ import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createNode } from '../src/node/node.js';
-import { createCarrierNode, type CarrierNode } from '../src/node/carrier.js';
+import { createCarrierNode, createCarryCore, type CarrierNode } from '../src/node/carrier.js';
 import { folderStores, type StoreFactory } from '../src/node/stores.js';
 import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
@@ -17,6 +17,8 @@ import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createMeshAuth } from '../src/network/peer-auth.js';
 import { makePass, openPass, carriedRecord } from '../src/space/pass.js';
+import { readKeyFromSeed } from '../src/space/space-access.js';
+import { base64UrlEncode } from '../src/utils/encoding.js';
 import { wakeFor, wakes } from '../src/space/own-automations.js';
 import type { CarrierEvent } from '../src/node/carrier.js';
 import { generateSpaceKey } from '../src/privacy/space-encryption.js';
@@ -129,7 +131,49 @@ describe('passes', () => {
       null,
     );
     assert.equal(await openPass({ ...pass, read: (await makePass(b)).read }, provider), null);
-    assert.equal(await openPass({ v: 1, space: pass.space }, provider), null);
+    assert.equal(await openPass({ ...pass, read: 7 }, provider), null);
+  });
+
+  test('a pass for a private space may bring no read key: it opens, with nothing to prove read with', async () => {
+    const registry = createSpaceManager(createMemoryAdapter(), provider);
+    const a = await registry.create({ name: 'A', visibility: 'private', creator: 'did:key:zCreator' });
+    const { space } = await makePass(a);
+    assert.deepEqual(await openPass({ v: 1, space }, provider), { space, read: null });
+  });
+
+  test('a carrier that is only dialled takes nothing from a pass but the space: no pass handed over reopens it', async () => {
+    const registry = createSpaceManager(createMemoryAdapter(), provider);
+    const record = await registry.create({
+      name: 'Club',
+      visibility: 'private',
+      creator: 'did:key:zCreator',
+    });
+    const fromAMember = await makePass(record);
+    const core = await createCarryCore({
+      key: await provider.generateKeyPair(),
+      stores: memoryStores(),
+      emit: () => {},
+      onClosed: () => {},
+    });
+    await core.addPass(fromAMember);
+    const opened = core.carried.get(record.space.id)?.runtime;
+    assert.ok(opened);
+    assert.equal(core.carried.get(record.space.id)?.record.read, null, 'it keeps no read key');
+
+    // Someone holding only the constitution: a pass with no seed, then one with a seed of their own making.
+    const seed = crypto.getRandomValues(new Uint8Array(32));
+    const madeUp = {
+      v: 1,
+      space: fromAMember.space,
+      read: base64UrlEncode(seed),
+      readKey: (await readKeyFromSeed(seed, provider)).did,
+    };
+    for (const pass of [{ v: 1, space: fromAMember.space }, madeUp]) {
+      await core.addPass(pass);
+      assert.equal(core.carried.get(record.space.id)?.runtime, opened, 'the space stays open as it was');
+    }
+    assert.equal(core.readKeyOf(record.space.id), record.space.readKey);
+    await core.close();
   });
 
   test("the read key from a pass is enough to join the space's peers", async () => {

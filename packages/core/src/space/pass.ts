@@ -43,7 +43,11 @@ export const CARRY_CLOSED_KEY = 'carry:closed';
 export interface SpacePass {
   readonly v: 1;
   readonly space: Space;
-  /** A private space's read key seed, base64url. Absent for a public space. */
+  /**
+   * A private space's read key seed, base64url, for a carrier that proves it
+   * may read. Absent for a public space, and for a carrier that devices dial:
+   * it proves nothing, and checks them against the space's history.
+   */
   readonly read?: string;
   /**
    * The public half of that read key, once the space's key has changed since
@@ -80,15 +84,16 @@ export async function makePass(record: SpaceRecord): Promise<SpacePass> {
 }
 
 /**
- * Checks a pass someone handed over: the space must hash to its id, and the
- * read key must be the one the space names.
+ * Checks a pass someone handed over: the space must hash to its id, and a
+ * read key it brings must be the one the space names. A pass says nothing of
+ * who handed it over, so nothing is taken from it but the space.
  */
 export async function openPass(value: unknown, provider: CryptoProvider): Promise<OpenedPass | null> {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkSpace checks the space, and read and readKey are checked where they are used
   const pass = value as Partial<SpacePass> | null;
   if (!pass || pass.v !== 1 || !pass.space) return null;
   if ((await checkSpace(pass.space)) !== null) return null;
-  if (pass.space.visibility === 'public') return { space: pass.space, read: null };
+  if (pass.space.visibility === 'public' || pass.read === undefined) return { space: pass.space, read: null };
   if (typeof pass.read !== 'string') return null;
   try {
     const read = await readKeyFromSeed(base64UrlDecode(pass.read), provider);

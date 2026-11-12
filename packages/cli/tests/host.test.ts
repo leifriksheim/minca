@@ -1624,6 +1624,34 @@ describe('a space paying for itself', () => {
     return { me, laptop, space: id };
   }
 
+  test('a host carries a private space from a pass with no read seed, and follows its read key from the history', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const served = await running({ free: true });
+    const url = `http://127.0.0.1:${served.port}`;
+    const laptop = await device(await account(), hub);
+    const { id: space } = await laptop.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+    const constitution = parseSpaceInvite(await laptop.spaces.invite(space)).space;
+
+    const client = createSpaceHostClient(url, (await describeHost(url)).did);
+    const { status } = await client.hand(space, { v: 1, space: constitution });
+    assert.equal(status.carrying, true);
+    assert.equal(status.readKey, constitution.readKey, 'the key the constitution names, before any history');
+
+    // The laptop reaches the host and proves it may read; the host learns the next key from what it syncs.
+    await laptop.collections.define(space, hostSchema);
+    await laptop.records.put(space, hostSchema.name, { url });
+    await hold(laptop, space);
+    await laptop.spaces.changeKey(space);
+    await until(
+      async () => {
+        const held = (await client.status(space)).status.readKey;
+        return held !== undefined && held !== constitution.readKey;
+      },
+      6000,
+      'the host to name the new read key',
+    );
+  });
+
   test('a member’s device hands a free host the pass, and the host carries the space for itself', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const served = await running({ free: true });
