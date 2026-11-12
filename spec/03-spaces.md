@@ -1957,10 +1957,6 @@ reads `carry:closed` forgets everything. Adding the same DID again counts the
 removed record, so it gets a new carry space, never the one that told it to
 forget. The account registry and contacts space are passed too.
 
-A `sys.carrier` record written before carry spaces were derived also has
-`space` and `invite`: its carry space is the one `invite` names, which a
-device joins with it. Such records are read, never written.
-
 _Source: `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts` (`deriveCarrySpace`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `carriers`, `carrySpaceOf`, `carrierRecords`). Tests: `packages/core/tests/carrier.test.ts` ("passes", "a carrier", "added again after it was removed…"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples")._
 
 ---

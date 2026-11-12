@@ -131,9 +131,6 @@ export interface Carrier {
   readonly gen?: number;
   /** When the account stopped using it. Kept, so adding it again takes a new carry space. */
   readonly removed?: string;
-  /** Added before carry spaces were derived: the carry space made for it, and a view-only invite to it */
-  readonly space?: string;
-  readonly invite?: string;
 }
 
 /**

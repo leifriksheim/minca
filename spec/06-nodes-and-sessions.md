@@ -883,10 +883,6 @@ again keeps what it holds, and is never sent `carry:closed` (below) for a
 space it is still using. One added again after it was removed gets a new
 carry space, one `gen` past its removed record's.
 
-A `sys.carrier` record from before carry spaces were derived names its carry
-space and a view-only invite to it in `space` and `invite`; a node opens that
-space with the invite. No node writes one.
-
 A removal made on a device that is offline can cross a reconnect made
 through another device that has not heard of it yet. The removal wins: once
 it arrives, the carrier reads `carry:closed`, forgets what it held and says
