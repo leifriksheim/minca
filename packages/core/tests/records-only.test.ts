@@ -39,7 +39,7 @@ import {
   useSchemas as addSchemas,
   type Blueprint,
   type DraftCollection,
-} from '../src/schemas/index.js';
+} from '@minca/std';
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import { grantSigner, isProposeRequest, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
 import {

@@ -15,7 +15,7 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { encodeInviteLink } from '../src/space/invite-link.js';
-import { host } from '../src/schemas/library/community.js';
+import { host } from '@minca/std';
 import { memoryStores } from './helpers/memory-stores.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 

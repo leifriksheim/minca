@@ -17,7 +17,7 @@ import type { Link } from '../types.js';
 import { didOf } from '../identity/did.js';
 import { verifyNote, type Delegation } from '../identity/ucan.js';
 import { grantsRecordsOnly, noteSpaces } from '../identity/abilities.js';
-import { direct as directSchema } from '../schemas/library/publishing.js';
+import { direct as directSchema } from '../schemas/direct.js';
 import { openDirect, sealDirect, type DirectBody } from '../privacy/direct.js';
 import { isRecord } from '../utils/guards.js';
 import { serial } from '../utils/serial.js';

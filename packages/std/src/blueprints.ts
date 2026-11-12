@@ -19,20 +19,23 @@
  * update is applied, the one it replaced is superseded: applying it would
  * only undo the update, so it is not offered again.
  */
-import type { NodeCollection, NodeRecord, P2PNode } from '../node/types.js';
 import {
+  canonicalize,
+  checkContractShape,
   checkStoredCollection,
+  describeCollection,
   isStoredCollection,
+  runContracts,
   schemaProblem,
+  storedContract,
   toJsonSchema,
-} from '../schema/collection-def.js';
+  type NodeCollection,
+  type NodeRecord,
+  type P2PNode,
+} from '@minca/core';
+import { definedIn } from '@minca/core/schemas';
+import { isObject } from './guards.js';
 import { standardDefinition } from './standard.js';
-import { definedIn } from './defined.js';
-import { isObject } from '../utils/guards.js';
-import { canonicalize } from '../schema/version.js';
-import { describeCollection } from '../records/describe.js';
-import { storedContract } from '../records/contract-builder.js';
-import { checkContractShape, runContracts } from '../records/contracts.js';
 import { blueprint, type Blueprint, type DraftCollection } from './library/collections.js';
 
 /** Why this can't be a blueprint, or null when it can */

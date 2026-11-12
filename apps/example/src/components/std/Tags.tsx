@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCan, useNode } from '@minca/react';
 import type { NodeRecord, SpaceSummary } from '@minca/core';
-import { tag } from '@minca/core/schemas';
+import { tag } from '@minca/std';
 import { bodyOf } from '../../derive/schema-ui';
 
 /** A tag's label, if the record is one */

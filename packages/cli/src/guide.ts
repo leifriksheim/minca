@@ -7,14 +7,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { COLLECTION_DEFINE, type P2PNode } from '@minca/core';
-import {
-  SCHEDULES,
-  checkCron,
-  profile,
-  automation,
-  automationRun,
-  standardDefinition,
-} from '@minca/core/schemas';
+import { SCHEDULES, checkCron, automation, automationRun } from '@minca/core/schemas';
+import { profile, standardDefinition } from '@minca/std';
 import * as ask from './ask.js';
 import { pickCollection, pickSpace } from './complete.js';
 import { commaList, errorCode, isRecord } from './json.js';

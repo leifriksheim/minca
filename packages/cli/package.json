@@ -38,6 +38,7 @@
     "@minca/actions": "*",
     "@minca/core": "*",
     "@minca/relay": "*",
+    "@minca/std": "*",
     "@modelcontextprotocol/client": "^2.4.0",
     "@modelcontextprotocol/node": "^2.1.2",
     "@modelcontextprotocol/server": "^2.4.0",

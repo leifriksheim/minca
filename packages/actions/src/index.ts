@@ -25,8 +25,8 @@ import {
   type P2PNode,
   type Query,
 } from '@minca/core';
+import { ACTIVITY_STATES, setActivity } from '@minca/core/schemas';
 import {
-  ACTIVITY_STATES,
   CHOOSING,
   applyBlueprint,
   blueprint,
@@ -35,7 +35,6 @@ import {
   lookalikes,
   proposeCollections,
   reviewBlueprint,
-  setActivity,
   standardCollections,
   standardDefinition,
   standardGroups,
@@ -43,7 +42,7 @@ import {
   tryContracts,
   type Blueprint,
   type ContractExample,
-} from '@minca/core/schemas';
+} from '@minca/std';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

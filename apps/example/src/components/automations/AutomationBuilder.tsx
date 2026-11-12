@@ -19,7 +19,6 @@ import { nameOf, type People } from '../../derive/people';
 import {
   INSTRUCT,
   SCHEDULES,
-  profile,
   checkCron,
   activity as activityCollection,
   matching,
@@ -29,6 +28,7 @@ import {
   type Automation,
   type AutomationAction,
 } from '@minca/core/schemas';
+import { profile } from '@minca/std';
 import {
   ACTIONS,
   COUNT_OPS,

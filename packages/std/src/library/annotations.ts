@@ -1,6 +1,8 @@
 /** Annotations: records that attach to any other record with an `about` link. */
-import { about, choice, count, people, person, text, define, words } from '../fragments.js';
-import type { BodyOf } from '../../query/types.js';
+import type { BodyOf } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
+
+const { about, choice, count, people, person, text, define, words } = fragments;
 
 /** An emoji reaction to any record. Link it: `{ rel: 'about', to: <key> }`. */
 export const reaction = define({

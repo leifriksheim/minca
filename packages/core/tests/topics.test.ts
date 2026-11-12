@@ -38,11 +38,11 @@ const own = (collection: string, where: Record<string, unknown> | undefined, sin
   spaces: 'all',
   since,
 });
-import { channel, message, post } from '../src/schemas/library/publishing.js';
-import { comment } from '../src/schemas/library/annotations.js';
-import { task } from '../src/schemas/library/planning.js';
-import { standardCollections } from '../src/schemas/blueprints.js';
-import { standardDefinition } from '../src/schemas/standard.js';
+import { channel, message, post } from '@minca/std';
+import { comment } from '@minca/std';
+import { task } from '@minca/std';
+import { standardCollections } from '@minca/std';
+import { standardDefinition } from '@minca/std';
 import { toJsonSchema } from '../src/schema/collection-def.js';
 import { isRecord } from '../src/utils/guards.js';
 import { person } from './helpers/person.js';

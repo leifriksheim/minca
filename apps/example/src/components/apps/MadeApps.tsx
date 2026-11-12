@@ -7,7 +7,7 @@ import {
   reviewBlueprint,
   type Blueprint,
   type BlueprintReview,
-} from '@minca/core/schemas';
+} from '@minca/std';
 import { AppBoard } from './AppBoard';
 import {
   addMade,

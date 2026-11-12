@@ -1,15 +1,13 @@
 /**
  * The space's own collections: blueprints of collections someone proposes,
  * and guides to how the ones it has are meant to be used. Neither is about
- * any one app. How they are used is in `schemas/blueprints.ts` and
- * `schemas/guides.ts`.
+ * any one app. How they are used is in `packages/std/src/blueprints.ts` and
+ * `packages/std/src/guides.ts`.
  */
-import type { JsonSchema } from '../../schema/collection-def.js';
-import type { LinkDeclaration } from '../../records/links.js';
-import type { CollectionRules } from '../../records/rules.js';
-import type { CollectionContract } from '../../records/contracts.js';
-import type { BodyOf } from '../../query/types.js';
-import { define, typed } from '../fragments.js';
+import type { BodyOf, CollectionContract, CollectionRules, JsonSchema, LinkDeclaration } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
+
+const { define, typed } = fragments;
 
 /** One collection a blueprint would add, as `collections_define` takes it, without a version: the space decides that */
 export interface DraftCollection {

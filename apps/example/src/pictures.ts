@@ -7,7 +7,7 @@
 import { createContext, useContext } from 'react';
 import { useWatched } from '@minca/react';
 import type { FileRef, SpaceSummary } from '@minca/core';
-import { spaceProfile, type SpaceProfileRecord } from '@minca/core/schemas';
+import { spaceProfile, type SpaceProfileRecord } from '@minca/std';
 import { fileRefOf } from './derive/kinds';
 
 /** Where someone's picture is: the space with their newest profile, and its picture there, if any */

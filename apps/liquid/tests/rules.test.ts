@@ -4,7 +4,7 @@
  */
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { useSchemas } from '@minca/core/schemas';
+import { useSchemas } from '@minca/std';
 import type { P2PNode } from '@minca/core';
 import { createNode } from '../../../packages/core/src/node/node.js';
 import { createIdentityManager } from '../../../packages/core/src/identity/identity-manager.js';

@@ -7,8 +7,8 @@
  * where a twin is about to be made. See "How the library is shaped" in
  * `packages/core/docs/standard-library.md`.
  */
-import type { DefineCollection } from '../node/types.js';
-import { isRecord } from '../utils/guards.js';
+import type { DefineCollection } from '@minca/core';
+import { isRecord } from './guards.js';
 
 /** What to use for what, one line each */
 export const CHOOSING: ReadonlyArray<string> = Object.freeze([

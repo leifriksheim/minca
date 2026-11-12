@@ -2,7 +2,10 @@
  * Time and planning: calendars, events and RSVPs, bookable slots, tasks on a
  * board, projects, time tracking, reminders, habits.
  */
-import {
+import type { BodyOf } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
+
+const {
   about,
   choice,
   count,
@@ -19,8 +22,7 @@ import {
   when,
   words,
   person,
-} from '../fragments.js';
-import type { BodyOf } from '../../query/types.js';
+} = fragments;
 
 /** A calendar that events are `in`. */
 export const calendar = define({

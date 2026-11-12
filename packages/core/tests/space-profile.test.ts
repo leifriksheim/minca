@@ -3,7 +3,7 @@ import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import type { P2PNode } from '../src/node/types.js';
 import { community } from '../src/space/presets.js';
-import { spaceProfile, type SpaceProfileRecord } from '../src/schemas/library/social.js';
+import { spaceProfile, type SpaceProfileRecord } from '@minca/std';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { forge, open, person, settle } from './helpers/person.js';
 import { hold, letGo } from './helpers/hold.js';
