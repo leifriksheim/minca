@@ -1,16 +1,10 @@
 /**
- * What is new: records others wrote in an app since you last opened it. When you last looked is kept
- * in the account registry (`node.account.space()`), one record per space, so every device of yours
- * agrees: what you read on your phone is not new on your laptop.
- *
- * Every edit to a record leaves a stub of a few hundred bytes that is kept for good, and every device
- * holds the registry whole. So what is kept is how far you have read, the newest record you saw in
- * each app, not when you looked: opening an app with nothing new changes nothing. A look is held in
- * memory and written when you leave the app or hide the page, or after a quiet spell, in case the tab
- * is closed before either: an edit each time you read something new, not one a visit or a message.
+ * What is new: records others wrote in an app since you last opened it here. How far you have read
+ * is kept in this browser (`seen-store.ts`), not synced: what you read on your phone is still new on
+ * your laptop.
  */
 import { useEffect, useSyncExternalStore } from 'react';
-import type { P2PNode, SpaceSummary } from '@minca/core';
+import type { SpaceSummary } from '@minca/core';
 import { createSeenStore, type Seen } from './seen-store';
 import { direct } from '@minca/core/schemas';
 import { useAccount, useCollections, useLive, useNode } from '@minca/react';
@@ -19,22 +13,21 @@ import { namesMe, useSpaceApps, type AppEntry } from './components/apps/entries'
 /** How far ahead a writer's clock may run before a record dated so waits for its time */
 const AHEAD_MS = 5 * 60 * 1000;
 
-const stores = new WeakMap<P2PNode, ReturnType<typeof createSeenStore>>();
+const stores = new Map<string, ReturnType<typeof createSeenStore>>();
 
 function useSeenStore() {
-  const node = useNode();
-  let store = stores.get(node);
+  const { did } = useNode();
+  let store = stores.get(did);
   if (!store) {
-    store = createSeenStore(node);
-    stores.set(node, store);
+    store = createSeenStore(did);
+    stores.set(did, store);
   }
   return store;
 }
 
 /**
  * Keeps an app in a space read while it is open and the page is shown, up to its newest record
- * (`upTo`, a time), so what arrives meanwhile counts as seen. Written when you leave the app or hide
- * the page.
+ * (`upTo`, a time), so what arrives meanwhile counts as seen.
  */
 export function useLookingAt(space: string, app: string | undefined, upTo: string): void {
   const store = useSeenStore();
@@ -42,14 +35,10 @@ export function useLookingAt(space: string, app: string | undefined, upTo: strin
     if (!app) return;
     const look = () => {
       if (globalThis.document.visibilityState === 'visible') store.look(space, app, upTo);
-      else store.keep(space);
     };
     look();
     globalThis.document.addEventListener('visibilitychange', look);
-    return () => {
-      globalThis.document.removeEventListener('visibilitychange', look);
-      store.keep(space);
-    };
+    return () => globalThis.document.removeEventListener('visibilitychange', look);
   }, [store, space, app, upTo]);
 }
 
@@ -59,13 +48,13 @@ export const seenAt = (seen: Seen, space: string, app: string): number => {
   return one ? Date.parse(one.apps[app] ?? one.since) : Number.POSITIVE_INFINITY;
 };
 
-/** What you have seen, across your devices */
+/** What you have seen in this browser */
 export function useSeen(): Seen {
   const store = useSeenStore();
   return useSyncExternalStore(store.subscribe, store.read);
 }
 
-/** Starts a space's seen state the first time any device of yours shows it */
+/** Starts a space's seen state the first time this browser shows it */
 export function useBegin(space: string): void {
   const store = useSeenStore();
   const seen = useSeen();

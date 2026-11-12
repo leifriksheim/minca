@@ -1,40 +1,50 @@
-import { test } from 'node:test';
+import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { createFakeHub } from '../../../packages/core/tests/helpers/fake-transport.js';
-import { person } from '../../../packages/core/tests/helpers/person.js';
-import { team } from '@minca/core';
 import { createSeenStore } from '../src/seen-store.js';
-import { waitFor } from './helpers.js';
 
-test('a look is written once, not again each time the account changes', async () => {
-  const hub = createFakeHub({ latencyMs: 1 });
-  const alice = await person(hub, { accountKey: true });
-  const { id: space } = await alice.node.spaces.create({ name: 'Climbing', ...team, visibility: 'private' });
-  const registry = await alice.node.account.space();
-  assert.ok(registry);
-  const store = createSeenStore(alice.node);
-  // Once the registry is read, a space none of her devices has seen begins.
-  await waitFor(async () => {
-    store.begin(space);
-    return store.read().has(space);
-  }, 'the registry is read');
+const ACCOUNT = 'did:key:zAlice';
 
-  // A look counts only once it is later than the space began, in another millisecond.
-  await waitFor(async () => {
-    store.look(space, 'chat', new Date().toISOString());
-    return 'chat' in (store.read().get(space)?.apps ?? {});
-  }, 'the look is taken');
-  store.keep(space);
-  const seenRecord = async () => {
-    const { records } = await alice.node.records.query(registry, { collection: 'minca.seen' });
-    return records[0];
-  };
-  const seqOfLook = 1;
-  await waitFor(async () => ((await seenRecord())?.seq ?? -1) >= seqOfLook, 'the look is written');
-  // Each write is an account change, which reads the registry again: it must find nothing to add.
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  const record = await seenRecord();
-  assert.ok(record);
-  assert.equal(record.seq, seqOfLook, `written ${record.seq + 1} times`);
-  await alice.node.close();
+beforeEach(() => {
+  const kept = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => kept.get(key) ?? null,
+      setItem: (key: string, value: string) => void kept.set(key, value),
+    },
+  });
+});
+
+test('a look is kept for the next visit, and for that account only', () => {
+  const store = createSeenStore(ACCOUNT);
+  store.begin('climbing');
+  const readUpTo = new Date(Date.parse(store.read().get('climbing')!.since) + 1).toISOString();
+  // A look is never later than now, so wait out the millisecond it is dated in.
+  while (new Date().toISOString() < readUpTo);
+  store.look('climbing', 'chat', readUpTo);
+
+  assert.equal(createSeenStore(ACCOUNT).read().get('climbing')?.apps.chat, readUpTo);
+  assert.equal(createSeenStore('did:key:zBob').read().size, 0);
+});
+
+test('a look never moves back, and a record dated ahead reads only up to now', () => {
+  const store = createSeenStore(ACCOUNT);
+  store.begin('climbing');
+  const began = store.read().get('climbing')!.since;
+
+  store.look('climbing', 'chat', new Date(Date.parse(began) - 60_000).toISOString());
+  assert.deepEqual(store.read().get('climbing')?.apps, {});
+
+  while (new Date().toISOString() <= began);
+  store.look('climbing', 'chat', '2999-01-01T00:00:00.000Z');
+  const read = store.read().get('climbing')?.apps.chat;
+  assert.ok(read && read > began && read <= new Date().toISOString(), `read up to ${read}`);
+});
+
+test('what is kept but is not a seen state is left out', () => {
+  globalThis.localStorage.setItem(
+    `minca.seen:${ACCOUNT}`,
+    JSON.stringify({ climbing: { since: '2026-01-01T00:00:00.000Z', apps: {} }, broken: { apps: [] } }),
+  );
+  assert.deepEqual([...createSeenStore(ACCOUNT).read().keys()], ['climbing']);
 });
