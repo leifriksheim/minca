@@ -7,6 +7,9 @@
 }
 
 .dialog {
+  /* In the middle of the screen, as the browser places a modal */
+  position: fixed;
+  inset: 0;
   width: min(560px, 100% - 32px);
   overflow-y: auto;
 
