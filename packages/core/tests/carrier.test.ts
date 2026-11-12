@@ -182,6 +182,15 @@ describe('a carrier', () => {
     assert.equal((await home.carriers.list()).length, 1);
   });
 
+  test('the carry space of a carrier that was removed is still a carry space', async () => {
+    const me = await account();
+    const home = await device(me, null);
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    await home.carriers.remove(added.space);
+    assert.deepEqual(await home.carriers.list(), []);
+    await assert.rejects(home.spaces.leave(added.space), /carry space cannot be left/);
+  });
+
   test('adding one that fails leaves no carry space behind, to come back as a space the account uses', async () => {
     const me = await account();
     const stores = memoryStores();

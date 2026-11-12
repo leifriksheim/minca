@@ -825,11 +825,15 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     down ends founder status, and does nothing else", "a revoke stops the
     key…").
 - **By design** (the principle above).
-  - A browser keeps an app's key, and an account home's lasting writer key,
-    as the seed it is derived from. A script running in that origin can copy
-    the key, not only sign with it while it runs, as it can copy the session
-    token of any web app
-    ([#444](https://github.com/leifriksheim/minca/issues/444);
+  - A browser keeps an app's key, a carrier's key in the extension, and an
+    account home's lasting writer key, as the seed it is derived from. A
+    script running in that origin can copy the key, not only sign with it
+    while it runs. A copied app key does what its grant allows. A copied
+    writer key's note grants `/`, so it is the account until that key is
+    revoked, which a script in the home's origin already is while the account
+    is open there
+    ([#444](https://github.com/leifriksheim/minca/issues/444),
+    [#165](https://github.com/leifriksheim/minca/issues/165);
     `packages/core/src/session/connect.ts`, `appKey`;
     `packages/core/src/node/writer-keys.ts`, `browserWriterKeys`).
   - What it signed before the revoke stands. The revoke stops the key from
