@@ -41,7 +41,7 @@ import type { LooseSigner } from '../records/loose.js';
 import { foundersOf } from '../space/constitution.js';
 import { unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
-import { serial } from '../utils/serial.js';
+import { queue, serial } from '../utils/serial.js';
 import { contactKeyPair, deriveMemberKeyBytes } from '../identity/contact-key.js';
 import { createMailboxClient } from '../network/relays.js';
 import {
@@ -197,7 +197,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const contactsSpaceId = contactsRecord?.space.id ?? config.contactsSpace ?? null;
   // Kept in the node's own list like a joined space, so it can be shared with an app like one.
   if (contactsRecord && !(await registry.get(contactsRecord.space.id))) {
-    await joinRegistry(await encodeSpaceInvite(contactsRecord, looseSigner(), provider));
+    await registry.join(await encodeSpaceInvite(contactsRecord, looseSigner(), provider));
   }
   async function kindOf(spaceId: string): Promise<OwnSpaceKind | null> {
     if (spaceId === accountSpaceId) return 'registry';
@@ -355,10 +355,26 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * record that makes the difference may be the one that arrived meanwhile.
    */
   const joining = new Map<string, () => Promise<void>>();
-  async function joinRegistry(invite: string): Promise<SpaceRecord> {
-    const record = await registry.join(invite);
-    noInviteWaiting.delete(record.space.id);
-    return record;
+  const registryTurns = new Map<string, ReturnType<typeof queue>>();
+  /** One join or removal of a space at a time: a removal amid a join would leave the space listed without its keys */
+  function inTurnFor<T>(spaceId: string, change: () => Promise<T>): Promise<T> {
+    let inTurn = registryTurns.get(spaceId);
+    if (!inTurn) registryTurns.set(spaceId, (inTurn = queue()));
+    return inTurn(change);
+  }
+  /** Joins a space in the registry, leaving no runtime open under what the node held of it before */
+  async function joinRegistry(invite: string, memberKey?: Uint8Array): Promise<SpaceRecord> {
+    const spaceId = parseSpaceInvite(invite).space.id;
+    return inTurnFor(spaceId, async () => {
+      const heldBefore = (await registry.get(spaceId)) !== null;
+      const openBefore = runtimes.get(spaceId);
+      const record = await registry.join(invite, memberKey);
+      // Held already, or still open from leaving it, what is open may lack the keys that came. One
+      // opened since the join listed the space has them all, and is left open: someone is using it.
+      if (heldBefore || (openBefore && runtimes.get(spaceId) === openBefore)) await closeRuntime(spaceId);
+      noInviteWaiting.delete(spaceId);
+      return record;
+    });
   }
   function finishJoining(spaceId: string): Promise<void> {
     if (noInviteWaiting.has(spaceId)) return Promise.resolve();
@@ -500,7 +516,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Opened while its record is here: a runtime needs it to open.
     const open = runtime(spaceId);
     await open.catch(() => null);
-    await registry.remove(spaceId);
+    await inTurnFor(spaceId, () => registry.remove(spaceId));
     inBackground(
       giveUpPlace(spaceId).then(async () => {
         // Joined again meanwhile, it was closed for the new key: leave the new one open.
@@ -537,8 +553,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (!membership.deleted && !held.has(spaceId)) {
         try {
           await joinRegistry(membership.body!.invite);
-          // One still open from leaving it can't read under the new key.
-          await closeRuntime(spaceId);
           changed = true;
         } catch {
           // An unreadable invite; the next version written for it will do.
@@ -606,7 +620,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     runtimes,
     findRecord,
     kindOf,
-    joinRegistry,
     requireAccount,
     ownRecords,
     accountRecords,
@@ -695,10 +708,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async join(invite, options = {}) {
-      const record = await joinRegistry((await carrying.resolveInvite(invite)).long);
-      if (options.memberKey) await registry.setMemberKey(record.space.id, options.memberKey);
-      // A runtime opened before the key arrived would still be unable to read.
-      await closeRuntime(record.space.id);
+      const record = await joinRegistry((await carrying.resolveInvite(invite)).long, options.memberKey);
       await remember(record.space.id);
       // Uses the invite now if its record is here already — otherwise when it arrives.
       await finishJoining(record.space.id);
@@ -715,7 +725,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         await giveUpPlace(spaceId);
         await forget(spaceId);
         await closeRuntime(spaceId);
-        await registry.remove(spaceId);
+        await inTurnFor(spaceId, () => registry.remove(spaceId));
       } finally {
         leaving.delete(spaceId);
       }

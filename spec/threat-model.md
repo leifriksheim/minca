@@ -628,8 +628,8 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     returns as data from others, not instructions. Showing only guides
     from members who may define collections needs a check the node itself
     makes, not one read off the grants, and guides keyed per author
-    (`guidesOf`, `writeGuide` in `packages/core/src/schemas/guides.ts`;
-    `collections_list` in `packages/core/src/node/actions.ts`;
+    (`guidesOf`, `writeGuide` in `packages/std/src/guides.ts`;
+    `collections_list` in `packages/actions/src/index.ts`;
     [#382](https://github.com/leifriksheim/minca/issues/382)). Not
     protocol: a layer the library and its apps keep.
 - **By design.**

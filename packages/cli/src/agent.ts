@@ -34,7 +34,7 @@ import {
   type NodeConfig,
   type P2PNode,
 } from '@minca/core';
-import { profile } from '@minca/core/schemas';
+import { profile } from '@minca/std';
 import {
   checkGrant,
   connectCodeUrl,

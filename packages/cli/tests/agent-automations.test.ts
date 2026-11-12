@@ -7,7 +7,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { openTrigger, ruleContext, triggerPrompt, writerInstructs } from '../src/agent-automations.js';
-import { offeredActions } from '../../core/src/node/actions.js';
+import { offeredActions } from '@minca/actions';
 import { aNode, onHub, tempDir } from './helpers/nodes.js';
 import { personaIn, runAutomations } from '../src/bot-runner.js';
 import { until } from '../../core/tests/helpers/until.js';
@@ -20,14 +20,12 @@ import { community } from '../../core/src/space/presets.js';
 import {
   activity,
   direct,
-  message,
-  profile,
   automation,
   automationRun,
   botSettings,
-  task,
   type Automation,
 } from '../../core/src/schemas/index.js';
+import { message, profile, task } from '@minca/std';
 
 /** Someone on the network, with an account of their own; with `account`, one that follows its account space, where its name is kept */
 const member = (hub: FakeHub, fill: number, options: { account?: boolean } = {}) =>

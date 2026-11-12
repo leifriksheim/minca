@@ -16,7 +16,7 @@ import {
   type Reply,
   type Spend,
 } from '../src/agent-chat.js';
-import { PEER_CONTENT_NOTE, PERSON_ONLY } from '../../core/src/node/actions.js';
+import { PEER_CONTENT_NOTE, PERSON_ONLY } from '@minca/actions';
 import { aNode, tempDir } from './helpers/nodes.js';
 
 const MODEL = 'claude-opus-5-5';

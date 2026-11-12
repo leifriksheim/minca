@@ -26,7 +26,7 @@ jobs:
           # Core's tests also test the relay, which has none of its own.
           - name: test core
             run: npm test -w packages/core
-            paths: '^(packages/(core|relay)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/check\.yml$)'
+            paths: '^(packages/(core|relay|actions|std|auth)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/check\.yml$)'
           # Every other workspace, by folder: a new app is picked up, a new package must be added.
           - name: test
             run: npm test --if-present -w packages/cli -w packages/relay -w packages/calls -w apps -w scenarios

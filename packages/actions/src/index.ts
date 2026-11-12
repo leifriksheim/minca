@@ -1,5 +1,5 @@
 /**
- * @module node/actions
+ * @module actions
  * The node's operations, described once so every front end can be generated
  * from the same list.
  *
@@ -12,28 +12,40 @@
  * Inputs and outputs are plain JSON. Nothing here may return a key, a handle or
  * a function.
  */
-import type { DefineCollection, NodeCollection, NodeRecord, P2PNode } from './types.js';
-import { rolePresets } from '../space/presets.js';
-import type { AnyIncluded, Query } from '../query/types.js';
 import {
+  describeCollection,
+  rolePresets,
+  storedComputed,
+  storedContract,
+  toJsonSchema,
+  type AnyIncluded,
+  type DefineCollection,
+  type NodeCollection,
+  type NodeRecord,
+  type P2PNode,
+  type Query,
+} from '@minca/core';
+import { ACTIVITY_STATES, setActivity } from '@minca/core/schemas';
+import {
+  CHOOSING,
   applyBlueprint,
+  blueprint,
   checkBlueprint,
+  guidesOf,
+  lookalikes,
   proposeCollections,
   reviewBlueprint,
   standardCollections,
+  standardDefinition,
+  standardGroups,
   supersededBlueprints,
   tryContracts,
+  type Blueprint,
   type ContractExample,
-} from '../schemas/blueprints.js';
-import { blueprint, type Blueprint } from '../schemas/library/collections.js';
-import { guidesOf } from '../schemas/guides.js';
-import { standardDefinition, standardGroups } from '../schemas/standard.js';
-import { CHOOSING, lookalikes } from '../schemas/choosing.js';
-import { toJsonSchema } from '../schema/collection-def.js';
-import { ACTIVITY_STATES, setActivity } from '../schemas/automations.js';
-import { describeCollection } from '../records/describe.js';
-import { storedComputed, storedContract } from '../records/contract-builder.js';
-import { isRecord } from '../utils/guards.js';
+} from '@minca/std';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** The subset of JSON Schema these inputs use */
 export interface ActionSchema {

@@ -78,6 +78,7 @@ export {
 } from './identity/account-vault.js';
 export {
   deriveContactKeyBytes,
+  deriveMemberKeyBytes,
   deriveInboxKeyBytes,
   deriveInboxSignKeyBytes,
   deriveNameKeyBytes,
@@ -198,6 +199,8 @@ export {
 export {
   CATALOG_COLLECTION,
   checkStoredCollection,
+  isStoredCollection,
+  schemaProblem,
   checkPublishableSchema,
   validateJsonSchema,
   asStandardSchema,
@@ -376,6 +379,7 @@ export {
   serveSigner,
   remoteSigner,
   startNodeInWorker,
+  startPageNode,
   SESSION_COMMAND,
   relayRoom,
   indexedDBStores,
@@ -383,18 +387,19 @@ export {
   directoryStores,
   browserWriterKeys,
   copyAccountData,
-  NODE_ACTIONS,
-  runAction,
-  callAction,
-  offeredActions,
-  PEER_CONTENT_NOTE,
-  PERSON_ONLY,
-  checkActionInput,
   createCarrierNode,
   createCarryCore,
   watchNotifications,
 } from './node/index.js';
-export { MAX_PROPOSALS, checkAppAutomation, checkOwnAutomation, ownQuery } from './space/own-automations.js';
+export {
+  MAX_PROPOSALS,
+  checkAppAutomation,
+  checkOwnAutomation,
+  ownQuery,
+  fromProposal,
+  proposalSpaces,
+  sameAutomation,
+} from './space/own-automations.js';
 export type {
   StoreFactory,
   WriterKeySource,
@@ -403,8 +408,6 @@ export type {
   StoreOptions,
   CopyAccountParams,
   CopyResult,
-  NodeAction,
-  ActionSchema,
   P2PNode,
   NodeConfig,
   WorkerNodeConfig,
@@ -498,6 +501,7 @@ export type {
   BodyOf,
   IncludedOf,
   ResultOf,
+  AnyIncluded,
 } from './query/types.js';
 export { plainQuery } from './query/types.js';
 
@@ -509,9 +513,10 @@ export { keyKind, lineKey, ownedKey } from './records/key.js';
 export { describeCollection } from './records/describe.js';
 export type { CollectionRules } from './records/rules.js';
 export type { Contract, Condition, CollectionContract, Line } from './records/contracts.js';
-export { contractCostHints } from './records/contracts.js';
+export type { LinkDeclaration } from './records/links.js';
+export { contractCostHints, checkContractShape, runContracts } from './records/contracts.js';
 // Contracts written in TypeScript, typed from the collection's schema, built into CEL
-export { contract } from './records/contract-builder.js';
+export { contract, storedComputed, storedContract } from './records/contract-builder.js';
 export type {
   CelExpr,
   CelInt,

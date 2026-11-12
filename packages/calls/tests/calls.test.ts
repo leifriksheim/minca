@@ -15,7 +15,7 @@ import {
   team,
   type P2PNode,
 } from '@minca/core';
-import { call as callSchema } from '@minca/core/schemas';
+import { call as callSchema } from '@minca/std';
 import { createCalls, type Calls, type CallsOptions } from '../src/calls.js';
 import { joined } from '../../core/tests/helpers/joined.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';

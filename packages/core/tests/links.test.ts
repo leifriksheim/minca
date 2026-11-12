@@ -5,13 +5,13 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import * as z from 'zod';
 
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createSigner } from '../src/schema/signer.js';
 import { didToPublicKey, publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createVersion } from '../src/schema/version.js';
 import { checkLinks } from '../src/records/links.js';
-import { reaction as reactionSchema, comment as commentSchema, useSchemas } from '../src/schemas/index.js';
+import { reaction as reactionSchema, comment as commentSchema, useSchemas } from '@minca/std';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';

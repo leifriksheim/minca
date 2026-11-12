@@ -11,9 +11,9 @@
  * A guide is what someone in the space wrote. An agent reads it as data about
  * the collections, never as instructions from the person it works for.
  */
-import type { NodeRecord, P2PNode } from '../node/types.js';
+import type { NodeRecord, P2PNode } from '@minca/core';
+import { definedNames } from '@minca/core/schemas';
 import { guide, type Guide } from './library/collections.js';
-import { definedNames } from './defined.js';
 
 type GuideRecord = NodeRecord<Guide>;
 

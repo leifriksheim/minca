@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^4.0.0",
+    "@minca/actions": "*",
     "@minca/app-shared": "*",
     "@minca/calls": "*",
     "@minca/core": "*",
     "@minca/react": "*",
+    "@minca/std": "*",
     "@minca/ui": "*",
     "@tanstack/react-router": "^1.170.46",
     "react": "^19.3.1",

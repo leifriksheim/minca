@@ -10,6 +10,9 @@
     "packages/cli",
     "packages/ui",
     "packages/calls",
+    "packages/std",
+    "packages/actions",
+    "packages/auth",
     "packages/react",
     "apps/*",
     "scenarios"

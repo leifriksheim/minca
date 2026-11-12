@@ -105,6 +105,41 @@ describe('the account name', () => {
   });
 });
 
+/** Stores that answer a write a moment later, as a disk does, so what waits on one sees what is half written */
+function storesLikeADisk(): StoreFactory {
+  const stores = memoryStores();
+  return async (path) => {
+    const adapter = await stores(path);
+    return {
+      ...adapter,
+      put: async (key, value) => {
+        await adapter.put(key, value);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      },
+    };
+  };
+}
+
+describe('a space the account joined on another device', () => {
+  test('takes a write the moment this device lists it', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await device(me, memoryStores(), hub);
+    const space = await laptop.spaces.create({ name: 'Team', visibility: 'private' });
+    const phone = await device(me, storesLikeADisk(), hub);
+    const deadline = Date.now() + 15_000;
+    while (!(await phone.spaces.list()).some((listed) => listed.id === space.id)) {
+      assert.ok(Date.now() < deadline, 'the space to reach the phone');
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    const note = await phone.records.put(space.id, 'app.note', { text: 'as soon as it is listed' });
+    assert.equal(
+      (await phone.records.get<{ text: string }>(space.id, note.key))?.body?.text,
+      'as soon as it is listed',
+    );
+  });
+});
+
 describe("the account's own space", () => {
   test('records an app keeps in the registry, in a collection of its own, reach every device', async () => {
     const me = await account();

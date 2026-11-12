@@ -20,7 +20,7 @@ import { person } from './helpers/person.js';
 import { team } from '../src/space/presets.js';
 import { automation, automationRun, runAutomations } from '../src/schemas/automations.js';
 import { linkedWakes, wakeFor, wakes } from '../src/space/own-automations.js';
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import { usableComputed } from '../src/query/computed.js';
 import { remoteNode, serveNode } from '../src/node/remote.js';
 

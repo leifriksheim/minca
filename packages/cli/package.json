@@ -35,8 +35,10 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
     "@clack/prompts": "^1.8.1",
+    "@minca/actions": "*",
     "@minca/core": "*",
     "@minca/relay": "*",
+    "@minca/std": "*",
     "@modelcontextprotocol/client": "^2.4.0",
     "@modelcontextprotocol/node": "^2.1.2",
     "@modelcontextprotocol/server": "^2.4.0",

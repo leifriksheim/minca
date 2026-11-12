@@ -5,5 +5,12 @@
     "jsx": "react-jsx",
     "customConditions": ["@minca/source"]
   },
-  "include": ["../../packages/core/src", "../../packages/react/src", "../../packages/calls/src"]
+  "include": [
+    "../../packages/core/src",
+    "../../packages/std/src",
+    "../../packages/actions/src",
+    "../../packages/auth/src",
+    "../../packages/react/src",
+    "../../packages/calls/src"
+  ]
 }

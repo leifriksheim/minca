@@ -6,10 +6,10 @@
  * screen must never be handed text sealed for its viewer alone, and Sheets
  * (`Sheets.tsx`), since it shows every collection and a screen sees only its own.
  */
+import { direct, notifyOn } from '@minca/core/schemas';
 import {
   column,
   comment,
-  direct,
   event,
   expense,
   file,
@@ -17,7 +17,6 @@ import {
   listItem,
   listing,
   message,
-  notifyOn,
   order,
   orderUpdate,
   poll,
@@ -27,7 +26,7 @@ import {
   settlement,
   task,
   vote,
-} from '@minca/core/schemas';
+} from '@minca/std';
 import { DIRECT, type Template } from '../launcher';
 import { SHEETS, sheetView } from '../../sheets/views';
 import bills from './bills.html?raw';

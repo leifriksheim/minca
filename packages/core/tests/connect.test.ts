@@ -5,7 +5,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
+import { createMincaAuth, type MincaAuth } from '@minca/auth';
 import {
   grantStore,
   homeAddress,

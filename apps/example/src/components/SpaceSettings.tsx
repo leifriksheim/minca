@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { SPACE_KEEPERS, type SpaceSummary } from '@minca/core';
-import { spaceProfile } from '@minca/core/schemas';
+import { spaceProfile } from '@minca/std';
 import { useCan, useNode } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
 import { useMay } from '@minca/app-shared/may';

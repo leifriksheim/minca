@@ -58,7 +58,8 @@
   "dependencies": {
     "@minca/core": "*",
     "@minca/react": "*",
-    "qrcode-generator": "^2.0.4",
-    "@minca/ui": "*"
+    "@minca/std": "*",
+    "@minca/ui": "*",
+    "qrcode-generator": "^2.0.4"
   }
 }

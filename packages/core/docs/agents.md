@@ -131,7 +131,7 @@ Schema for its input. The CLI, the MCP service and WebMCP tools are all made
 from it. You can run one by name:
 
 ```typescript
-import { runAction } from '@minca/core';
+import { runAction } from '@minca/actions';
 
 await runAction(node, 'records_put', {
   space: space.id,

@@ -4,7 +4,7 @@
  */
 export { createNode, SESSION_COMMAND } from './node.js';
 export { serveNode, remoteNode, serveSigner, remoteSigner } from './remote.js';
-export { startNodeInWorker, runNodeWorker } from './worker.js';
+export { startNodeInWorker, startPageNode, runNodeWorker } from './worker.js';
 export type { PageNodeConfig, WorkerNodeConfig, WorkerLike } from './worker.js';
 export { relayRoom } from './space-peers.js';
 export { indexedDBStores, folderStores, directoryStores, workerStores } from './stores.js';
@@ -26,16 +26,6 @@ export type { AutomationProposal, AppAutomation, Wake } from '../space/own-autom
 export type { CopyAccountParams, CopyResult } from './copy.js';
 export type { StoreFactory, StoreOptions, WorkerStores } from './stores.js';
 export type { Keeper } from '../space/roles.js';
-export {
-  NODE_ACTIONS,
-  runAction,
-  callAction,
-  offeredActions,
-  PEER_CONTENT_NOTE,
-  PERSON_ONLY,
-  checkActionInput,
-} from './actions.js';
-export type { NodeAction, ActionSchema } from './actions.js';
 export type {
   P2PNode,
   NodeConfig,

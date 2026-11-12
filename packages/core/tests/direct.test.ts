@@ -6,12 +6,12 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { contactKeyPair, deriveMemberKeyBytes } from '../src/identity/contact-key.js';
 import { directBound, openDirect, sealDirect, type DirectBody } from '../src/privacy/direct.js';
-import { direct } from '../src/schemas/library/publishing.js';
+import { direct } from '../src/schemas/direct.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { team } from '../src/space/presets.js';

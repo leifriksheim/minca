@@ -21,7 +21,7 @@ import {
   habit,
   checkin,
   proposal,
-} from '../src/schemas/index.js';
+} from '@minca/std';
 import { checkStoredCollection, toJsonSchema } from '../src/schema/collection-def.js';
 import { describeCollection } from '../src/records/describe.js';
 import { team } from '../src/space/presets.js';

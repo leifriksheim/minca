@@ -7,13 +7,8 @@ import {
   type ReactNode,
 } from 'react';
 import type { P2PNode } from '@minca/core';
-import type {
-  AuthState,
-  MincaAuth,
-  MincaConnection,
-  MincaConnectionState,
-  MincaSession,
-} from '@minca/core/session';
+import type { MincaConnection, MincaConnectionState } from '@minca/core/session';
+import type { AuthState, MincaAuth, MincaSession } from '@minca/auth';
 import { useFollow, type Followed } from './follow.js';
 
 interface MincaContextValue {

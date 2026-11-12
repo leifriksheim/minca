@@ -5,7 +5,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { callAction, PEER_CONTENT_NOTE } from '../src/node/actions.js';
+import { callAction, PEER_CONTENT_NOTE } from '@minca/actions';
 import { profileKey } from '../src/node/space-profiles.js';
 import type { P2PNode } from '../src/node/types.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';

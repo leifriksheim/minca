@@ -2,7 +2,8 @@
  * The standard library as one list, by area: what `collections_standard`
  * shows an agent, and what a `std.*` name means.
  */
-import type { DefineCollection } from '../node/types.js';
+import type { DefineCollection } from '@minca/core';
+import { activity, automation, automationRun, botSettings, connect, connector } from '@minca/core/schemas';
 import { annotationGroups } from './library/annotations.js';
 import { socialGroups } from './library/social.js';
 import { publishingGroups } from './library/publishing.js';
@@ -11,9 +12,7 @@ import { planningGroups } from './library/planning.js';
 import { lifeGroups } from './library/life.js';
 import { moneyGroups } from './library/money.js';
 import { communityGroups } from './library/community.js';
-import { activity, automation, automationRun } from '../schemas/automations.js';
 import { collectionsGroups } from './library/collections.js';
-import { botSettings, connect, connector } from './connectors.js';
 
 type Definitions = ReadonlyArray<DefineCollection>;
 

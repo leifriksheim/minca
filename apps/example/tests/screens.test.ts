@@ -16,14 +16,7 @@ import {
   type ScreenHost,
 } from '@minca/app-shared/screens';
 import type { NodeRecord, P2PNode } from '@minca/core';
-import {
-  file as fileCollection,
-  list,
-  listItem,
-  message,
-  poll,
-  useSchemas as addSchemas,
-} from '@minca/core/schemas';
+import { file as fileCollection, list, listItem, message, poll, useSchemas as addSchemas } from '@minca/std';
 import { checkLauncherApp, showsRecord } from '../src/components/apps/launcher';
 import { setup, waitFor } from './helpers';
 

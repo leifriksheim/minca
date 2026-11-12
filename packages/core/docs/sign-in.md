@@ -12,7 +12,7 @@ The flow is state and actions: draw a screen for each `stage`, and call an
 action from its buttons. `subscribe` calls back after every change.
 
 ```js
-import { createMincaAuth } from '@minca/core/session';
+import { createMincaAuth } from '@minca/auth';
 
 const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://relay.minca.social'] } });
 
@@ -28,7 +28,7 @@ In React, hand the flow to `MincaProvider`, and read it with `useMinca`:
 
 ```tsx
 import { createRoot } from 'react-dom/client';
-import { createMincaAuth } from '@minca/core/session';
+import { createMincaAuth } from '@minca/auth';
 import { MincaProvider, useMinca } from '@minca/react';
 
 const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://relay.minca.social'] } });
@@ -71,13 +71,13 @@ them most recently used first.
 The flow is a state to read and actions to call. `auth.getState().stage`
 says which screen it is on. It goes from `starting` through the screens of signing in or setting up,
 to `ready`. What each stage means is in
-[`AuthStage`](https://minca.dev/api/session/type-aliases/AuthStage/).
+[`AuthStage`](https://minca.dev/api/auth/type-aliases/AuthStage/).
 
 Where data lives is asked at `existing`, not up front. A page that waits for
 `ready` doesn't see the session during `recovery`, `unlock` or `pod`.
 
 A failed action sets `error`, an
-[`AuthError`](https://minca.dev/api/session/interfaces/AuthError/), and stays
+[`AuthError`](https://minca.dev/api/auth/interfaces/AuthError/), and stays
 on the same stage. A dismissed passkey or folder prompt sets no error.
 
 ### Moving between stages
@@ -179,7 +179,7 @@ doesn't ask again. The choices are `never`, `1d`, `7d` and `30d`. The default
 is `7d`, and each use pushes the expiry forward.
 
 ```ts
-import { createMincaAuth } from '@minca/core/session';
+import { createMincaAuth } from '@minca/auth';
 
 const auth = createMincaAuth();
 await auth.staySignedIn.setChoice('30d');
@@ -225,7 +225,7 @@ sign-in kept for days. So anything that hands out the whole account, or
 changes how it signs in, asks again first:
 
 ```ts
-import { createMincaAuth } from '@minca/core/session';
+import { createMincaAuth } from '@minca/auth';
 
 const auth = createMincaAuth();
 const ok = await auth.confirm({ password: 'correct horse battery staple' });
@@ -233,7 +233,7 @@ const ok = await auth.confirm({ password: 'correct horse battery staple' });
 
 The proof is the password, the passkey's own check (a fingerprint, a face or
 a PIN), or the recovery code itself
-([`MincaAuth.confirm`](https://minca.dev/api/session/interfaces/MincaAuth/)).
+([`MincaAuth.confirm`](https://minca.dev/api/auth/interfaces/MincaAuth/)).
 A wrong answer resolves false and sets `error`. A passkey with nothing behind
 it is no proof.
 
@@ -384,7 +384,7 @@ no proof. [Threat model §3.1](https://github.com/leifriksheim/minca/blob/main/s
 ## Options
 
 `createMincaAuth(config)` takes the options in
-[`MincaAuthConfig`](https://minca.dev/api/session/interfaces/MincaAuthConfig/).
+[`MincaAuthConfig`](https://minca.dev/api/auth/interfaces/MincaAuthConfig/).
 Every one has a default, so `createMincaAuth()` alone signs in offline, in
 this browser.
 
@@ -448,7 +448,7 @@ Device keys in the vault are in
 
 A sign-in starts a node with the account's keys, the place's stores for that
 account ([stores](node.md#stores)) and the configured network. The session is a
-[`MincaSession`](https://minca.dev/api/session/interfaces/MincaSession/).
+[`MincaSession`](https://minca.dev/api/auth/interfaces/MincaSession/).
 
 The seed stays inside the auth object. `recoveryCode()` returns it as a
 recovery code. The page also holds the local key, which seals a pod's
@@ -481,7 +481,7 @@ chose, from 1/24 to 365.
 ### Connections
 
 `auth.connections()` lists what the home has connected, each a
-[`Connection`](https://minca.dev/api/session/interfaces/Connection/). They are kept
+[`Connection`](https://minca.dev/api/auth/interfaces/Connection/). They are kept
 per account in `localStorage` under `<prefix>.connections:<accountId>`. A kept
 connection in any other shape is dropped when read, and its app connects
 again.

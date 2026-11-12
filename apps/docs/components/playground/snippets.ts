@@ -43,7 +43,7 @@ function Spaces() {
 }`;
 
 export const collectionsCode = `import { useNode } from '@minca/react';
-import { listItem, useSchemas } from '@minca/core/schemas';
+import { listItem, useSchemas } from '@minca/std';
 
 const node = useNode();
 
@@ -54,7 +54,7 @@ await useSchemas(node, space, [listItem]);
 const defined = await node.collections.list(space);`;
 
 export const recordsCode = `import { useNode, useQuery } from '@minca/react';
-import { listItem } from '@minca/core/schemas';
+import { listItem } from '@minca/std';
 
 function List({ space }: { space: string }) {
   const node = useNode();

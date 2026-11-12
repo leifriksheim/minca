@@ -5,7 +5,7 @@
  * the screen (`minca.places`), which may ask the person first.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { cellsAround, cellsOf, centreOf, distanceKm, geohash } from '@minca/core/schemas';
+import { cellsAround, cellsOf, centreOf, distanceKm, geohash } from '@minca/std';
 import type { FoundPlace } from './minca';
 import { html } from './html';
 import { Modal } from './modal';

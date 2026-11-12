@@ -3,8 +3,10 @@
  * Blocks and mutes are one person's choice, so they belong in that person's
  * own space rather than in a space others read.
  */
-import { address, blob, day, person, text, define, url, when, words } from '../fragments.js';
-import type { BodyOf } from '../../query/types.js';
+import type { BodyOf } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
+
+const { address, blob, day, person, text, define, url, when, words } = fragments;
 
 /**
  * How someone presents themselves: more than the name every space keeps for

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { AuthStage } from '@minca/core/session';
+import type { AuthStage } from '@minca/auth';
 import { useMinca } from '@minca/react';
 import { Loader } from '@minca/app-shared/Loader';
 import { shortUsername } from '@minca/app-shared/usernames';

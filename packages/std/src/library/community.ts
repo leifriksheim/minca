@@ -6,9 +6,10 @@
  * A decision and a goal reached are proven, not declared: each cites the
  * records that prove it, and every device checks the proof (02 §7.6).
  */
-import type { Contract } from '../../records/contracts.js';
-import { blob, choice, count, markdown, one, person, text, define, when, words } from '../fragments.js';
-import type { BodyOf } from '../../query/types.js';
+import type { BodyOf, Contract } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
+
+const { blob, choice, count, markdown, one, person, text, define, when, words } = fragments;
 
 /**
  * A question with fixed options. The options cannot change once it is asked —

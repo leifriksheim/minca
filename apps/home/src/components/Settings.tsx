@@ -1,12 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CarrierSummary, P2PNode } from '@minca/core/node';
-import {
-  STAY_SIGNED_IN_CHOICES,
-  connectionKey,
-  type AuthState,
-  type Connection,
-  type StaySignedIn,
-} from '@minca/core/session';
+import { STAY_SIGNED_IN_CHOICES, type StaySignedIn } from '@minca/core/session';
+import { connectionKey, type AuthState, type Connection } from '@minca/auth';
 import { useAsync, useAuth, useSession } from '@minca/react';
 import { usernameIdeas } from '@minca/core/inbox';
 import { UsernamePicker } from '@minca/app-shared/UsernamePicker';

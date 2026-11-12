@@ -8,14 +8,14 @@ import assert from 'node:assert/strict';
 import * as z from 'zod';
 
 import { createNode } from '../src/node/node.js';
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { community } from '../src/space/presets.js';
-import { message } from '../src/schemas/library/publishing.js';
-import { task } from '../src/schemas/library/planning.js';
+import { message } from '@minca/std';
+import { task } from '@minca/std';
 import { checkCron, cronMatches } from '../src/schemas/cron.js';
 import {
   ACTIVITY_STALE_SECONDS,

@@ -7,7 +7,7 @@
  */
 export { createMincaConnection, type MincaConnection } from '@minca/core/session';
 // useSchemas defines what a space lacks; it isn't a React hook, whatever its name says.
-export { listItem, useSchemas as addSchemas } from '@minca/core/schemas';
+export { listItem, useSchemas as addSchemas } from '@minca/std';
 export type { NodeCollection } from '@minca/core';
 export { MincaProvider, useAccount, useConnection, useNode, useQuery, useSpaces } from '@minca/react';
 export { createScreenBridge, screenDocument } from '@minca/app-shared/screens';

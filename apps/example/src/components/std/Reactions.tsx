@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNode, useAccount } from '@minca/react';
 import type { NodeRecord, SpaceSummary } from '@minca/core';
-import { reaction } from '@minca/core/schemas';
+import { reaction } from '@minca/std';
 import { bodyOf } from '../../derive/schema-ui';
 import { respondingTo } from '../../derive/people';
 import { Icon } from '@minca/app-shared/Icon';

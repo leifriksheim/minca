@@ -85,6 +85,24 @@ describe('space manager', () => {
 });
 
 describe('invites', () => {
+  test('a joined space is listed only once its key is held', async () => {
+    const mine = createSpaceManager(createMemoryAdapter());
+    const record = await mine.create({ name: 'Move house', ...team, visibility: 'private', creator: OWNER });
+    const invite = await mine.createInvite(record.space.id, await selfSigner());
+
+    const adapter = createMemoryAdapter();
+    const listedWithoutKey: string[] = [];
+    const theirs = createSpaceManager({
+      ...adapter,
+      put: async (key, value) => {
+        await adapter.put(key, value);
+        for (const listed of await theirs.list()) if (listed.key === null) listedWithoutKey.push(key);
+      },
+    });
+    await theirs.join(invite);
+    assert.deepEqual(listedWithoutKey, []);
+  });
+
   test('carries a private space key to another device', async () => {
     const mine = createSpaceManager(createMemoryAdapter());
     const theirs = createSpaceManager(createMemoryAdapter());

@@ -97,6 +97,9 @@ const modules = [
   { dir: 'core/src/node', slug: 'node', title: '@minca/core/node' },
   { dir: 'core/src/storage', slug: 'storage', title: '@minca/core/storage' },
   { dir: 'core/src/inbox', slug: 'inbox', title: '@minca/core/inbox' },
+  { dir: 'std/src', slug: 'std', title: '@minca/std' },
+  { dir: 'actions/src', slug: 'actions', title: '@minca/actions' },
+  { dir: 'auth/src', slug: 'auth', title: '@minca/auth' },
   { dir: 'react/src', slug: 'react', title: '@minca/react' },
   { dir: 'calls/src/react', slug: 'calls-react', title: '@minca/calls/react' },
   { dir: 'calls/src', slug: 'calls', title: '@minca/calls' },
@@ -221,9 +224,13 @@ for (const dir of [...nav.topics.map((topic) => topic.slug), 'spec', 'api']) {
 // Catalogues written from the code (scripts/catalogues.ts), for the pages
 // that mark a place for one with `<!-- catalogue: name -->`.
 const catalogues = JSON.parse(
-  execFileSync(join(root, 'node_modules/.bin/tsx'), [join(docsDir, 'scripts/catalogues.ts')], {
-    encoding: 'utf8',
-  }),
+  execFileSync(
+    join(root, 'node_modules/.bin/tsx'),
+    ['--conditions=@minca/source', join(docsDir, 'scripts/catalogues.ts')],
+    {
+      encoding: 'utf8',
+    },
+  ),
 );
 const withCatalogues = (markdown) =>
   markdown.replace(/<!-- catalogue: (\w+) -->/g, (marker, name) => {

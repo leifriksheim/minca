@@ -12,7 +12,7 @@ import * as z from 'zod';
 
 import { createNode } from '../src/node/node.js';
 import { profileKey } from '../src/node/space-profiles.js';
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { noteTerms } from '../src/identity/abilities.js';
@@ -39,8 +39,8 @@ import {
   useSchemas as addSchemas,
   type Blueprint,
   type DraftCollection,
-} from '../src/schemas/index.js';
-import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
+} from '@minca/std';
+import { createMincaAuth, type MincaAuth } from '@minca/auth';
 import { grantSigner, isProposeRequest, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
 import {
   answerConnectCode,

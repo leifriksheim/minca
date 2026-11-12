@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@minca/core": "*",
+    "@minca/std": "*",
     "htm": "3.1.1",
     "preact": "10.29.8"
   },

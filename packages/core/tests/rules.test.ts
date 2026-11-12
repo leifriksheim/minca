@@ -8,7 +8,7 @@ import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 import * as z from 'zod';
 
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { checkRules } from '../src/records/rules.js';
 import { createFakeHub } from './helpers/fake-transport.js';

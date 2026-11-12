@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { accountCredentialName, type AccountEntry } from '@minca/core/session';
+import { accountCredentialName, type AccountEntry } from '@minca/auth';
 import type { AccountSummary } from '@minca/core';
 import { useAuth } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';

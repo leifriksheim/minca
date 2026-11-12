@@ -50,7 +50,7 @@ import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { at, bodyOf, urlOf } from './helpers/json.js';
 import { tempDir } from './helpers/nodes.js';
 import { until } from '../../core/tests/helpers/until.js';
-import { host as hostSchema } from '../../core/src/schemas/library/community.js';
+import { host as hostSchema } from '@minca/std';
 import { team } from '../../core/src/space/presets.js';
 import { parseSpaceInvite } from '../../core/src/space/space-manager.js';
 import { linkTopic, parseInviteLink } from '../../core/src/space/invite-link.js';

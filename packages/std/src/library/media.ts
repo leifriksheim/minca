@@ -2,21 +2,10 @@
  * Lists, files and media. A list is a record and each item another, linked
  * `in` it, so two people ticking items at once never undo each other.
  */
-import {
-  about,
-  blob,
-  count,
-  one,
-  person,
-  placeRef,
-  position,
-  text,
-  define,
-  url,
-  when,
-  words,
-} from '../fragments.js';
-import type { BodyOf } from '../../query/types.js';
+import type { BodyOf } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
+
+const { about, blob, count, one, person, placeRef, position, text, define, url, when, words } = fragments;
 
 /**
  * A list of anything: shopping, packing, reading, people, a playlist. `kind`

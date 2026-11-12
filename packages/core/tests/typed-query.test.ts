@@ -8,7 +8,7 @@ import * as z from 'zod';
 
 import { collection } from '../src/schema/collection-def.js';
 import type { Typed } from '../src/query/types.js';
-import { poll as stdPoll, vote as stdVote, useSchemas } from '../src/schemas/index.js';
+import { poll as stdPoll, vote as stdVote, useSchemas } from '@minca/std';
 import { team } from '../src/space/presets.js';
 import { person as somebody } from './helpers/person.js';
 

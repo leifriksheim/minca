@@ -7,6 +7,9 @@
     "../../packages/core/src/node/index.ts",
     "../../packages/core/src/storage/index.ts",
     "../../packages/core/src/inbox/index.ts",
+    "../../packages/std/src/index.ts",
+    "../../packages/actions/src/index.ts",
+    "../../packages/auth/src/index.ts",
     "../../packages/react/src/index.ts",
     "../../packages/calls/src/index.ts",
     "../../packages/calls/src/react.ts"
