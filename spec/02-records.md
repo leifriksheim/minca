@@ -524,7 +524,7 @@ their own view of the definition. A writer MUST set `retain: true` when:
 - the collection's definition in force says `history: "all"` (§6); or
 - the collection is one of the access-history collections (`sys.role`,
   `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.collection`,
-  `sys.key`, `sys.relays`, `sys.keepers`, `sys.fork`, `sys.stepdown`, `sys.succeed`). A peer MUST refuse a version of
+  `sys.key`, `sys.relays`, `sys.carriers`, `sys.fork`, `sys.stepdown`, `sys.succeed`). A peer MUST refuse a version of
   one of these without `retain` ([03 — Spaces](03-spaces.md)); or
 - the version is a first version (`seq 0`) and the rules in force (§7) have
   `onePer` or `fixed`. Both are checked against the first version's body,
@@ -590,8 +590,8 @@ arrival, a peer looks that version up, whole or as a stub (§4.5):
 
 - If it is not held, judging waits (§9.5), and the peer asks for it
   ([05](05-sync-and-storage.md)). A peer syncing by shallow sets
-  ([05](05-sync-and-storage.md) §5.1) instead takes a version a keeper sent
-  without it, as checked by that keeper, outside lines and the access
+  ([05](05-sync-and-storage.md) §5.1) instead takes a version a carrier sent
+  without it, as checked by that carrier, outside lines and the access
   history.
 - Otherwise, with `P` the version `prev` names, the version is refused unless
   all of these hold:
@@ -1090,13 +1090,13 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   formats and checks are specified where they are used:
   `sys.collection` (here); the access history, keys, profiles and the account
   registry — `sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.fork`,
-  `sys.stepdown`, `sys.succeed`, `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`,
+  `sys.stepdown`, `sys.succeed`, `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.carriers`,
   `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
   passes and automations — `sys.carrier`, `sys.pass`, `sys.automation`,
   `sys.wake` — in [03](03-spaces.md) §13–15, and how a node uses them
   in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; hosting —
   `sys.hosting` — in [08 — Hosting](08-hosting.md)
-  (`sys.relays` and `sys.keepers` also in [05](05-sync-and-storage.md)).
+  (`sys.relays` and `sys.carriers` also in [05](05-sync-and-storage.md)).
 - Loose versions (§3.5) are in `sys.*` too: `sys.invitation` in
   [03](03-spaces.md) §7.4, `sys.inbox` and `sys.knock` in
   [07 — Inbox](07-inbox.md). None of them is ever stored in a space.
@@ -1384,7 +1384,7 @@ _Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src
 
 A collection may name up to eight **topics**: body fields (`mentions`) and link
 roles (`link:channel`). Each record then carries, on its outside, a keyed hash
-of each value of each topic — so a keeper that cannot read a private body can
+of each value of each topic — so a carrier that cannot read a private body can
 still match "messages in #design" or "messages that mention me", learning which
 records share a topic but not which topic.
 
@@ -1413,7 +1413,7 @@ values.
 
 > Rationale: a record that points at another record says so with a link, and
 > everything that follows links (conformance, `onePer`, checks, queries) sees
-> it. A link topic lets a keeper match on that link too, so a reference never
+> it. A link topic lets a carrier match on that link too, so a reference never
 > has to be copied into the body to be matched without reading.
 
 ### 8.2 The tag key
@@ -1463,11 +1463,11 @@ differs from the set in `tags` (order and duplicates ignored). With no topics in
 any tag is refused. A peer that cannot read the body, or holds only a stub,
 does not check (see the known defect in §4.9).
 
-To ask a keeper for records on a topic, a reader computes the tag the same way
+To ask a carrier for records on a topic, a reader computes the tag the same way
 ([05 — Sync and storage](05-sync-and-storage.md)).
 
 > Rationale: a blind index (as in CipherSweet) — equality only, never ranges or
-> substrings. The keeper learns co-occurrence and frequency, nothing more.
+> substrings. The carrier learns co-occurrence and frequency, nothing more.
 
 _Source: `packages/core/src/records/topics.ts` (`checkTopics`, `topicValues`, `topicKey`, `topicTag`, `tagsFor`, `sameTags`, `MAX_TOPICS`, `MAX_TAGS`), `packages/core/src/records/links.ts` (`LINK_FIELD_PATTERN`), `packages/core/src/node/space-rules.ts` (`tagKey`, `tagProblem`), `packages/core/src/node/space-writing.ts` (`write`). Tests: `packages/core/tests/topics.test.ts` (all; "topic tags on links" for link roles)._
 

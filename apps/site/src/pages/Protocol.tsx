@@ -304,8 +304,8 @@ const PARTS: ReadonlyArray<Part> = [
         body: 'Time only helps sort things for comparing. It never decides what wins, so a device with a wrong clock only slows down its own changes.',
       },
       {
-        title: 'Keepers',
-        body: 'A space can name keepers that hold every record, like a host or the browser extension. Apps can then keep just what they use, and hold on to their writes until enough keepers have them.',
+        title: 'Carriers',
+        body: 'A space can name carriers that hold every record, like a host or the browser extension. Apps can then keep just what they use, and hold on to their writes until enough carriers have them.',
       },
       {
         title: 'Where data is stored',
@@ -469,7 +469,7 @@ const LIMITS: ReadonlyArray<Point> = [
     body: 'Whoever had a space’s key keeps what they read. Changing the key protects what comes next. An app you give a private space can read all of it.',
   },
   {
-    title: 'Keepers can hold records back',
+    title: 'Carriers can hold records back',
     body: 'A node that syncs with nobody else can be kept in the dark by the one it syncs with. Each writer’s versions form a numbered log, so a node that holds part of a space notices a gap, but only in ordinary collections.',
   },
   {

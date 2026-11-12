@@ -11,7 +11,7 @@
 
 app = "minca-mcp"
 primary_region = "ams"
-# Idle nodes with writes the keepers don't have yet get a moment to hand them over.
+# Idle nodes with writes the carriers don't have yet get a moment to hand them over.
 kill_timeout = 30
 
 [build]

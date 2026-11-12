@@ -8,7 +8,7 @@ import {
   ROLE_ASSIGN,
   ROLE_DEFINE,
   ROLE_UNASSIGN,
-  SPACE_KEEPERS,
+  SPACE_CARRIERS,
   SPACE_RELAYS,
 } from '@minca/core';
 import type { SpaceGrant as Grant, SpaceAccess } from '@minca/core';
@@ -62,7 +62,7 @@ export const GRANT_CHOICES: ReadonlyArray<GrantChoice> = [
     grants: [
       { cmd: KEY_CHANGE, pol: [] },
       { cmd: SPACE_RELAYS, pol: [] },
-      { cmd: SPACE_KEEPERS, pol: [] },
+      { cmd: SPACE_CARRIERS, pol: [] },
     ],
   },
 ];

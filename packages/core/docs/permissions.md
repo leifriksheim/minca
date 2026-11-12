@@ -52,14 +52,14 @@ preset's name.
 
 What each role may do:
 
-| Role                  | Grants                                                                                                                                                                                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `team` editor         | `/record`, `/collection/define`, `/role/assign` with `.role == "editor"`                                                                                                                                                                               |
-| `community` admin     | `/record`, `/collection/define`, `/role/assign`, `/role/define` for every role but admin, `/role/unassign` and `/member/remove` of anyone not an admin, `/std.automation/instruct`, `/space/succeed`, `/key/change`, `/space/relays`, `/space/keepers` |
-| `community` moderator | `/record`, `/role/assign` with `.role == "member"`, `/std.automation/instruct`                                                                                                                                                                         |
-| `community` member    | `/record/write` and `/record/delete` where `.byCreator` is true, outside `STAFF_COLLECTIONS`                                                                                                                                                           |
-| `coop` steward        | `/record`, `/collection/define`, `/role/define` for member, `/role/assign` and `/role/unassign` of member or steward, `/member/remove` of anyone, `/std.automation/instruct`, `/space/succeed`, `/key/change`, `/space/relays`, `/space/keepers`       |
-| `coop` member         | as `community` member, and `/space/succeed`                                                                                                                                                                                                            |
+| Role                  | Grants                                                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `team` editor         | `/record`, `/collection/define`, `/role/assign` with `.role == "editor"`                                                                                                                                                                                |
+| `community` admin     | `/record`, `/collection/define`, `/role/assign`, `/role/define` for every role but admin, `/role/unassign` and `/member/remove` of anyone not an admin, `/std.automation/instruct`, `/space/succeed`, `/key/change`, `/space/relays`, `/space/carriers` |
+| `community` moderator | `/record`, `/role/assign` with `.role == "member"`, `/std.automation/instruct`                                                                                                                                                                          |
+| `community` member    | `/record/write` and `/record/delete` where `.byCreator` is true, outside `STAFF_COLLECTIONS`                                                                                                                                                            |
+| `coop` steward        | `/record`, `/collection/define`, `/role/define` for member, `/role/assign` and `/role/unassign` of member or steward, `/member/remove` of anyone, `/std.automation/instruct`, `/space/succeed`, `/key/change`, `/space/relays`, `/space/carriers`       |
+| `coop` member         | as `community` member, and `/space/succeed`                                                                                                                                                                                                             |
 
 ### Founders or no top
 

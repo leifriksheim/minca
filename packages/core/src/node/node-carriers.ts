@@ -11,8 +11,8 @@ import {
   type InviteLinkOptions,
   type SpaceRecord,
 } from '../space/space-manager.js';
-import { MAX_KEEPERS, MAX_RELAYS } from '../space/roles.js';
-import { SPACE_KEEPERS } from '../space/grants.js';
+import { MAX_CARRIERS, MAX_RELAYS } from '../space/roles.js';
+import { SPACE_CARRIERS } from '../space/grants.js';
 import type { SpaceRuntime } from './space-runtime.js';
 import { usableRelays } from './space-peers.js';
 import { deriveInviteKey } from '../space/space-access.js';
@@ -448,29 +448,28 @@ export function createNodeCarriers(ctx: NodeContext) {
   }
 
   /**
-   * Names the account's carriers — its extensions, its hosts — as keepers of
-   * a space it manages, and stops naming ones it removed, so apps there hold
-   * only what they use. Other keepers the space names stay. Done as each space
+   * Names the account's carriers — its extensions, its hosts — among the
+   * carriers of a space it manages, and stops naming ones it removed, so
+   * apps there hold only what they use. Others the space names stay. Done as each space
    * opens and whenever the carriers change; a space this account doesn't
    * manage is left to whoever does. The account's own spaces too, its
-   * registry first: a carrier is a keeper of the account's personal space,
-   * and so of every space it manages (06 §4). Not a carry space, which holds
+   * registry first (06 §4). Not a carry space, which holds
    * only a carrier's passes.
    */
-  async function nameKeepers(spaceId: string, rt: SpaceRuntime): Promise<void> {
+  async function nameOwnCarriers(spaceId: string, rt: SpaceRuntime): Promise<void> {
     if (!account || ctx.narrowNote || (await ctx.kindOf(spaceId)) === 'carry') return;
-    if (!(await rt.may(SPACE_KEEPERS))) return;
+    if (!(await rt.may(SPACE_CARRIERS))) return;
     const access = await rt.access();
     const carriers = await carrierRecords();
     const active = carriers.filter(({ body }) => !body.removed).map(({ body }) => body);
     const gone = new Set(carriers.filter(({ body }) => body.removed).map(({ body }) => body.did));
     for (const carrier of active) gone.delete(carrier.did);
-    const kept = access.keepers.filter((keeper) => !gone.has(keeper.did));
+    const kept = access.carriers.filter((named) => !gone.has(named.did));
     const added = active
-      .filter((carrier) => !kept.some((keeper) => keeper.did === carrier.did))
+      .filter((carrier) => !kept.some((named) => named.did === carrier.did))
       .map((c) => ({ did: c.did, name: c.name.slice(0, 80) }));
-    if (added.length === 0 && kept.length === access.keepers.length) return;
-    await rt.setKeepers([...kept, ...added].slice(0, MAX_KEEPERS), access.copies);
+    if (added.length === 0 && kept.length === access.carriers.length) return;
+    await rt.setCarriers([...kept, ...added].slice(0, MAX_CARRIERS));
   }
 
   /** Writing in carry spaces, one thing at a time: a removal never lands in the middle of a refill */
@@ -639,7 +638,7 @@ export function createNodeCarriers(ctx: NodeContext) {
     carrierRecords,
     liveCarriers,
     isCarrySpace,
-    nameKeepers,
+    nameOwnCarriers,
     passAll,
     inviteTo,
     shortInvite,

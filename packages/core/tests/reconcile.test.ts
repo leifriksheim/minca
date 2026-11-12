@@ -552,7 +552,7 @@ describe('holding part of a space', () => {
       assert.equal((await ids(c.storage, 'app.chat')).length, 41);
       assert.equal((await ids(c.storage, 'app.photos')).length, 0, 'not held, not taken');
       assert.equal((await ids(c.storage, 'sys.member')).length, 1, 'the space’s own always');
-      assert.ok(stored.includes(mine.id), 'the keeper said it has the cache’s write');
+      assert.ok(stored.includes(mine.id), 'the carrier said it has the cache’s write');
       assert.ok(level.includes('app.chat'));
 
       // A push for a collection it doesn't hold passes it by.

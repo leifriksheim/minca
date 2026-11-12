@@ -150,7 +150,7 @@
     }, [openKey, openTitle]);
     const now = useMinute();
     const [near, setNear] = useNear();
-    // The cells around the circle, as a keeper would match them; then the exact distance.
+    // The cells around the circle, as a carrier would match them; then the exact distance.
     const candidates = useRecords(EVENT, near ? nearWhere(near) : undefined);
     if (!all || !rsvps || !candidates) return null;
 

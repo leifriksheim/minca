@@ -25,7 +25,7 @@ import {
   ROLE_ASSIGN,
   ROLE_DEFINE,
   ROLE_UNASSIGN,
-  SPACE_KEEPERS,
+  SPACE_CARRIERS,
   SPACE_RELAYS,
   SPACE_SUCCEED,
 } from './grants.js';
@@ -66,11 +66,11 @@ const notHolding = (roles: ReadonlyArray<string>) =>
  */
 const INSTRUCT_BOTS: SpaceGrant = Object.freeze({ cmd: '/std.automation/instruct', pol: [] });
 
-/** The space's own settings: its key, its relays, its keepers */
+/** The space's own settings: its key, its relays, its carriers */
 const SETTINGS: ReadonlyArray<SpaceGrant> = [
   { cmd: KEY_CHANGE, pol: [] },
   { cmd: SPACE_RELAYS, pol: [] },
-  { cmd: SPACE_KEEPERS, pol: [] },
+  { cmd: SPACE_CARRIERS, pol: [] },
 ];
 
 /**

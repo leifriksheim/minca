@@ -1,5 +1,5 @@
 /**
- * What the MCP service can't do, it says: a write the keepers haven't
+ * What the MCP service can't do, it says: a write the carriers haven't
  * confirmed, and a space the always-on nodes don't carry.
  */
 import { test } from 'node:test';
@@ -19,7 +19,7 @@ import { until } from '../../core/tests/helpers/until.js';
 import { tempDir } from './helpers/nodes.js';
 import { keptByHosts, closing, freePort, signInWith, callTool, between } from './helpers/remote-mcp.js';
 
-test('a write the keepers haven’t confirmed is not said to be written', async () => {
+test('a write the carriers haven’t confirmed is not said to be written', async () => {
   const served = await startHost({
     key: await createP256Provider().generateKeyPair(),
     stores: memoryStores(),

@@ -144,7 +144,7 @@ const longitude = () => ({ type: 'number' as const, minimum: -180, maximum: 180 
 /**
  * The fields of a place, for a definition that is one. `cells` are the
  * geohashes of `lat` and `lon` at a few sizes (`cellsOf` in `geo.ts`), for a
- * topic: a keeper matches them to find places in an area without reading.
+ * topic: a carrier matches them to find places in an area without reading.
  */
 export const placeFields = () => ({
   name: text(200),

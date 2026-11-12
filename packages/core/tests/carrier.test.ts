@@ -245,43 +245,43 @@ describe('a carrier', () => {
     );
   });
 
-  test('is named a keeper of the spaces the account manages, and no longer once removed', async () => {
+  test('is named among the carriers of the spaces the account manages, and no longer once removed', async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });
     const laptop = await device(me, hub);
     const notes = await laptop.spaces.create({ name: 'Notes', visibility: 'private' });
-    const keepers = async () => (await laptop.spaces.access(notes.id)).keepers;
+    const carriers = async () => (await laptop.spaces.access(notes.id)).carriers;
 
     const { did } = await carrierKey();
     const added = await laptop.carriers.add({ did, name: 'Chrome' });
     await until(
-      async () => (await keepers()).some((k) => k.did === did),
+      async () => (await carriers()).some((k) => k.did === did),
       5000,
-      'the carrier to be named a keeper',
+      'the space to name the carrier',
     );
-    assert.deepEqual(await keepers(), [{ did, name: 'Chrome' }]);
+    assert.deepEqual(await carriers(), [{ did, name: 'Chrome' }]);
 
-    // The account's personal space names it too, as a keeper of everything it lists; its own carry space does not.
+    // The account's personal space names it too; its own carry space does not.
     const registry = (await laptop.account.space())!;
-    const registryKeepers = async () => (await laptop.spaces.access(registry)).keepers;
+    const registryCarriers = async () => (await laptop.spaces.access(registry)).carriers;
     await until(
-      async () => (await registryKeepers()).some((k) => k.did === did),
+      async () => (await registryCarriers()).some((k) => k.did === did),
       5000,
       'the registry to name the carrier',
     );
-    assert.deepEqual((await laptop.spaces.access(added.space)).keepers, []);
+    assert.deepEqual((await laptop.spaces.access(added.space)).carriers, []);
 
     // A space made after the carrier was added names it too.
     const later = await laptop.spaces.create({ name: 'Later', visibility: 'public' });
     await until(
-      async () => (await laptop.spaces.access(later.id)).keepers.length === 1,
+      async () => (await laptop.spaces.access(later.id)).carriers.length === 1,
       5000,
       'the new space to name it',
     );
 
     await laptop.carriers.remove(added.space);
-    await until(async () => (await keepers()).length === 0, 5000, 'the carrier to be no longer named');
-    await until(async () => (await registryKeepers()).length === 0, 5000, 'nor in the registry');
+    await until(async () => (await carriers()).length === 0, 5000, 'the carrier to be no longer named');
+    await until(async () => (await registryCarriers()).length === 0, 5000, 'nor in the registry');
   });
 
   test('two devices never online together meet through it, and it cannot read what it carries', async () => {

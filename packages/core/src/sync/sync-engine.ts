@@ -287,7 +287,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     for (const needed of dependsOn) {
       if (typeof needed !== 'string' || (await storage.getVersion(needed))) continue;
       lacking.push(needed);
-      // Syncing shallow, the version before is not fetched: a keeper's copy of this one comes without it.
+      // Syncing shallow, the version before is not fetched: a carrier's copy of this one comes without it.
       if (needed === version.prev && config.shallowWith?.(peerId)) continue;
       intake.firsts.set(needed, version.collection);
     }

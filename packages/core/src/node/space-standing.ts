@@ -327,8 +327,8 @@ export function createStanding(
   /**
    * Whether a version from outside, checked to be what its id names and
    * placed in its key's log, may be stored. `vouched`: it came from a
-   * keeper this node syncs shallow with (05 §5), so a `prev` this node lacks
-   * by design is that keeper's to have checked; one it holds is checked here.
+   * carrier this node syncs shallow with (05 §5), so a `prev` this node lacks
+   * by design is that carrier's to have checked; one it holds is checked here.
    */
   async function admission(version: Version, vouched = false): Promise<Standing> {
     if (version.retain && isStub(version))

@@ -476,7 +476,7 @@ itself and every command under it, by whole segments: `/record` covers
 | `/record/write`      | Write records (every version in a space needs it)                                                                                                         |
 | `/record/read`       | Reading, for an app given read access, which writes nothing; a peer checks it only on an invitation that shares a space to view ([03](03-spaces.md) §7.4) |
 | `/collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                                                                 |
-| `/access/change`     | Every other change to a space's access history: role definitions, assignments, removals, invites, revocations, keys, relays, keepers, forks               |
+| `/access/change`     | Every other change to a space's access history: role definitions, assignments, removals, invites, revocations, keys, relays, carriers, forks              |
 | `/account/write`     | Write in the account's own spaces, open its inbox and knock ([07](07-inbox.md))                                                                           |
 
 What each command permits in a space is specified in
@@ -707,7 +707,7 @@ a note to some spaces, name them, as above.
 
 A key whose note grants `/access/change` in a space with no policy on
 `.collection` changes there what its account may do to others: roles,
-members, invites, the space's key, relays and keepers, and a successor
+members, invites, the space's key, relays and carriers, and a successor
 (`sys.succeed`, [03](03-spaces.md) §2.5, §2.7). Its account's own place it
 leaves alone unless the note is about the whole account: an app given a
 space never makes the account leave or step down, never gives up its roles,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { COLLECTION_DEFINE, SPACE_KEEPERS, type SpaceHostingView } from '@minca/core';
+import { COLLECTION_DEFINE, SPACE_CARRIERS, type SpaceHostingView } from '@minca/core';
 import { useCollections, useNode } from '@minca/react';
 import { useAssignable, useMay } from './may';
 import { activity, INSTRUCT } from '@minca/std';
@@ -253,7 +253,7 @@ export function SpaceBots({
 }) {
   const { bots: listed, look, lookBots } = useSpaceBots(spaceId, writable);
   const [adding, setAdding] = useState(false);
-  const mayManage = useMay(spaceId, SPACE_KEEPERS) && writable;
+  const mayManage = useMay(spaceId, SPACE_CARRIERS) && writable;
   if (!listed.length && !mayManage) return null;
   return (
     <section aria-label="AI helpers" className="stack">

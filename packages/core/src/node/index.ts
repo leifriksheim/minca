@@ -23,7 +23,7 @@ export type {
 } from '../space/own-automations.js';
 export type { CopyAccountParams, CopyResult } from './copy.js';
 export type { StoreFactory, StoreOptions, WorkerStores } from './stores.js';
-export type { Keeper } from '../space/roles.js';
+export type { SpaceCarrier } from '../space/roles.js';
 export type {
   P2PNode,
   NodeConfig,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   RECORD_WRITE,
-  SPACE_KEEPERS,
+  SPACE_CARRIERS,
   type NodeCollection,
   type NodeRecord,
   type SpaceSummary,
@@ -76,7 +76,7 @@ export function AutomationBuilder({
   const node = useNode();
   const { did } = useAccount();
   const mayDefine = useMayDefine(space.id);
-  const mayManage = useMay(space.id, SPACE_KEEPERS);
+  const mayManage = useMay(space.id, SPACE_CARRIERS);
   const here = usePeopleHere();
   const people: People = here?.people ?? new Map();
   const from = editing ?? copying;

@@ -458,7 +458,7 @@ describe('a standard message’s topics', () => {
     assert.throws(() => standardCollections([without]), /different shape/);
   });
 
-  test('every standard collection that names people has them as topics, so a keeper can tell them', () => {
+  test('every standard collection that names people has them as topics, so a carrier can tell them', () => {
     const expected: Record<string, ReadonlyArray<string>> = {
       'std.message': ['link:in', 'mentions', 'replyingTo'],
       'std.comment': ['mentions', 'replyingTo', 'respondingTo'],
@@ -492,7 +492,7 @@ describe('a standard message’s topics', () => {
     );
   });
 
-  test('a report names nobody: whoever is reported is not told, and a keeper can’t tell whom it is about', () => {
+  test('a report names nobody: whoever is reported is not told, and a carrier can’t tell whom it is about', () => {
     assert.equal(standardDefinition('std.report')?.topics, undefined);
   });
 

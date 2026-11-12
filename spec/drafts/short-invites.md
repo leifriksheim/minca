@@ -16,7 +16,7 @@ short enough to paste, say and print.
   supports, lacks the raw form.
 - Invite nodes are kept like invite relays, not dropped after `4003`s: they
   come from the inviter, as the relays do. Whether to let them go belongs to
-  #220's keepers plan.
+  #220's carriers plan.
 - The record key is `link:<hex of the pin>`: record keys are lowercase.
 
 ## The problem
@@ -198,9 +198,9 @@ The invite's nodes are kept with the space as its invite relays are, and
 dialled until one answers `4003` (it doesn't hold the space) on reconnects
 over a day. A host behind on a key change answers `4003` too, to a joiner
 holding only the new key; that host is dropped, and the joiner's own
-carriers or the space's keepers take over. They came from the inviter, as the relays did, so they get the
-same trust. Whether a node that the space's own keepers don't name should
-stay longer belongs to #220's keepers plan.
+carriers or the space's carriers take over. They came from the inviter, as the relays did, so they get the
+same trust. Whether a node that the space's own carriers don't name should
+stay longer belongs to #220's carriers plan.
 
 Preview is steps 1–3. No blob found means the link expired or its places are
 gone; the joiner is told that, not that it was closed.
@@ -337,7 +337,7 @@ Three reviews. Both blockers came from taking more than one blob on trust; the t
 | **Blocker.** A link holder's blob with a random key locked joiners out: the last key imported is the one proved with | The pin is the hash of the inviter's blob. Exactly one blob is taken; two that match refuse the link               |
 | An account's record could make a host answer under any topic, a door's included                                      | The host computes the topic from the record's blob; the account names none                                         |
 | Nodes and relays from other blobs steered and exposed joiners                                                        | Only the inviter's blob counts. At most 8 nodes, each pinned by DID; relays pass `checkRelays`                     |
-| The keeper rule dropped an editor's host                                                                             | Invite nodes are kept as invite relays are, until the node says it doesn't hold the space                          |
+| The carrier rule dropped an editor's host                                                                            | Invite nodes are kept as invite relays are, until the node says it doesn't hold the space                          |
 | A registry record's `mailboxes` steered every device of the account                                                  | No `mailboxes`: devices drop only to relays they use for the space                                                 |
 | Pin collisions; record kept after a key change; `S` at rest; inflating; place format; relay row; closing by link     | Two matching blobs refuse; record deleted on a key change; 05 §15; streaming; URLs with a default; row fixed; §7.6 |
 
@@ -368,7 +368,7 @@ Three reviews. Both blockers came from taking more than one blob on trust; the t
 - **Expiry enforced by peers.** Peers would compare the join's time with the
   expiry, and the joiner writes that time. Closing the invite is the hard
   stop; `until` is when to stop serving it.
-- **Signed contact cards for every keeper.** Useful once nodes move often;
+- **Signed contact cards for every carrier.** Useful once nodes move often;
   not needed while links are fixed and short-lived.
 
 ## Prior art

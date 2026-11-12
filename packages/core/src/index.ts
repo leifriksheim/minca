@@ -184,7 +184,7 @@ export {
   ROLE_UNASSIGN,
   KEY_CHANGE,
   SPACE_RELAYS,
-  SPACE_KEEPERS,
+  SPACE_CARRIERS,
   grantFits,
 } from './space/grants.js';
 export type { FoundingRole } from './space/grants.js';

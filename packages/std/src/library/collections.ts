@@ -21,7 +21,7 @@ export interface DraftCollection {
   readonly rules?: CollectionRules;
   /** What a version must be to count, judged by readers */
   readonly contract?: CollectionContract;
-  /** Fields whose values keepers can match without reading: `mentions`, `channel` */
+  /** Fields whose values carriers can match without reading: `mentions`, `channel` */
   readonly topics?: ReadonlyArray<string>;
 }
 

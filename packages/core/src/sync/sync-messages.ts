@@ -59,7 +59,7 @@ export type SyncMessage = V &
     /**
      * "I have these now": versions the sender took in from the receiver, or
      * already had. A node holding only part of a space lets go of its own
-     * writes once enough keepers have said so.
+     * writes once enough carriers have said so.
      */
     | { readonly type: 'stored'; readonly ids: ReadonlyArray<string> }
     /** "Send me these chunks of a file, or its chunk list" (spec 05 §16.6) */

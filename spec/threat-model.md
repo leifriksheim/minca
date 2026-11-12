@@ -124,7 +124,7 @@ reference implementation, or any implementation, honestly.
     the inviter (03 §7.4).
   - The nodes an invite names are dialled by whoever joins with it, so a
     node named by whoever signed it learns the joiner's address and when it
-    is online, until the space names keepers that leave it out. They are
+    is online, until the space names carriers that leave it out. They are
     never passed on in the joiner's own invites (03 §7.4).
   - A knock's invite that reaches anyone but the person it was for, passed
     on by them, taken from a device of theirs, or opened by an app they gave
@@ -382,7 +382,7 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     accounts that may not each change it, and a contested collection takes
     no writes until someone granted `/collection/define` for it settles it (02 §6.3).
 - **Does not hold yet.**
-  - A member who may name keepers (`/space/keepers`) can name its own
+  - A member who may name carriers (`/space/carriers`) can name its own
     session one, and stands as a host does toward a node syncing shallow
     (§3.8). Being a member, it can also sign what it serves: if it may edit
     a record it can freeze it there, and what that node then writes on the
@@ -1093,17 +1093,17 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     whoever holds the key and note can share a space it has to view
     (03 §7.4), though the service offers no tool that does; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
-    it. A write is done once the space's keepers have it (05 §9), or, in a
+    it. A write is done once the space's carriers have it (05 §9), or, in a
     space that names none, once a member's device online then does, which the
     app is told is less sure, since a peer that holds part of the space, or
     refused the write, counts too. What outlives the node is only where its
     key has signed, its last place in each collection, kept for as long as
     the token lasts: a key that outlives its node must keep that (02 §4.10).
-    One the app was told wasn't done, lost before a keeper has it (the node
+    One the app was told wasn't done, lost before a carrier has it (the node
     evicted, the service stopped), leaves a gap in the key's log, so a later
     disconnect withdraws what it wrote after (03 §6.3), as on any device that
-    lost a write; an idle node waits up to an hour for its keepers first. A call in a space runs
-    only once the node is level with the space's keepers connected then, or
+    lost a write; an idle node waits up to an hour for its carriers first. A call in a space runs
+    only once the node is level with the space's carriers connected then, or
     any one peer where it names none (a member who connects and says nothing
     can't hold it up): a
     node behind would say a record isn't there, and write a first version in
@@ -1160,7 +1160,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     until its note runs out, at most a month;
     nodes that run while called, each holding in memory the spaces its calls
     name that those always-on nodes carry, at most 32 MB, and up to an hour
-    after for writes their keepers don't have; each a few bytes of places for a key that wrote, for a
+    after for writes their carriers don't have; each a few bytes of places for a key that wrote, for a
     month; and, through its own spaces' records, requests to as many public
     hosts as it names, and sockets to them while its node runs, their names
     looked up a few at a time, each for two seconds at most, so they hold up
@@ -1173,7 +1173,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     `minca spaces …` or `minca records …` command an agent's shell runs is
     a node of the agent's for that command, under the MCP service's rule
     above, so it refuses a space it can't catch up with rather than write
-    behind, and a write fails until a keeper or member has it. Those act as
+    behind, and a write fails until a carrier or member has it. Those act as
     the agent unless an account is named. The commands that open the account
     itself (`minca run`, `minca agent --bot`, `minca init --existing`) unlock
     it with whatever passphrase or recovery code the environment holds, so a
@@ -1374,7 +1374,7 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     contract's verdict that cites a superseded stub reads pending there
     while it fails on a whole node, and neither counts it. What it can do
     to such a node is under "Does not hold yet".
-    _Tests: `packages/core/tests/shallow.test.ts` ("a keeper vouches for nothing in the access history: a role it slips in counts nowhere", "a shallow node with its keeper away takes the latest edits whole from any other peer", "a shallow node refuses to remove someone whose line it lacks", "a node that synced a space shallow still refuses once the space names no keeper", "a store synced shallow, opened by a node not set to sync shallow, still refuses to remove someone", "an edit after its collection gained a contract counts on a shallow node as on a whole one", "a double spend counts on no shallow node: a line is held whole, losing twins too")._
+    _Tests: `packages/core/tests/shallow.test.ts` ("a carrier vouches for nothing in the access history: a role it slips in counts nowhere", "a shallow node with its carrier away takes the latest edits whole from any other peer", "a shallow node refuses to remove someone whose line it lacks", "a node that synced a space shallow still refuses once the space names no carrier", "a store synced shallow, opened by a node not set to sync shallow, still refuses to remove someone", "an edit after its collection gained a contract counts on a shallow node as on a whole one", "a double spend counts on no shallow node: a line is held whole, losing twins too")._
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).
@@ -1403,18 +1403,18 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     What it stops is being there for them: members meet only when two are
     online, wakes for the space stop, and after `keepDays` its copy goes.
 - **Does not hold yet.**
-  - A node syncing a space by shallow sets (05 §5.1) takes a keeper's word
+  - A node syncing a space by shallow sets (05 §5.1) takes a carrier's word
     for the chain below each version it sends, outside lines and the access
-    history, and never checks it. A keeper alone can hold records back from
+    history, and never checks it. A carrier alone can hold records back from
     it, or leave it at an older edit, for as long as it stays connected:
-    while a keeper is connected the node takes no chain from its other
-    peers. With a member who may edit a record, a keeper can also show it a
+    while a carrier is connected the node takes no chain from its other
+    peers. With a member who may edit a record, a carrier can also show it a
     version that skipped a `seq` or follows one nobody has, which a whole
     node refuses (02 §4.7). That freezes the record there for as long as
-    the node's store lasts, the keeper gone or not, and what the node
+    the node's store lasts, the carrier gone or not, and what the node
     itself writes on top of it counts on no whole node. A remote MCP
-    session's store lasts as long as the session. Keepers include an
-    account's carriers, of its registry and contacts space too (06 §4), so
+    session's store lasts as long as the session. A space's carriers include those
+    of the accounts that manage it, in their registry and contacts space too (06 §4), so
     this reaches every space the account manages. A revoke written from
     such a node takes away more of the revoked key's writes than one from a
     whole node would.
@@ -1428,7 +1428,7 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     with the first of them, with nothing to choose, when that host keeps
     accounts with nothing paid (`packages/core/docs/sign-in.md`). It is handed
     the account's DID, passes for the registry, the contacts and every space
-    joined later, its wakes and links, and is named a keeper, all as a host
+    joined later, its wakes and links, and is named in the spaces it manages, all as a host
     the person chose would be; and it sees what a host sees of each (below).
     Stopping it on the account page tells it to forget, but a host that
     doesn't keeps the read seeds it was given, proving itself and fetching

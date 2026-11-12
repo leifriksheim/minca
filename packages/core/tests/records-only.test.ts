@@ -234,7 +234,7 @@ describe('an agent acting for a person', () => {
     );
   });
 
-  test("it cannot change a space's key, relays or keepers — not even one it was not given", async () => {
+  test("it cannot change a space's key, relays or carriers — not even one it was not given", async () => {
     const { alice, space } = await setup();
     const { id: other } = await alice.node.spaces.create({ name: 'Diary', visibility: 'private' });
     const agent = await agentFor(alice, [space]);
@@ -243,7 +243,7 @@ describe('an agent acting for a person', () => {
     for (const id of [space, other]) {
       await assert.rejects(() => helper.spaces.changeKey(id), /Ask the person/);
       await assert.rejects(() => helper.spaces.setRelays(id, ['wss://elsewhere.example']), /Ask the person/);
-      await assert.rejects(() => helper.spaces.setKeepers(id, []), /Ask the person/);
+      await assert.rejects(() => helper.spaces.setCarriers(id, []), /Ask the person/);
     }
     assert.equal((await alice.node.spaces.access(other)).key?.changes, before);
   });

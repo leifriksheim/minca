@@ -648,7 +648,7 @@ export const usableGrant = (grant: Grant | null): boolean =>
  * its data in this site's storage. It has no account key: it sees the spaces
  * it was given, not the account's whole list.
  *
- * In a space that names a keeper it holds only the collections the app uses
+ * In a space that names a carrier it holds only the collections the app uses
  * (`cache`); pass `cache: false` to hold every space whole.
  */
 export async function startConnectedNode(params: {

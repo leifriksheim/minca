@@ -13,7 +13,7 @@ import {
   MEMBER_KEY_COLLECTION,
   SPACE_KEY_RECORD,
   SPACE_RELAYS_RECORD,
-  SPACE_KEEPERS_RECORD,
+  SPACE_CARRIERS_RECORD,
   inviteKey as inviteRecordKey,
   assignKey,
   removalKey,
@@ -34,10 +34,10 @@ import {
   KEY_COLLECTION,
   MAX_RELAYS,
   RELAYS_COLLECTION,
-  KEEPERS_COLLECTION,
+  SPACE_CARRIERS_COLLECTION,
   FORK_COLLECTION,
-  checkKeepers,
-  type Keeper,
+  checkCarriers,
+  type SpaceCarrier,
   REMOVE_COLLECTION,
   REVOKE_COLLECTION,
   ROLE_COLLECTION,
@@ -62,7 +62,7 @@ const NO_CUTOFF: Cutoff = new Map();
 /** Access states replayed for warrants */
 const MAX_VIEWS = 256;
 
-const areKeepers = (keepers: unknown): keepers is Keeper[] => checkKeepers(keepers) === null;
+const areCarriers = (carriers: unknown): carriers is SpaceCarrier[] => checkCarriers(carriers) === null;
 
 /** A cutoff from a record's body — key DID → collection → the place covered up to — or null when it isn't one */
 function readCutoff(value: unknown): Cutoff | null {
@@ -229,12 +229,10 @@ export function createHistory({
         if (typeof fork === 'string' || version.key !== (await forkKey(fork.writer))) return null;
         return { ...base, kind: 'fork', writer: fork.writer, collection: fork.collection, from: fork.from };
       }
-      case KEEPERS_COLLECTION: {
-        const { keepers } = body;
-        const copies = body.copies ?? null;
-        if (version.key !== SPACE_KEEPERS_RECORD || checkKeepers(keepers, copies) !== null) return null;
-        if (!areKeepers(keepers) || !(copies === null || typeof copies === 'number')) return null;
-        return { ...base, kind: 'keepers', keepers, copies };
+      case SPACE_CARRIERS_COLLECTION: {
+        const { carriers } = body;
+        if (version.key !== SPACE_CARRIERS_RECORD || !areCarriers(carriers)) return null;
+        return { ...base, kind: 'carriers', carriers };
       }
       case REVOKE_COLLECTION: {
         // At a key naming both the key and its account, so no one else's revoke can take its place.

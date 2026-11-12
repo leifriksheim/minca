@@ -90,7 +90,7 @@ A checkpoint skips checks for everyone who trusts it, so it needs a signer
 that a newcomer has reason to trust. Proposed:
 
 - its author, as of its `seen`, holds `manage` in the space; or is named
-  among the space's keepers (`sys.keepers`), whose job is already to hold the
+  among the space's carriers (`sys.carriers`), whose job is already to hold the
   space whole;
 - it is written by a person's root, or under a note that grants
   `access/change`, never a records-only note (as for the
@@ -116,7 +116,7 @@ version that is already held and valid.
 
 ### 3.2 When to write one
 
-The node's own policy, not protocol: a keeper, or an always-on node of a
+The node's own policy, not protocol: a carrier, or an always-on node of a
 manager, writes a checkpoint for a record whose chain is longer than _n_
 stubs (say 16), anchored at a version older than a horizon (say 30 days) and
 at least _k_ versions below the current (say 1). The horizon is what makes a
@@ -276,7 +276,7 @@ collection's line instead of a chain.
   why (as for an unknown `v` in a sync message).
 - **The sync protocol version** (`v` in sync messages, 05 §4) goes up by one,
   so peers can tell before the switch is read.
-- **Writing the first checkpoints** is the keeper's job (§3.2), in the
+- **Writing the first checkpoints** is the carrier's job (§3.2), in the
   background, oldest records first; nothing has to happen at once.
 - **No backfill of trust.** Stubs already dropped can't be recovered, so a
   space should not turn the switch on until its apps implement it.
@@ -320,8 +320,8 @@ dropped. Worth doing for canvases and chats with many deletes. It touches
 
 ## 8. Open questions
 
-- **Signers.** `manage` or keepers (§3.1)? A quorum? Should a checkpoint by a
-  keeper whose keeper status was later removed still stand? (Proposed: yes,
+- **Signers.** `manage` or carriers (§3.1)? A quorum? Should a checkpoint by a
+  carrier whose carrier status was later removed still stand? (Proposed: yes,
   judged as of `seen`.)
 - **Never withdrawn.** Is "judged as of `seen`, never withdrawn" acceptable
   for something written by a manager who was removed concurrently?

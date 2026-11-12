@@ -1,6 +1,6 @@
 /**
- * The MCP service's node and the space's keepers: a fresh node never starts a
- * line again, and a write isn't done until every keeper has it.
+ * The MCP service's node and the space's carriers: a fresh node never starts a
+ * line again, and a write isn't done until every carrier has it.
  */
 import { test } from 'node:test';
 import { noteTerms } from '../../core/src/identity/abilities.js';
@@ -130,7 +130,7 @@ test('a fresh node answers only once it holds what the free host does: a payment
   assert.notEqual(verdict?.passes, false, JSON.stringify(verdict));
 });
 
-test('with two always-on keepers, a payment one of them missed isn’t done until both have it, and the next builds on it', async () => {
+test('with two always-on carriers, a payment one of them missed isn’t done until both have it, and the next builds on it', async () => {
   const hosts = await Promise.all(
     [0, 1].map(async () => {
       const served = await startHost({
@@ -222,7 +222,7 @@ test('with two always-on keepers, a payment one of them missed isn’t done unti
   });
 
   // The second host can't be reached. She pays 5; the first stores it, but a payment is done
-  // only once both keepers have it: a node behind, answered by the second alone, would pay again
+  // only once both carriers have it: a node behind, answered by the second alone, would pay again
   // from the balance before it, a double spend that ends her line (09 §7.5; found by adversarial review).
   link2.refuse();
   const paid = await callTool(issuer, token, 'records_update', {
@@ -237,7 +237,7 @@ test('with two always-on keepers, a payment one of them missed isn’t done unti
   await until(
     async () => (await callTool(issuer, token, 'spaces_status', { space: space.id })).includes('"pending":0'),
     60_000,
-    'both keepers to have the payment',
+    'both carriers to have the payment',
   );
   await new Promise((resolve) => setTimeout(resolve, 3000));
 

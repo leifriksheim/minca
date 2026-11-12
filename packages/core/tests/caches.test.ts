@@ -1,7 +1,7 @@
 /**
  * Holding part of a space: an app connected to an account holds only the
- * collections it uses once the space names keepers, keeps its own writes
- * until enough keepers have them, and says when a query is complete.
+ * collections it uses once the space names carriers, keeps its own writes
+ * until enough carriers have them, and says when a query is complete.
  */
 import { test, describe, afterEach } from 'node:test';
 import { newRecordKey } from '../src/records/key.js';
@@ -33,7 +33,7 @@ afterEach(async () => {
 
 interface Person {
   node: P2PNode;
-  /** The key its node shows peers — what a space names as a keeper */
+  /** The key its node shows peers — what a space names as a carrier */
   session: () => string;
   stores: StoreFactory;
   signer: RootSigner;
@@ -72,7 +72,7 @@ async function held(p: Person, space: string, collection: string): Promise<numbe
 }
 
 /** Alice's space with chat and photos in it, and Bob and Carol in it too, their nodes holding everything */
-async function spaceWithKeepers(hub: FakeHub, options: { keepers?: boolean } = {}) {
+async function spaceWithCarriers(hub: FakeHub, options: { carriers?: boolean } = {}) {
   const alice = await person(hub);
   const bob = await person(hub);
   const carol = await person(hub);
@@ -84,19 +84,19 @@ async function spaceWithKeepers(hub: FakeHub, options: { keepers?: boolean } = {
     await alice.node.records.put(space, 'app.chat', { text: `hello ${i}` });
     await alice.node.records.put(space, 'app.photos', { title: `photo ${i}` });
   }
-  for (const keeper of [bob, carol]) {
-    await keeper.node.spaces.join(await alice.node.spaces.invite(space));
-    await hold(keeper.node, space);
-    await joined(keeper.node, space);
+  for (const carrier of [bob, carol]) {
+    await carrier.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(carrier.node, space);
+    await joined(carrier.node, space);
   }
   await until(
     async () =>
       (await held(bob, space, 'app.photos')) === 10 && (await held(carol, space, 'app.photos')) === 10,
     5000,
-    'the keepers to hold it all',
+    'the carriers to hold it all',
   );
-  if (options.keepers !== false) {
-    await alice.node.spaces.setKeepers(space, [
+  if (options.carriers !== false) {
+    await alice.node.spaces.setCarriers(space, [
       { did: bob.session(), name: 'Bob’s host' },
       { did: carol.session(), name: 'Carol’s extension' },
     ]);
@@ -115,7 +115,7 @@ async function app(hub: FakeHub, alice: Person, space: string, cache: CacheConfi
 describe('holding part of a space', () => {
   test('removing someone from an app that holds only the chat leaves their whole chat standing: its lines are whole', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, bob, space } = await spaceWithKeepers(hub);
+    const { alice, bob, space } = await spaceWithCarriers(hub);
     const erin = await app(hub, alice, space);
     // Chat, then a photo, then chat: the photo leaves a gap in her key's log at a node without photos.
     const first = await erin.node.records.put(space, 'app.chat', { text: 'one' });
@@ -160,11 +160,11 @@ describe('holding part of a space', () => {
     );
   });
 
-  test('with keepers named, an app holds only what it uses, and says when a query is complete', async () => {
+  test('with carriers named, an app holds only what it uses, and says when a query is complete', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, space } = await spaceWithKeepers(hub);
+    const { alice, space } = await spaceWithCarriers(hub);
     assert.deepEqual(
-      (await alice.node.spaces.access(space)).keepers.map((k) => k.name),
+      (await alice.node.spaces.access(space)).carriers.map((k) => k.name),
       ['Bob’s host', 'Carol’s extension'],
     );
 
@@ -197,12 +197,12 @@ describe('holding part of a space', () => {
 
   test('a writer’s line that names a version not here keeps a query incomplete, until it comes', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, bob, space } = await spaceWithKeepers(hub);
+    const { alice, bob, space } = await spaceWithCarriers(hub);
     const dave = await app(hub, alice, space);
     const chat = () => dave.node.records.query(space, { collection: 'app.chat' });
     await until(async () => (await chat()).complete, 5000, 'the chat to be complete');
 
-    // A key of Alice's writes twice; only the second reaches anyone, as if a keeper had held the first back.
+    // A key of Alice's writes twice; only the second reaches anyone, as if a carrier had held the first back.
     const provider = createP256Provider();
     const pair = await provider.generateKeyPair();
     const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
@@ -251,7 +251,7 @@ describe('holding part of a space', () => {
 
   test('an app that writes in a collection holds it from then on, and fetches the rest of it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, space } = await spaceWithKeepers(hub);
+    const { alice, space } = await spaceWithCarriers(hub);
     const dave = await app(hub, alice, space);
     await until(async () => (await dave.node.spaces.status(space)).holds !== 'all', 5000, 'holding part');
     // Written without a query first: what it writes stays here, and the collection comes whole,
@@ -262,18 +262,18 @@ describe('holding part of a space', () => {
     await until(async () => (await held(dave, space, 'app.photos')) === 11, 5000, 'the rest of the photos');
   });
 
-  test('a space that names no keeper is held whole, as before', async () => {
+  test('a space that names no carrier is held whole, as before', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, space } = await spaceWithKeepers(hub, { keepers: false });
+    const { alice, space } = await spaceWithCarriers(hub, { carriers: false });
     const dave = await app(hub, alice, space);
     await until(async () => (await held(dave, space, 'app.photos')) === 10, 5000, 'everything to arrive');
     assert.equal((await dave.node.spaces.status(space)).holds, 'all');
     assert.equal((await dave.node.records.query(space, { collection: 'app.chat' })).complete, true);
   });
 
-  test('an app’s own write stays pending until two keepers have it', async () => {
+  test('an app’s own write stays pending until two carriers have it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, carol, space } = await spaceWithKeepers(hub);
+    const { alice, carol, space } = await spaceWithCarriers(hub);
     const dave = await app(hub, alice, space);
     await until(
       async () => (await dave.node.records.query(space, { collection: 'app.chat' })).complete,
@@ -281,40 +281,40 @@ describe('holding part of a space', () => {
       'the chat',
     );
 
-    // Carol's keeper is away.
+    // Carol's carrier is away.
     await letGo(carol.node, space);
     await dave.node.records.put(space, 'app.chat', { text: 'from the app' });
     await new Promise((resolve) => setTimeout(resolve, 300));
-    assert.equal((await dave.node.spaces.status(space)).pending, 1, 'one keeper is not enough');
+    assert.equal((await dave.node.spaces.status(space)).pending, 1, 'one carrier is not enough');
 
     await hold(carol.node, space);
     await until(
       async () => (await dave.node.spaces.status(space)).pending === 0,
       5000,
-      'the second keeper to have it',
+      'the second carrier to have it',
     );
   });
 
-  test('kept waits for the keepers to have what the app wrote since; where none are named, for a peer online', async () => {
+  test('kept waits for the carriers to have what the app wrote since; where none are named, for a peer online', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, carol, space } = await spaceWithKeepers(hub);
+    const { alice, carol, space } = await spaceWithCarriers(hub);
     const dave = await app(hub, alice, space);
-    // Carol's keeper is away: one keeper is not enough, so an earlier write stays pending.
+    // Carol's carrier is away: one carrier is not enough, so an earlier write stays pending.
     await letGo(carol.node, space);
     await dave.node.records.put(space, 'app.chat', { text: 'earlier' });
     assert.equal(await dave.node.spaces.kept(space, 300), null, 'not kept yet');
-    // A node holding the whole space waits on its keepers the same way.
+    // A node holding the whole space waits on its carriers the same way.
     await alice.node.records.put(space, 'app.chat', { text: 'from the whole node' });
     assert.equal(await alice.node.spaces.kept(space, 300), null, 'nor the whole node’s');
     // What was written since is all a caller waits for; the earlier write still waits.
     const since = Date.now();
-    assert.equal(await dave.node.spaces.kept(space, 300, since), 'keepers', 'nothing since');
+    assert.equal(await dave.node.spaces.kept(space, 300, since), 'carriers', 'nothing since');
     await hold(carol.node, space);
-    assert.equal(await dave.node.spaces.kept(space, 5000), 'keepers', 'once both keepers have it');
-    assert.equal(await alice.node.spaces.kept(space, 5000), 'keepers', 'the whole node’s too');
+    assert.equal(await dave.node.spaces.kept(space, 5000), 'carriers', 'once both carriers have it');
+    assert.equal(await alice.node.spaces.kept(space, 5000), 'carriers', 'the whole node’s too');
 
-    // A space that names no keepers: every member's node is a copy, so one online that has it will do.
-    const { alice: anne, space: unkept } = await spaceWithKeepers(hub, { keepers: false });
+    // A space that names no carriers: every member's node is a copy, so one online that has it will do.
+    const { alice: anne, space: unkept } = await spaceWithCarriers(hub, { carriers: false });
     const erin = await app(hub, anne, unkept);
     await erin.node.records.put(unkept, 'app.chat', { text: 'hi' });
     assert.equal(await erin.node.spaces.kept(unkept, 5000), 'peer', 'a member online has it');
@@ -325,17 +325,17 @@ describe('holding part of a space', () => {
     assert.equal(await solo.node.spaces.kept(mine, 500), null, 'nobody to keep it');
   });
 
-  test('a keeper’s own writes are kept once the other keepers have them: it is one of the copies', async () => {
+  test('a carrier’s own writes are kept once the other carriers have them: it is one of the copies', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { bob, space } = await spaceWithKeepers(hub);
+    const { bob, space } = await spaceWithCarriers(hub);
     for (let i = 0; i < 3; i++) await bob.node.records.put(space, 'app.chat', { text: `from Bob ${i}` });
-    assert.equal(await bob.node.spaces.kept(space, 5000), 'keepers');
+    assert.equal(await bob.node.spaces.kept(space, 5000), 'carriers');
     assert.equal((await bob.node.spaces.status(space)).pending, 0, 'nothing waits for good');
   });
 
   test('a collection nobody used for a while is dropped when the app opens again; declared ones stay', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, space } = await spaceWithKeepers(hub);
+    const { alice, space } = await spaceWithCarriers(hub);
     const dave = await app(hub, alice, space, { collections: ['app.chat'] });
     await until(
       async () => (await dave.node.records.query(space, { collection: 'app.photos' })).complete,
@@ -357,11 +357,11 @@ describe('holding part of a space', () => {
     assert.deepEqual((await again.node.spaces.status(space)).holds, ['app.chat']);
   });
 
-  test('only someone who manages the space names its keepers', async () => {
+  test('only someone who manages the space names its carriers', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { bob, space } = await spaceWithKeepers(hub, { keepers: false });
+    const { bob, space } = await spaceWithCarriers(hub, { carriers: false });
     await assert.rejects(
-      bob.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'mine' }]),
+      bob.node.spaces.setCarriers(space, [{ did: bob.session(), name: 'mine' }]),
       /may not change who keeps the space/,
     );
   });

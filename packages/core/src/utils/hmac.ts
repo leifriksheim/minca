@@ -1,5 +1,5 @@
 /**
- * HMAC-SHA256 keys derived by HKDF-SHA256, for tags and keys a keeper can
+ * HMAC-SHA256 keys derived by HKDF-SHA256, for tags and keys a carrier can
  * compare but not reverse.
  * @module hmac
  */

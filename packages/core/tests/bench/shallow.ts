@@ -1,7 +1,7 @@
 /**
  * A new device joining a space shaped like an account registry that churned:
  * one record edited HOT times (6000) and R records (100) edited E times (130)
- * each, kept whole by a keeper the space names. Timed until the newcomer
+ * each, kept whole by a carrier the space names. Timed until the newcomer
  * reads every record's latest edit, syncing whole and shallow, over links of
  * LATENCY ms (20).
  *
@@ -49,22 +49,22 @@ async function until(done: () => Promise<boolean>, what: string, since = perform
   }
 }
 
-const keeperStores = memoryStores();
-const keeper = await person(hub, { stores: keeperStores });
-await keeper.spaces.join(await alice.spaces.invite(space));
-await hold(keeper, space);
-await joined(keeper, space, LIMIT);
-const versionsIn = async (stores: typeof keeperStores) =>
+const carrierStores = memoryStores();
+const carrier = await person(hub, { stores: carrierStores });
+await carrier.spaces.join(await alice.spaces.invite(space));
+await hold(carrier, space);
+await joined(carrier, space, LIMIT);
+const versionsIn = async (stores: typeof carrierStores) =>
   (await createStorageProvider(await stores(`spaces/${space}`)).sums()).get('app.seen')?.count ?? 0;
-await until(async () => (await versionsIn(keeperStores)) === versions, 'the keeper holding every version');
-await alice.spaces.setKeepers(space, [{ did: keeper.sessionDid, name: 'Host' }]);
+await until(async () => (await versionsIn(carrierStores)) === versions, 'the carrier holding every version');
+await alice.spaces.setCarriers(space, [{ did: carrier.sessionDid, name: 'Host' }]);
 await until(
-  async () => (await keeper.spaces.access(space)).keepers.length > 0,
-  'the keeper knowing it keeps',
+  async () => (await carrier.spaces.access(space)).carriers.length > 0,
+  'the carrier knowing it keeps',
 );
 const invite = await alice.spaces.invite(space);
 await alice.close();
-console.log(`${versions} versions, all at the keeper. A newcomer over ${LATENCY}ms links:`);
+console.log(`${versions} versions, all at the carrier. A newcomer over ${LATENCY}ms links:`);
 
 for (const shallow of [false, true].filter((mode) => MODES.includes(mode ? 'shallow' : 'whole'))) {
   const stores = memoryStores();
@@ -79,5 +79,5 @@ for (const shallow of [false, true].filter((mode) => MODES.includes(mode ? 'shal
   );
   await node.close();
 }
-await keeper.close();
+await carrier.close();
 process.exit(0);

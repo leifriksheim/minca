@@ -127,7 +127,7 @@ const TASK_STATUS = ['todo', 'doing', 'done', 'cancelled'] as const;
  * A task: `in` a column of a board, or in a project with no columns, and
  * under a parent task. `status` is for lists without columns; a board's
  * column says where the task is.
- * `assignees` is its topic, so "assigned to me" can be asked of a keeper that
+ * `assignees` is its topic, so "assigned to me" can be asked of a carrier that
  * can't read it.
  */
 export const task = define({

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { SPACE_KEEPERS, type SpaceSummary } from '@minca/core';
+import { SPACE_CARRIERS, type SpaceSummary } from '@minca/core';
 import { spaceProfile } from '@minca/std';
 import { useCan, useNode } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
@@ -22,7 +22,7 @@ export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space
   const [addingBot, setAddingBot] = useState(false);
   const [connecting, setConnecting] = useState(false);
   // A bot runs where the space is kept online, so adding one is for whoever chooses that.
-  const mayAddBot = useMay(space.id, SPACE_KEEPERS) && space.writable;
+  const mayAddBot = useMay(space.id, SPACE_CARRIERS) && space.writable;
   // Writing its profile, or adding the collection for it where the space has none yet.
   const mayPresent = useCan(space.id, 'create', spaceProfile.name) || mayDefine;
 

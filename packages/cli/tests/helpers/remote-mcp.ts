@@ -15,11 +15,11 @@ import { createRelay, MAX_MESSAGE_BYTES } from '../../../relay/relay.mjs';
 import net from 'node:net';
 import path from 'node:path';
 
-/** Names her carriers as a space's keepers, as her home does for a space it hands a host */
+/** Names her carriers among a space's, as her home does for a space it manages */
 export async function keptByHosts(node: P2PNode, space: string, hosts = 1): Promise<void> {
   await until(async () => (await node.carriers.list()).length >= hosts, 10_000, 'her hosts to be carriers');
   const carriers = await node.carriers.list();
-  await node.spaces.setKeepers(
+  await node.spaces.setCarriers(
     space,
     carriers.map((carrier) => ({ did: carrier.did, name: carrier.name })),
   );

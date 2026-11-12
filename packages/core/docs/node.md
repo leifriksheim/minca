@@ -284,8 +284,8 @@ taken over once that process is gone.
 A space opens the first time anything asks for it: a read, a write, a status.
 Opening reads its store, joins its peers and starts syncing. It also
 publishes the account's profile there, checks whether the node's note was
-revoked there ([`revoked`](#events)), and names the account's carriers as
-keepers if the account manages the space.
+revoked there ([`revoked`](#events)), and names the account's carriers among
+the space's if the account manages it.
 
 The space stays open until it is released or the node closes.
 `spaces.hold(id)` keeps it open, and resolves to a function that lets go:
@@ -331,7 +331,7 @@ The account registry, the contacts space and carry spaces can't be left.
 ## Holding part of a space
 
 A node doesn't need every record in a space. With `config.cache`, once a space
-names at least one keeper, the node holds only the collections it uses, plus
+names at least one carrier, the node holds only the collections it uses, plus
 the space's own `sys.*` collections. Apps connected to an account home do this
 by default.
 
@@ -349,7 +349,7 @@ const node = await createNode({
 
 `cache` is a [`CacheConfig`](https://minca.dev/api/core/interfaces/CacheConfig/): the
 collections to hold from the start, when to drop one nothing uses, and how
-many keepers a write must reach.
+many carriers a write must reach.
 
 ### What gets held
 
@@ -357,11 +357,11 @@ many keepers a write must reach.
   `include … from`, and a write marks the one it writes. Sync then fetches
   them.
 - Until the node has caught up once with a node holding the whole space, it
-  can't know whether the space names keepers, so it holds only what it uses.
+  can't know whether the space names carriers, so it holds only what it uses.
 - An unused collection is dropped when the space opens, and every 6 hours
   while it stays open. It stops being held before its versions go, so nothing
   syncs it back meanwhile. A collection with a pending write is never dropped.
-- A space that names no keeper is held whole.
+- A space that names no carrier is held whole.
 - The account registry, the contacts space and carry spaces are always held
   whole.
 - When what it holds changes, the node says hello to every peer again.
@@ -374,23 +374,23 @@ lacks nothing a writer's line there names. A version that names one the node
 doesn't have adds it to `missing`, and the node asks every peer for it by id.
 It asks again whenever the collection is level with a peer.
 
-So what a keeper withholds from the middle of a writer's line shows up as
+So what a carrier withholds from the middle of a writer's line shows up as
 missing. A writer's newest versions aren't named by any line yet, so holding
 those back would take every peer the node syncs with.
 
 ### Pending writes
 
-In a space that names keepers, every node's own writes are _pending_ until
-`min(keepers named, max(copies ?? 2, cache.copies ?? 0))` keepers have them. A
-keeper's own node counts as one. A keeper confirms a write with `stored`, or by
+In a space that names carriers, every node's own writes are _pending_ until
+`min(carriers named, max(2, cache.copies ?? 0))` carriers have them. A
+carrier's own node counts as one. A carrier confirms a write with `stored`, or by
 being level with the writer on its collection. Only peers named in
-`sys.keepers` count. A node holding part of a space keeps pending writes in
+`sys.carriers` count. A node holding part of a space keeps pending writes in
 its store across runs. One holding all of it keeps the latest 4096 in memory.
 
 `node.spaces.kept(spaceId, waitMs, since?)` waits up to `waitMs`, at most a
 minute, for this node's writes to be kept elsewhere:
 
-- In a space with keepers, it says `'keepers'` once none of its writes from
+- In a space with carriers, it says `'carriers'` once none of its writes from
   `since` (ms) on is pending.
 - In a space without, it says `'peer'` once a connected peer holds all this
   node does. That's less sure, since the peer may be a device that goes away.
@@ -403,10 +403,10 @@ a server's node at the end of its job.
 
 This state lives in the space's own store, `spaces/<spaceId>`:
 
-| Key                    | Value (JSON)                                                         |
-| ---------------------- | -------------------------------------------------------------------- |
-| `cache`                | `{ settled, used, level, missing }`, below                           |
-| `pending/<version id>` | `{ collection, by: [keeper DID…], at }`, deleted once `by` is enough |
+| Key                    | Value (JSON)                                                          |
+| ---------------------- | --------------------------------------------------------------------- |
+| `cache`                | `{ settled, used, level, missing }`, below                            |
+| `pending/<version id>` | `{ collection, by: [carrier DID…], at }`, deleted once `by` is enough |
 
 In `cache`, `settled` says whether the node has synced with a whole-space
 peer. `used` maps each collection to when a query last used it, `level` to
@@ -418,7 +418,7 @@ ids a writer's line names that aren't here.
 
 A record edited thousands of times has thousands of versions, and an agent
 answering one question doesn't need them. With `shallow: true`, a node syncs
-a space with its keepers by **shallow sets**: each record's current and
+a space with its carriers by **shallow sets**: each record's current and
 first versions, what its writer retained, and every version in a line, not
 every superseded stub.
 
@@ -426,11 +426,11 @@ It is for a node that lives for a session and can't work without the
 space's always-on nodes anyway, as a remote MCP session's. Apps and devices
 leave it off and hold every version, so they work the same with no host.
 
-A shallow node takes its keepers' word for the history it skips. A keeper
+A shallow node takes its carriers' word for the history it skips. A carrier
 can hold a record back or show an older edit, but it can't forge one:
 signatures, standing and first versions are checked as always. With no
-keeper connected the node syncs whole from its other peers, and a space
-that names no keepers syncs whole.
+carrier connected the node syncs whole from its other peers, and a space
+that names no carriers syncs whole.
 
 Removing someone, or taking a role away (`unassign`, `removeMember`,
 `stepDown`), needs everything they wrote, which a shallow node doesn't
@@ -440,7 +440,7 @@ hold: it refuses. `revoke` always goes through.
 ### Planned: caches that widen and trim
 
 > **Planned.** A node holding part of a space would hold all of it when too
-> few keepers are online (opt-in, `cache.widen: true`), and drop least
+> few carriers are online (opt-in, `cache.widen: true`), and drop least
 > recently used collections above `cache.maxBytes` or when the browser runs
 > low on room. Fetching linked records by key, and holding less than a
 > collection, are planned in
@@ -483,14 +483,14 @@ one run at a time:
    afresh each run what the registry still lacks. A space left meanwhile
    stays left.
 4. It brings every carrier's passes and wakes up to date.
-5. It names the account's carriers as keepers of the open spaces it manages,
-   the account registry and contacts space among them: a carrier keeps the
-   account's personal space. Carry spaces name none.
+5. It names the account's carriers among those of the open spaces it manages,
+   the account registry and contacts space too. Carry spaces name none.
 6. It asks each host the account uses how it stands, without waiting, and
    hands it the spaces if it was paid ([hosting](#carriers-hosting-and-notifications)).
    A host whose signed status says the account's subscription lapsed, or has
-   none, and that it won't carry for it as things stand, stops being a carrier,
-   and so a keeper. A host that doesn't answer stays one.
+   none, and that it won't carry for it as things stand, stops being the
+   account's carrier, and so is named in no space. A host that doesn't answer
+   stays one.
 
 Creating or joining a space writes its `sys.joined` record. Leaving deletes it.
 
@@ -614,7 +614,7 @@ work over a command line, MCP and WebMCP ([actions](actions.md)).
 `node.spaces` creates, invites, previews, joins and leaves spaces, and
 manages who is in them: `access`, `may`, `holdsRole`, `defineRole`, `assign`,
 `unassign`, `removeMember`, `stepDown`, `succeed`, `closeInvite`,
-`changeKey`, `setRelays`, `setKeepers`, `revoke`, `profiles` and
+`changeKey`, `setRelays`, `setCarriers`, `revoke`, `profiles` and
 `authenticator` ([spaces](spaces.md)).
 
 An invite is for `member` when the inviter may give that role. Otherwise it's
@@ -623,7 +623,7 @@ for the first role by name the inviter may give, or view-only with none
 
 - `access(id)` gives a [`SpaceAccess`](https://minca.dev/api/core/interfaces/SpaceAccess/):
   the roles with their current definitions, the members, invites, founders,
-  successors, keepers and more
+  successors, carriers and more
   ([the top and founders](permissions.md#the-top-and-founders)).
 - `may(id, cmd, args?, account?)` asks whether an account may run a command
   with these arguments now. Apps use it to show what someone can do. Peers
@@ -804,7 +804,7 @@ made out to `keys`, and was issued by `node.did`. The agent:
 
 It refuses everything that needs a person: making, inviting, joining or
 leaving spaces; changing members, roles, invites, revokes, keys, relays or
-keepers; defining or deleting collections; live messages, which a person's
+carriers; defining or deleting collections; live messages, which a person's
 devices would take as theirs; renaming or revoking at the account level;
 carriers, notifications and hosting; contacts and the inbox; `delegate` and
 `asAgent`.
@@ -1051,7 +1051,7 @@ A new space lives only on the device that made it until a carrier syncs it.
 An invite handed out before then, with the device closed, can't be used.
 
 `node.spaces.carried(spaceId, { waitMs? })` is a short loading step for that.
-If a carrier of the account is connected, it names it a keeper, writes its
+If a carrier of the account is connected, it names it in the space, writes its
 pass, and waits up to `waitMs` (default 3 seconds) for it to be level. It
 says whether it was, and is `false` at once with no carrier connected.
 `contacts.ask` and `inbox.knock` wait on it, and return what it said as

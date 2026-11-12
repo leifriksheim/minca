@@ -1,5 +1,5 @@
 /**
- * Places as cells: geohashes a keeper can match as topics, and the cells that
+ * Places as cells: geohashes a carrier can match as topics, and the cells that
  * cover a circle, so "near here" never misses something inside it.
  */
 import { test, describe } from 'node:test';
@@ -124,7 +124,7 @@ describe('places as topics', () => {
     assert.deepEqual(place.topics, ['cells']);
   });
 
-  test('a keeper finds listings near a point by its cells, without reading them', async () => {
+  test('a carrier finds listings near a point by its cells, without reading them', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const { id: space } = await alice.node.spaces.create({ name: 'Market', ...team, visibility: 'private' });
@@ -145,7 +145,7 @@ describe('places as topics', () => {
       );
     }
 
-    // Within 3 km of Grünerløkka: nine cells, each a tag a keeper can match.
+    // Within 3 km of Grünerløkka: nine cells, each a tag a carrier can match.
     const area = cellsAround(59.9226, 10.7522, 3);
     assert.ok(area);
     // Any of the nine: what a carrier holds as nine tags.

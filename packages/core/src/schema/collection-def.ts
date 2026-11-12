@@ -175,7 +175,7 @@ export interface StoredCollection {
   readonly rules?: CollectionRules;
   /**
    * Fields whose values are topics: each record carries a keyed hash of each
-   * value on its outside (`tags`), so a keeper that can't read the record can
+   * value on its outside (`tags`), so a carrier that can't read the record can
    * still match "in #design" or "mentions me". It learns which records share
    * a topic, never which topic. At most 8; exact values only.
    */

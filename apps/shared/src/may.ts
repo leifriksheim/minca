@@ -25,7 +25,7 @@ const COMMANDS: Readonly<Record<string, string>> = {
   '/role/unassign': 'take roles away',
   '/key/change': "change the space's key",
   '/space/relays': 'choose where the space meets',
-  '/space/keepers': 'choose who keeps the space',
+  '/space/carriers': 'choose who keeps the space',
   '/space/succeed': 'name a space that succeeds this one',
   '/std.automation/instruct': 'instruct bots',
 };

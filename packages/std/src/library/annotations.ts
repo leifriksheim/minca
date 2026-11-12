@@ -28,7 +28,7 @@ export type Reaction = BodyOf<typeof reaction>;
  * A comment on any record, optionally a reply to another comment. As on a
  * `std.message`, `mentions` names who it calls on and `replyingTo` whose
  * comment it answers, and both are topics: "mentions me" and "replies to me"
- * can be asked of a keeper that can't read it. Commenting is also how to
+ * can be asked of a carrier that can't read it. Commenting is also how to
  * mention someone on a record of any kind, whatever its own definition holds.
  */
 export const comment = define({

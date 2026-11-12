@@ -48,7 +48,7 @@ peers outside the space see only the envelope. Other members see who wrote to
 whom, and when, but not what.
 
 `to` is a topic, so "direct messages to me" can be an automation of the
-account's own, which a keeper can match without reading the message
+account's own, which a carrier can match without reading the message
 ([automations](automations.md#the-accounts-own)).
 
 A reader can't tell that the others read the same text. A writer can seal

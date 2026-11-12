@@ -321,7 +321,7 @@ test('with no host at all, a chat app writes to her open tab through a relay, an
     40_000,
     'the chat app to read the space from her tab',
   );
-  // The space names no keepers: her tab has what it writes, and the app is told that is all.
+  // The space names no carriers: her tab has what it writes, and the app is told that is all.
   const put = await callTool(issuer, token, 'records_put', {
     space: space.id,
     records: [{ collection: 'app.note', body: { text: 'Bread too' } }],

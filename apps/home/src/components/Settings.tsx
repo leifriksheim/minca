@@ -150,7 +150,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             hasPasskey={hasPasskey}
             hasPassword={hasPassword}
             apps={connections.filter((app) => app.access !== 'carry').length}
-            keepers={carriers?.length ?? 0}
+            carriers={carriers?.length ?? 0}
             openTab={openTab}
           />
           <Username />
@@ -371,13 +371,13 @@ function Overview({
   hasPasskey,
   hasPassword,
   apps,
-  keepers,
+  carriers,
   openTab,
 }: {
   hasPasskey: boolean;
   hasPassword: boolean;
   apps: number;
-  keepers: number;
+  carriers: number;
   openTab: (tab: TabId) => void;
 }) {
   const ways = [hasPasskey && 'Passkey', hasPassword && 'password'].filter(Boolean).join(' and ');
@@ -402,8 +402,8 @@ function Overview({
       kind: 'burst',
       colour: 'sage',
       title: 'Data',
-      line: keepers === 0 ? 'Only on this device' : `Kept online by ${keepers}`,
-      warn: keepers === 0,
+      line: carriers === 0 ? 'Only on this device' : `Kept online by ${carriers}`,
+      warn: carriers === 0,
       tab: 'data',
     },
     {

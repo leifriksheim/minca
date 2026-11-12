@@ -26,7 +26,7 @@ import {
   type InviteLinkOptions,
   type SpaceRecord,
 } from '../space/space-manager.js';
-import type { Keeper } from '../space/roles.js';
+import type { SpaceCarrier } from '../space/roles.js';
 import { ROLE_ASSIGN } from '../space/grants.js';
 import { createWriters } from './writers.js';
 import { openSpaceRuntime, type SpaceRuntime } from './space-runtime.js';
@@ -171,7 +171,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const registryStore = await config.stores('registry', { seal: true });
   const registry = createSpaceManager(registryStore, provider);
   const runtimes = new Map<string, Promise<SpaceRuntime>>();
-  /** What this node fetches ahead and keeps of others' files; null, all of them, as a keeper does */
+  /** What this node fetches ahead and keeps of others' files; null, all of them, as a carrier does */
   let fileLimits: FileLimits | null = config.fetchFiles === 'all' ? null : DEVICE_LIMITS;
   /** Spaces with no invite waiting: every change to them would otherwise read the registry to find that out */
   const noInviteWaiting = new Set<string>();
@@ -283,7 +283,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     open.catch(() => runtimes.delete(spaceId));
     runtimes.set(spaceId, open);
     // Its profile, a revoke from an earlier visit, carriers added since, and the hosts to reach.
-    for (const step of [people.publishProfile, checkRevoked, carrying.nameKeepers]) whenOpen(spaceId, step);
+    for (const step of [people.publishProfile, checkRevoked, carrying.nameOwnCarriers])
+      whenOpen(spaceId, step);
     inBackground(open.then(() => hosts.reachHosts(spaceId)));
     return open;
   }
@@ -584,7 +585,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // folder takes long, and nothing here needs it done. Signing in waits on this.
     inBackground(carrying.passAll());
     // Carriers came or went: the open spaces this account manages say so.
-    for (const spaceId of runtimes.keys()) whenOpen(spaceId, carrying.nameKeepers);
+    for (const spaceId of runtimes.keys()) whenOpen(spaceId, carrying.nameOwnCarriers);
     // Not awaited: a host that is slow to answer must not hold up the rest.
     inBackground(hosts.keepHosted());
     // Hosts came or went: every open space holds a socket to those the account uses now.
@@ -777,8 +778,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (!online.some((peer) => carriers.has(peer))) return false;
       const deadline = Date.now() + (options.waitMs ?? CARRIED_WAIT_MS);
       const open = await runtime(spaceId);
-      // Named a keeper, and given its pass now rather than whenever the next round comes.
-      await carrying.nameKeepers(spaceId, open).catch(() => {});
+      // Named a carrier, and given its pass now rather than whenever the next round comes.
+      await carrying.nameOwnCarriers(spaceId, open).catch(() => {});
       inBackground(carrying.passAll());
       while (!closed && Date.now() < deadline) {
         // Level with a carrier: it holds the genesis, and any invite opened since.
@@ -823,9 +824,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     revoke: perSpace((rt, key: string, options?: RevokeOptions) => rt.revoke(key, options)),
     changeKey: perSpace((rt) => rt.rotateKey()),
     setRelays: perSpace((rt, relays: ReadonlyArray<string>) => rt.setRelays(relays)),
-    setKeepers: perSpace((rt, keepers: ReadonlyArray<Keeper>, copies?: number | null) =>
-      rt.setKeepers(keepers, copies ?? null),
-    ),
+    setCarriers: perSpace((rt, carriers: ReadonlyArray<SpaceCarrier>) => rt.setCarriers(carriers)),
 
     async authenticator(spaceId) {
       const record = await findRecord(spaceId);

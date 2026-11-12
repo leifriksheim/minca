@@ -1,13 +1,13 @@
 /**
  * @module node/space-membership
  * Who may do what in a space, as this account changes it: roles, members,
- * invites, keys revoked, relays and keepers. Every change is a record in the
+ * invites, keys revoked, relays and carriers. Every change is a record in the
  * access history (`space-history.ts`), refused here, with the reason, when
  * every peer would refuse it.
  */
 import {
   SPACE_RELAYS_RECORD,
-  SPACE_KEEPERS_RECORD,
+  SPACE_CARRIERS_RECORD,
   deriveInviteKey,
   generateInviteSecret,
   inviteKey as inviteRecordKey,
@@ -25,9 +25,9 @@ import {
   INVITE_COLLECTION,
   RELAYS_COLLECTION,
   checkRelays,
-  KEEPERS_COLLECTION,
-  checkKeepers,
-  type Keeper,
+  SPACE_CARRIERS_COLLECTION,
+  checkCarriers,
+  type SpaceCarrier,
   REMOVE_COLLECTION,
   REVOKE_COLLECTION,
   ROLE_COLLECTION,
@@ -104,11 +104,11 @@ export function createMembership(deps: MembershipDeps) {
       await upsert(RELAYS_COLLECTION, SPACE_RELAYS_RECORD, { relays: [...named] });
     },
 
-    async setKeepers(keepers: ReadonlyArray<Keeper>, copies: number | null = null) {
-      const named = keepers.map((k) => ({ did: k.did, name: k.name }));
-      const problem = checkKeepers(named, copies);
+    async setCarriers(carriers: ReadonlyArray<SpaceCarrier>) {
+      const named = carriers.map((k) => ({ did: k.did, name: k.name }));
+      const problem = checkCarriers(named);
       if (problem) throw new Error(problem);
-      await upsert(KEEPERS_COLLECTION, SPACE_KEEPERS_RECORD, { keepers: named, copies });
+      await upsert(SPACE_CARRIERS_COLLECTION, SPACE_CARRIERS_RECORD, { carriers: named });
     },
 
     async access(): Promise<SpaceAccess> {
@@ -146,8 +146,7 @@ export function createMembership(deps: MembershipDeps) {
         heads: history.heads(),
         key: state.keys.length ? { changes: state.keys.length - 1, held: currentKey(state) !== null } : null,
         relays: state.relays.length ? state.relays : deps.meeting.relays(),
-        keepers: state.keepers,
-        copies: state.copies,
+        carriers: state.carriers,
         forks: history.forks(),
         flagged: await deps.flagged(),
       });

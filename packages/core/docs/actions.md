@@ -257,6 +257,6 @@ What the agent writes shows "via agent". Its node runs for that one command:
 
 - A command naming a space waits up to 15 s to hold what an always-on node
   there holds, and refuses when it can't.
-- A command that writes waits up to 10 s for the space's keepers to have it,
+- A command that writes waits up to 10 s for the space's carriers to have it,
   and fails when nobody does.
 - A `peerContent` result comes with `PEER_CONTENT_NOTE` on stderr.

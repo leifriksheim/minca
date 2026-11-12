@@ -174,8 +174,8 @@ describe('a node that syncs shallow', () => {
     return { node, me, manager, stores, config, seed, session: () => session };
   }
 
-  /** Alice's space with one card edited `edits` times, kept whole by Bob, who it names its keeper */
-  async function editedSpace(hub: FakeHub, edits: number, options: { keepers?: false } = {}) {
+  /** Alice's space with one card edited `edits` times, kept whole by Bob, who it names its carrier */
+  async function editedSpace(hub: FakeHub, edits: number, options: { carriers?: false } = {}) {
     const alice = await personOn(hub);
     const bob = await personOn(hub);
     const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'public' });
@@ -189,11 +189,11 @@ describe('a node that syncs shallow', () => {
     const versionsAt = async (who: { stores: StoreFactory }) =>
       (await createStorageProvider(await who.stores(`spaces/${space}`)).sums()).get('app.card')?.count ?? 0;
     await until(async () => (await versionsAt(bob)) === edits + 1, 10_000, 'Bob to keep every edit');
-    if (options.keepers !== false) {
-      await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
-      // As at a host: the keeper knows it is one before anyone new comes.
+    if (options.carriers !== false) {
+      await alice.node.spaces.setCarriers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+      // As at a host: the carrier knows it is one before anyone new comes.
       await until(
-        async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+        async () => (await bob.node.spaces.access(space)).carriers.length === 1,
         10_000,
         'Bob to know he keeps it',
       );
@@ -223,16 +223,16 @@ describe('a node that syncs shallow', () => {
     return dave;
   }
 
-  test('takes a record edited 200 times as its first and current version, from its keeper', async () => {
+  test('takes a record edited 200 times as its first and current version, from its carrier', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, space, key, versionsAt } = await editedSpace(hub, 200);
     const dave = await newcomer(hub, alice.node, space, key, true);
     assert.equal(await versionsAt(dave), 2);
   });
 
-  test('where the space names no keepers, nobody vouches for what it skips: it takes every edit', async () => {
+  test('where the space names no carriers, nobody vouches for what it skips: it takes every edit', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, space, key, versionsAt } = await editedSpace(hub, 200, { keepers: false });
+    const { alice, space, key, versionsAt } = await editedSpace(hub, 200, { carriers: false });
     const dave = await newcomer(hub, alice.node, space, key, true);
     await until(async () => (await versionsAt(dave)) === 201, 10_000, 'every edit');
   });
@@ -270,8 +270,12 @@ describe('a node that syncs shallow', () => {
     await hold(bob.node, space);
     await joined(bob.node, space);
     await until(async () => (await latest(bob.node)) === 3, 10_000, 'Bob, whole, to count edit 3');
-    await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
-    await until(async () => (await bob.node.spaces.access(space)).keepers.length === 1, 10_000, 'the keeper');
+    await alice.node.spaces.setCarriers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+    await until(
+      async () => (await bob.node.spaces.access(space)).carriers.length === 1,
+      10_000,
+      'the carrier',
+    );
 
     const dave = await personOn(hub, { shallow: true });
     await dave.node.spaces.join(await alice.node.spaces.invite(space));
@@ -311,9 +315,9 @@ describe('a node that syncs shallow', () => {
       10_000,
       'Bob to keep the line',
     );
-    await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+    await alice.node.spaces.setCarriers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
     await until(
-      async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+      async () => (await bob.node.spaces.access(space)).carriers.length === 1,
       10_000,
       'Bob keeping it',
     );
@@ -363,9 +367,9 @@ describe('a node that syncs shallow', () => {
     await bob.node.spaces.join(await alice.node.spaces.invite(space));
     await hold(bob.node, space);
     await joined(bob.node, space);
-    await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+    await alice.node.spaces.setCarriers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
     await until(
-      async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+      async () => (await bob.node.spaces.access(space)).carriers.length === 1,
       10_000,
       'Bob keeps it',
     );
@@ -393,7 +397,7 @@ describe('a node that syncs shallow', () => {
     await hold(alice.node, space);
     const balance = async (node: P2PNode) =>
       (await node.records.get<{ balance: number }>(space, line))?.body?.balance;
-    await until(async () => (await balance(bob.node)) === -30, 10_000, 'the keeper to fail both twins');
+    await until(async () => (await balance(bob.node)) === -30, 10_000, 'the carrier to fail both twins');
 
     const dave = await personOn(hub, { shallow: true });
     await dave.node.spaces.join(await alice.node.spaces.invite(space));
@@ -406,7 +410,7 @@ describe('a node that syncs shallow', () => {
     );
   });
 
-  test('a shallow node with its keeper away takes the latest edits whole from any other peer', async () => {
+  test('a shallow node with its carrier away takes the latest edits whole from any other peer', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, bob, space, key } = await editedSpace(hub, 20);
     await bob.node.close();
@@ -423,7 +427,7 @@ describe('a node that syncs shallow', () => {
   /** A shallow node that also holds only the collections it uses */
   const SHALLOW_AND_PARTIAL = { shallow: true, cache: { collections: ['app.card'] } } as const;
 
-  /** Alice's new space with Mallory in it and one card of hers, both on devices started with `options`, and no keeper */
+  /** Alice's new space with Mallory in it and one card of hers, both on devices started with `options`, and no carrier */
   async function spaceOfTwoDevices(hub: FakeHub, options: Parameters<typeof personOn>[1]) {
     const alice = await personOn(hub, options);
     const mallory = await personOn(hub, options);
@@ -441,13 +445,13 @@ describe('a node that syncs shallow', () => {
     ['two shallow nodes holding part of the space', SHALLOW_AND_PARTIAL],
     ['two shallow nodes', { shallow: true }],
   ] as const) {
-    test(`${devices} in a space with no keeper sync its records: neither waits for a node holding it whole`, async () => {
+    test(`${devices} in a space with no carrier sync its records: neither waits for a node holding it whole`, async () => {
       const hub = createFakeHub({ latencyMs: 1 });
       const { alice, space, card } = await spaceOfTwoDevices(hub, options);
       await until(async () => (await alice.node.records.get(space, card.key)) !== null, 10_000, 'the card');
     });
 
-    test(`${devices}, no keeper: whoever made the space removes a member at once, alone`, async () => {
+    test(`${devices}, no carrier: whoever made the space removes a member at once, alone`, async () => {
       const hub = createFakeHub({ latencyMs: 1 });
       const { alice, mallory, space, card } = await spaceOfTwoDevices(hub, options);
       await until(async () => (await alice.node.records.get(space, card.key)) !== null, 10_000, 'the card');
@@ -455,16 +459,23 @@ describe('a node that syncs shallow', () => {
 
       const started = Date.now();
       await alice.node.spaces.removeMember(space, mallory.node.did);
-      assert.ok(Date.now() - started < 5_000, 'no keeper to ask for shallow sets, so no history to wait for');
+      assert.ok(
+        Date.now() - started < 5_000,
+        'no carrier to ask for shallow sets, so no history to wait for',
+      );
     });
   }
 
-  test('a shallow node new to a space that names a keeper refuses to remove someone, the keeper away or not', async () => {
+  test('a shallow node new to a space that names a carrier refuses to remove someone, the carrier away or not', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { alice, bob, space } = await editedSpace(hub, 5, { keepers: false });
+    const { alice, bob, space } = await editedSpace(hub, 5, { carriers: false });
     const hostAway = await personOn(createFakeHub({ latencyMs: 1 }));
-    await alice.node.spaces.setKeepers(space, [{ did: hostAway.node.did, name: 'A host, away' }]);
-    await until(async () => (await bob.node.spaces.access(space)).keepers.length === 1, 10_000, 'the keeper');
+    await alice.node.spaces.setCarriers(space, [{ did: hostAway.node.did, name: 'A host, away' }]);
+    await until(
+      async () => (await bob.node.spaces.access(space)).carriers.length === 1,
+      10_000,
+      'the carrier',
+    );
 
     const aliceAgain = await personOn(hub, { shallow: true, seed: alice.seed });
     await aliceAgain.node.spaces.join(await alice.node.spaces.invite(space));
@@ -480,16 +491,20 @@ describe('a node that syncs shallow', () => {
     );
   });
 
-  test('a node that synced a space shallow still refuses once the space names no keeper', async () => {
+  test('a node that synced a space shallow still refuses once the space names no carrier', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, bob, space, key } = await editedSpace(hub, 20);
     const aliceAgain = await newcomer(hub, alice.node, space, key, true, alice.seed, 20);
     await aliceAgain.node.close();
-    await alice.node.spaces.setKeepers(space, []);
+    await alice.node.spaces.setCarriers(space, []);
     const reopened = await createNode({ ...aliceAgain.config, shallow: true });
     nodes.push(reopened);
     await hold(reopened, space);
-    await until(async () => (await reopened.spaces.access(space)).keepers.length === 0, 10_000, 'no keeper');
+    await until(
+      async () => (await reopened.spaces.access(space)).carriers.length === 0,
+      10_000,
+      'no carrier',
+    );
     await assert.rejects(reopened.spaces.removeMember(space, bob.node.did), /doesn't hold all they wrote/);
   });
 
@@ -531,7 +546,7 @@ describe('a node that syncs shallow', () => {
     assert.ok(Date.now() - started < 5_000, 'no wait for a gap that never fills');
   });
 
-  test('a keeper vouches for nothing in the access history: a role it slips in counts nowhere', async () => {
+  test('a carrier vouches for nothing in the access history: a role it slips in counts nowhere', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await personOn(hub);
     const bob = await personOn(hub);
@@ -542,13 +557,13 @@ describe('a node that syncs shallow', () => {
     await hold(bob.node, space);
     await joined(bob.node, space);
     await alice.node.spaces.assign(space, bob.node.did, 'editor');
-    await alice.node.spaces.setKeepers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
+    await alice.node.spaces.setCarriers(space, [{ did: bob.session(), name: 'Bob’s host' }]);
     await alice.node.spaces.assign(space, erin.node.did, 'editor');
     await alice.node.spaces.unassign(space, erin.node.did, 'editor');
     const erinRoles = async (node: P2PNode) =>
       (await node.spaces.access(space)).members.find((member) => member.did === erin.node.did)?.roles ?? [];
     await until(
-      async () => (await bob.node.spaces.access(space)).keepers.length === 1,
+      async () => (await bob.node.spaces.access(space)).carriers.length === 1,
       10_000,
       'Bob keeps it',
     );
@@ -586,7 +601,7 @@ describe('a node that syncs shallow', () => {
     await hold(dave.node, space);
     await joined(dave.node, space);
     await until(
-      async () => (await dave.node.spaces.access(space)).keepers.length === 1,
+      async () => (await dave.node.spaces.access(space)).carriers.length === 1,
       10_000,
       'Dave to know',
     );

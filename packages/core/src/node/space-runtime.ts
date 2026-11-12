@@ -116,13 +116,13 @@ export interface SpaceRuntimeDeps {
    * trusts less join the account to a space or leave one.
    */
   readonly accountOnly?: boolean;
-  /** Hold only the collections used, once the space names a keeper (`NodeConfig.cache`). Absent: hold it whole. */
+  /** Hold only the collections used, once the space names a carrier (`NodeConfig.cache`). Absent: hold it whole. */
   readonly cache?: CacheConfig;
-  /** Sync by shallow sets with the space's keepers (`NodeConfig.shallow`) */
+  /** Sync by shallow sets with the space's carriers (`NodeConfig.shallow`) */
   readonly shallow?: boolean;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
-  /** The limits on others' files as they are now; null fetches and keeps every file named, as a keeper does (spec 05 §16.6). Absent: a device's. */
+  /** The limits on others' files as they are now; null fetches and keeps every file named, as a carrier does (spec 05 §16.6). Absent: a device's. */
   readonly fileLimits?: () => FileLimits | null;
 }
 
@@ -285,7 +285,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (problem) return { ok: false, reason: problem };
     // Whatever its key signed takes a place in that key's log, allowed or not: a second at one place is a fork.
     if ((await versions.judge(version)).verified) await lines.placeInLog(version);
-    // From a keeper this node syncs shallow with: the chain below it is the keeper's to have checked.
+    // From a carrier this node syncs shallow with: the chain below it is the carrier's to have checked.
     // Not in a line or the access history, which are held whole: their chains are here to check.
     const vouched =
       from !== undefined &&
@@ -384,7 +384,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     history.changed(placed);
     for (const derived of [index, catalog, profiles, keys, standing, checks]) derived.forget();
     keys.keepUp();
-    // The access history may name keepers now, or none.
+    // The access history may name carriers now, or none.
     void holding.refreshHolds().catch(() => {});
     // Or a new key, which someone connected may not hold.
     void peers.letGoOfOutsiders().catch(() => {});
@@ -577,13 +577,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
     syncedWith: peers.syncedWith,
     /**
-     * Who has this node's writes from `since` on: the space's keepers, or, in a
+     * Who has this node's writes from `since` on: the space's carriers, or, in a
      * space that names none, where every member's node is a copy, a peer
      * connected now that holds all this node does. Null when nobody, in time.
      */
-    async kept(waitMs: number, since?: number): Promise<'keepers' | 'peer' | null> {
-      if ((await history.access()).history.current.keepers.length > 0)
-        return (await holding.kept(waitMs, since)) ? 'keepers' : null;
+    async kept(waitMs: number, since?: number): Promise<'carriers' | 'peer' | null> {
+      if ((await history.access()).history.current.carriers.length > 0)
+        return (await holding.kept(waitMs, since)) ? 'carriers' : null;
       const deadline = Date.now() + waitMs;
       do {
         const left = Math.max(0, deadline - Date.now());

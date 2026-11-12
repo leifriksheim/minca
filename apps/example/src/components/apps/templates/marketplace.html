@@ -131,7 +131,7 @@
       if (openTitle) goTo(openKey, openTitle);
     }, [openKey, openTitle]);
     const [near, setNear] = useNear();
-    // The cells around the circle, as a keeper would match them; then the exact distance. With no circle, every listing.
+    // The cells around the circle, as a carrier would match them; then the exact distance. With no circle, every listing.
     const where = nearWhere(near);
     const candidates = useRecords(LISTING, where);
     if (!listed || !orders || !updates) return null;

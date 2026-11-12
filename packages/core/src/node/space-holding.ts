@@ -2,13 +2,13 @@
  * @module node/space-holding
  * Holding part of a space.
  *
- * With `cache` set, and once the space names a keeper, this node holds only
+ * With `cache` set, and once the space names a carrier, this node holds only
  * the collections it uses, besides the space's own. Sync takes in nothing
  * else. A collection holding a pending write is never dropped. Without a
- * keeper the space is held whole: then this node may be one of its copies.
+ * carrier the space is held whole: then this node may be one of its copies.
  *
  * On any node, holding part of a space or all of it, its own writes are
- * pending until enough of the space's keepers have them (05 §9): what a node
+ * pending until enough of the space's carriers have them (05 §9): what a node
  * that may stop before it syncs again waits on (`kept`).
  */
 import type { StorageAdapter, Version } from '../types.js';
@@ -27,7 +27,7 @@ const DAY = 24 * HOUR;
 const CACHE_KEY = 'cache';
 /** There once this node has synced the space by shallow sets: from then on it lacks the history */
 const SYNCED_SHALLOW_KEY = 'synced-shallow';
-/** One entry per write of this node's still waiting for keepers: `pending/<id>` */
+/** One entry per write of this node's still waiting for carriers: `pending/<id>` */
 const PENDING_PREFIX = 'pending/';
 /** How many pending writes a node holding a whole space keeps track of */
 const MAX_PENDING_IN_MEMORY = 4096;
@@ -35,7 +35,7 @@ const MAX_PENDING_IN_MEMORY = 4096;
 interface CacheState {
   /**
    * Whether this node has caught up with a node holding the whole space at
-   * least once: until then it can't know whether the space names keepers.
+   * least once: until then it can't know whether the space names carriers.
    */
   settled: boolean;
   /** Collection → when a query last used it: what this node holds */
@@ -50,7 +50,7 @@ interface CacheState {
   missing: Record<string, string[]>;
 }
 
-/** A write waiting for keepers: its collection, the keepers that have it, and when it was written */
+/** A write waiting for carriers: its collection, the carriers that have it, and when it was written */
 interface Pending {
   readonly collection: string;
   readonly by: string[];
@@ -95,12 +95,12 @@ const isPending = (value: unknown): value is Pending =>
 /** What holding part of the space reads of the open space */
 export interface HoldingContext {
   readonly cache: CacheConfig | null;
-  /** Whether to sync by shallow sets with the space's keepers (`NodeConfig.shallow`) */
+  /** Whether to sync by shallow sets with the space's carriers (`NodeConfig.shallow`) */
   readonly shallow: boolean;
   readonly adapter: StorageAdapter;
   readonly storage: StorageProvider;
   readonly spaceId: string;
-  /** The key this node signs with: its writes are the ones that wait for keepers */
+  /** The key this node signs with: its writes are the ones that wait for carriers */
   readonly sessionDid: string;
   readonly emit: (event: NodeEvent) => void;
   readonly statusChanged: () => void;
@@ -131,57 +131,57 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   const cacheState = await loadCacheState(adapter);
   for (const collection of cache?.collections ?? [])
     if (!collection.startsWith('sys.')) cacheState.used[collection] ??= Date.now();
-  // Only what it uses, until it has caught up enough to know whether the space names keepers.
+  // Only what it uses, until it has caught up enough to know whether the space names carriers.
   let partial = cache !== null;
-  /** The keepers the access history names now: a shallow node takes on their word the chains it skips */
-  let keepers = new Set<string>();
+  /** The carriers the access history names now: a shallow node takes on their word the chains it skips */
+  let carriers = new Set<string>();
   /** Whether this node has synced the space by shallow sets, in this run or an earlier one */
   let hasSyncedShallow = (await adapter.get(SYNCED_SHALLOW_KEY)) !== null;
   /**
    * Whether this node has finished an exchange with any peer here: the access
    * history it holds is then as good as that peer's, so it can tell whether
-   * the space names keepers. Any peer will do: waiting for one that holds the
+   * the space names carriers. Any peer will do: waiting for one that holds the
    * whole space would leave two new devices waiting for each other.
    */
   let caughtUpOnAccess = cacheState.settled;
   /**
    * Whether to sync by shallow sets: once this node knows the space names
-   * keepers, and is not one itself. A space that names none syncs whole.
+   * carriers, and is not one itself. A space that names none syncs whole.
    */
-  const syncsShallow = () => shallow && caughtUpOnAccess && keepers.size > 0 && !keepers.has(sessionDid);
-  const keeperConnected = () => connectedPeers().some((peer) => keepers.has(peer));
+  const syncsShallow = () => shallow && caughtUpOnAccess && carriers.size > 0 && !carriers.has(sessionDid);
+  const carrierConnected = () => connectedPeers().some((peer) => carriers.has(peer));
   /**
-   * With a keeper, and with any other peer while a keeper is connected to
+   * With a carrier, and with any other peer while a carrier is connected to
    * vouch for what it skips. With none connected, others sync whole: their
-   * versions bring the chain below them, so a keeper away only slows this node.
+   * versions bring the chain below them, so a carrier away only slows this node.
    */
-  const shallowWith = (peer: string) => syncsShallow() && (keepers.has(peer) || keeperConnected());
-  /** Whether a version a peer sent may skip the chain below it: from a keeper this node syncs shallow with */
-  const vouches = (peer: string) => shallowWith(peer) && keepers.has(peer);
+  const shallowWith = (peer: string) => syncsShallow() && (carriers.has(peer) || carrierConnected());
+  /** Whether a version a peer sent may skip the chain below it: from a carrier this node syncs shallow with */
+  const vouches = (peer: string) => shallowWith(peer) && carriers.has(peer);
 
   /**
    * Whether this node holds the space's history, as one that never synced it
-   * shallow does. Not before it knows whether the space names keepers, nor
+   * shallow does. Not before it knows whether the space names carriers, nor
    * while it syncs shallow, nor ever after: what it skipped, it never took.
    */
   async function holdsHistory(): Promise<boolean> {
     // A store synced shallow lacks it whoever opens it, a node not set to sync shallow too.
     if (hasSyncedShallow) return false;
     if (!shallow) return true;
-    // By the keepers the access history names now, not as of the last change heard of.
+    // By the carriers the access history names now, not as of the last change heard of.
     await refreshHolds();
     return caughtUpOnAccess && !syncsShallow() && !hasSyncedShallow;
   }
 
   /**
-   * The first exchange with a peer is over. The keepers are read before
+   * The first exchange with a peer is over. The carriers are read before
    * this node counts as caught up, so it never offers to hold the whole
    * space in between.
    */
   async function noteCaughtUpOnAccess(): Promise<void> {
-    const named = (await access()).history.current.keepers;
+    const named = (await access()).history.current.carriers;
     if (caughtUpOnAccess || isClosed()) return;
-    keepers = new Set(named.map((keeper) => keeper.did));
+    carriers = new Set(named.map((carrier) => carrier.did));
     caughtUpOnAccess = true;
     await refreshHolds();
     // What a shallow node holds just grew past the space's own.
@@ -196,7 +196,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   }
 
   const holds = (): Holds => {
-    // Syncing shallow: only the space's own until it knows whether the space names keepers to vouch.
+    // Syncing shallow: only the space's own until it knows whether the space names carriers to vouch.
     if (shallow && !caughtUpOnAccess) return new Set();
     return partial ? new Set(Object.keys(cacheState.used)) : 'all';
   };
@@ -220,14 +220,14 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     await adapter.put(CACHE_KEY, encodeJson(cacheState)).catch(() => {});
   };
   /**
-   * Holds part of the space from the moment it names a keeper, and all of it
+   * Holds part of the space from the moment it names a carrier, and all of it
    * again if it stops — once this node has caught up enough to know.
    */
   async function refreshHolds(): Promise<void> {
     if (isClosed()) return;
-    const named = (await access()).history.current.keepers;
+    const named = (await access()).history.current.carriers;
     const wasShallow = syncsShallow();
-    keepers = new Set(named.map((keeper) => keeper.did));
+    carriers = new Set(named.map((carrier) => carrier.did));
     await rememberSyncingShallow();
     // Peers hear the sets this node compares now.
     if (syncsShallow() !== wasShallow) sync().notifyPeers(connectedPeers());
@@ -300,15 +300,13 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     if (changed) saveCache();
   }
 
-  /** How many of the space's keepers a write must reach */
-  const copiesWanted = (state: {
-    readonly keepers: ReadonlyArray<unknown>;
-    readonly copies: number | null;
-  }) => Math.min(state.keepers.length, Math.max(state.copies ?? 2, cache?.copies ?? 0));
+  /** How many of the space's carriers a write must reach */
+  const copiesWanted = (state: { readonly carriers: ReadonlyArray<unknown> }) =>
+    Math.min(state.carriers.length, Math.max(2, cache?.copies ?? 0));
 
   /**
    * Where pending writes are kept. A node holding part of the space keeps them
-   * in its store: until a keeper has one, it is never dropped, across runs.
+   * in its store: until a carrier has one, it is never dropped, across runs.
    * One holding all of it keeps them in memory, the latest few thousand: only
    * a caller waiting on `kept` reads them, and the node holds its writes
    * itself whatever comes of them.
@@ -342,28 +340,28 @@ export async function openSpaceHolding(ctx: HoldingContext) {
         };
       })();
 
-  /** A write of this node's, waiting for the space's keepers, on any node: none when it names none */
+  /** A write of this node's, waiting for the space's carriers, on any node: none when it names none */
   async function markPending(version: Version): Promise<void> {
     if (version.author !== sessionDid || version.collection.startsWith('sys.')) return;
     const state = (await access()).history.current;
-    if (state.keepers.length === 0) return;
-    // A keeper's own node is one of the copies it waits for.
-    const by = state.keepers.some((keeper) => keeper.did === sessionDid) ? [sessionDid] : [];
+    if (state.carriers.length === 0) return;
+    // A carrier's own node is one of the copies it waits for.
+    const by = state.carriers.some((carrier) => carrier.did === sessionDid) ? [sessionDid] : [];
     if (by.length >= copiesWanted(state)) return;
     await pendingStore.put(version.id, { collection: version.collection, by, at: Date.now() });
   }
 
   /**
-   * A keeper has some of this node's pending writes: those it named, or every
-   * one in a collection it is level on. Once enough keepers have one, it
-   * stops being pending. Only keepers the space names count.
+   * A carrier has some of this node's pending writes: those it named, or every
+   * one in a collection it is level on. Once enough carriers have one, it
+   * stops being pending. Only carriers the space names count.
    */
   async function confirm(
     peer: string,
     which: { ids?: ReadonlySet<string>; collection?: string },
   ): Promise<void> {
     const state = (await access()).history.current;
-    if (!state.keepers.some((keeper) => keeper.did === peer)) return;
+    if (!state.carriers.some((carrier) => carrier.did === peer)) return;
     const target = copiesWanted(state);
     for (const [id, pending] of await pendingStore.list()) {
       if (which.ids && !which.ids.has(id)) continue;
@@ -378,13 +376,13 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   /** Waits on `kept` to look again */
   const whenKept = new Set<() => void>();
 
-  /** Whether a write of this node's from `since` on still waits for keepers */
+  /** Whether a write of this node's from `since` on still waits for carriers */
   async function waiting(since: number): Promise<boolean> {
     return (await pendingStore.list()).some(([, pending]) => (pending.at ?? 0) >= since);
   }
 
   /**
-   * Waits up to `waitMs` for the space's keepers to have every write of this
+   * Waits up to `waitMs` for the space's carriers to have every write of this
    * node's from `since` on (ms; all of them by default). False when that long
    * passed first.
    */
@@ -410,7 +408,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   /**
    * Drops collections no query has touched for a while: their records go,
    * and they are no longer held. Never one the app declared, nor one holding
-   * a write still waiting for keepers.
+   * a write still waiting for carriers.
    */
   async function dropUnused(): Promise<void> {
     if (!cache || !partial || isClosed()) return;
@@ -483,7 +481,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     holdsHistory,
     /** What this node holds now, for its status */
     held: () => (partial ? Object.keys(cacheState.used).sort() : ('all' as const)),
-    /** How many of this node's writes still wait for keepers */
+    /** How many of this node's writes still wait for carriers */
     pending: async () => (await pendingStore.list()).length,
     kept,
     async close(): Promise<void> {

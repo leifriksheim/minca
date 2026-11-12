@@ -198,7 +198,7 @@ export function createWriting(deps: WritingDeps) {
 
     let payload: unknown = null;
     let tags: string[] = [];
-    // The files the body refers to, named on the outside so keepers fetch and keep them.
+    // The files the body refers to, named on the outside so carriers fetch and keep them.
     const named = deleted ? [] : fileRefsIn(body);
     if (named.length > MAX_FILES) throw new Error(`A record names at most ${MAX_FILES} files`);
     if (!deleted) {

@@ -27,7 +27,7 @@ import {
   type AccessHistory,
   type AccessState,
   type EventStatus,
-  type Keeper,
+  type SpaceCarrier,
   type Needs,
 } from '../src/space/roles.js';
 import {
@@ -39,7 +39,7 @@ import {
   ROLE_ASSIGN,
   ROLE_DEFINE,
   ROLE_UNASSIGN,
-  SPACE_KEEPERS,
+  SPACE_CARRIERS,
   SPACE_RELAYS,
   type FoundingRole,
 } from '../src/space/grants.js';
@@ -87,7 +87,7 @@ const POOL: ReadonlyArray<Grant> = [
   { cmd: COLLECTION_DEFINE, pol: [] },
   { cmd: KEY_CHANGE, pol: [] },
   { cmd: SPACE_RELAYS, pol: [] },
-  { cmd: SPACE_KEEPERS, pol: [] },
+  { cmd: SPACE_CARRIERS, pol: [] },
 ];
 const ROLES: ReadonlyArray<FoundingRole> = [
   {
@@ -101,7 +101,7 @@ const ROLES: ReadonlyArray<FoundingRole> = [
       { cmd: COLLECTION_DEFINE, pol: [] },
       { cmd: KEY_CHANGE, pol: [] },
       { cmd: SPACE_RELAYS, pol: [] },
-      { cmd: SPACE_KEEPERS, pol: [] },
+      { cmd: SPACE_CARRIERS, pol: [] },
     ],
   },
   {
@@ -272,7 +272,7 @@ function generate(seed: number): History {
       ]);
       event = { ...base, kind: 'relays', key: 'relays', relays };
     } else {
-      const keepers: Keeper[] = r.pick([
+      const carriers: SpaceCarrier[] = r.pick([
         [{ did: 'did:key:zA', name: 'A' }],
         [
           { did: 'did:key:zA', name: 'A' },
@@ -280,7 +280,7 @@ function generate(seed: number): History {
         ],
         [{ did: 'not-a-did', name: 'X' }],
       ]);
-      event = { ...base, kind: 'keepers', key: 'keepers', keepers, copies: r.pick([null, 1, 2, 99]) };
+      event = { ...base, kind: 'carriers', key: 'carriers', carriers };
     }
     const mine = new Set<string>();
     for (const parent of seen) {
@@ -339,8 +339,7 @@ function stateShape(state: AccessState | null): string {
     keys: state.keys,
     keyDue: state.keyDue,
     relays: state.relays,
-    keepers: state.keepers,
-    copies: state.copies,
+    carriers: state.carriers,
     may: PEOPLE.map((did) => ASKED.map(([cmd, args]) => (may(state, did, cmd, args) ? 1 : 0)).join('')),
   });
 }

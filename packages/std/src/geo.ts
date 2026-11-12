@@ -1,5 +1,5 @@
 /**
- * Where things are, as something a keeper can match without reading.
+ * Where things are, as something a carrier can match without reading.
  *
  * A place in a standard record carries `lat` and `lon`, and with them
  * `cells`: the geohash cells the point is in, one for each precision in

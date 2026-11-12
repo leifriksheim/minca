@@ -378,7 +378,7 @@ describe('sync engine', () => {
       },
       self: 'b',
       shallowWith: () => shallow,
-      // As a node's chain check: a version waits for the one before it, but a keeper's comes alone while shallow.
+      // As a node's chain check: a version waits for the one before it, but a carrier's comes alone while shallow.
       validate: async (version) =>
         shallow || version.seq === 0 || (await newcomerStorage.getVersion(String(version.prev)))
           ? { valid: true }

@@ -3,7 +3,7 @@
  * records-only note a person's account home signed are kept by the service,
  * sealed under a key only the app's access token carries (`oauth.ts`). Each
  * call opens them, and the node they start runs while the app is using it,
- * holding its spaces in memory. A write is done once the space's keepers have
+ * holding its spaces in memory. A write is done once the space's carriers have
  * it. What outlives the node is only where its key has signed (`places`): a
  * key that outlives its node must keep that, or the next would fork it.
  */
@@ -102,10 +102,10 @@ interface Started {
   stop(): Promise<void>;
 }
 
-/** How long an idle node stays up for its writes the space's keepers don't have yet */
+/** How long an idle node stays up for its writes the space's carriers don't have yet */
 const UNKEPT_MS = 60 * 60_000;
 
-/** Whether a node wrote something a space's keepers don't have yet: stopped, it would be lost */
+/** Whether a node wrote something a space's carriers don't have yet: stopped, it would be lost */
 async function unkept(started: Started): Promise<boolean> {
   for (const space of started.used)
     if ((await started.node.spaces.status(space).catch(() => null))?.pending) return true;
@@ -181,7 +181,7 @@ export function createSessions(options: {
     one.timer = setTimeout(() => {
       void (async () => {
         if (one.busy > 0) return idleLater(id);
-        // Its writes the keepers don't have yet would go with it: it waits for them, for a while.
+        // Its writes the carriers don't have yet would go with it: it waits for them, for a while.
         const waiting = await one.started.then(unkept, () => false);
         if (waiting && Date.now() - one.used < UNKEPT_MS) return idleLater(id);
         await stop(id);

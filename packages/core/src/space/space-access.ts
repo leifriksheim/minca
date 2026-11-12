@@ -123,8 +123,8 @@ export const memberKeyRecordKey = (did: string) => hashedKey('memberkey', did);
 export const BOX_COLLECTION = 'sys.box';
 /** The one record key the space's relay list is a version of */
 export const SPACE_RELAYS_RECORD = 'relays:space';
-/** The one record key the space's list of keepers is a version of */
-export const SPACE_KEEPERS_RECORD = 'keepers:space';
+/** The one record key the space's list of carriers is a version of */
+export const SPACE_CARRIERS_RECORD = 'carriers:space';
 /** The one record key every change of a private space's key is a version of — so two made apart are rivals, and one wins */
 export const SPACE_KEY_RECORD = 'key:space';
 /** The key of a sealed copy of a space key: one per key, recipient and sender */

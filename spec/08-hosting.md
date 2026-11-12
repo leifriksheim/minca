@@ -234,7 +234,7 @@ Every device of the account then holds a socket to that address for every
 space it holds ([04](04-network.md)), as the host carries all of them through
 the carry space. A device also holds one, for that space, to each host a space
 it holds pays itself (§2), and to each node the invite that brought the space
-here named ([03](03-spaces.md) §7.4), until the space names keepers that
+here named ([03](03-spaces.md) §7.4), until the space names carriers that
 leave it out: so someone invited reaches the space through the inviter's
 host with nobody else online. An invite names the account's hosts, and
 those the space pays; never the nodes an invite named. Example: a host at `https://host.example` that
@@ -792,17 +792,17 @@ _Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finis
 > can only act on its own side: it removes the host's bots and changes its
 > key, so the host cannot follow. Nothing tells the host, so the fund keeps
 > paying and cards that add every month keep being charged. The space will
-> say it in `sys.keepers` ([03](03-spaces.md) §10), which is in the clear,
-> needs a grant of `/space/keepers`, and every peer already checks: a host carries a space for
-> the space's own subscription only while the keepers name its DID, and once
+> say it in `sys.carriers` ([03](03-spaces.md) §10), which is in the clear,
+> needs a grant of `/space/carriers`, and every peer already checks: a host carries a space for
+> the space's own subscription only while the carriers name its DID, and once
 > they no longer do it pauses the subscription, which means it stops carrying,
 > stops its bots there, takes nothing more from the fund and cancels payments
 > that add every month. The balance stays and counts again if the space names
 > the host again. No refunds, and no new call: the subscription has no key,
-> so a call would let any pass holder stop it. Open: keepers need
-> `/space/keepers` while choosing a host needs only a grant to write
+> so a call would let any pass holder stop it. Open: carriers need
+> `/space/carriers` while choosing a host needs only a grant to write
 > `std.host`; whether a
-> host must be named a keeper before it carries at all; whether a paused fund
+> host must be named a carrier before it carries at all; whether a paused fund
 > expires. Tracked in [#220](https://github.com/leifriksheim/minca/issues/220).
 >
 > **Metering beyond storage.** A host that meters requests and bandwidth per

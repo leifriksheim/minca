@@ -42,7 +42,7 @@ export const KEY_CHANGE = '/key/change';
 /** Naming the relays the space meets on: no arguments */
 export const SPACE_RELAYS = '/space/relays';
 /** Naming the nodes that keep the space whole: no arguments */
-export const SPACE_KEEPERS = '/space/keepers';
+export const SPACE_CARRIERS = '/space/carriers';
 /** Naming a space that succeeds this one: no arguments. It changes nothing here. */
 export const SPACE_SUCCEED = '/space/succeed';
 

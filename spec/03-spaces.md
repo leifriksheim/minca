@@ -23,7 +23,7 @@ How peers connect and prove they may read is in [04 — Network](04-network.md).
 - [7. Invites](#7-invites)
 - [8. Private spaces: encryption](#8-private-spaces-encryption)
 - [9. Key changes, member keys and boxes](#9-key-changes-member-keys-and-boxes)
-- [10. Relays and keepers](#10-relays-and-keepers)
+- [10. Relays and carriers](#10-relays-and-carriers)
 - [11. Profiles](#11-profiles)
 - [12. The space manager](#12-the-space-manager)
 - [13. The account registry](#13-the-account-registry)
@@ -293,7 +293,7 @@ policy runs:
 | `/role/unassign`     | `role`, `self`, `roles`           | As for `/role/assign`                                                                                                                   |
 | `/key/change`        | (none)                            | A new key for a private space (§9)                                                                                                      |
 | `/space/relays`      | (none)                            | The relays the space names (§10)                                                                                                        |
-| `/space/keepers`     | (none)                            | The nodes that keep the space whole (§10)                                                                                               |
+| `/space/carriers`    | (none)                            | The nodes that keep the space whole (§10)                                                                                               |
 | `/space/succeed`     | (none)                            | A space that succeeds this one (§2.7)                                                                                                   |
 
 `/record/read` (`collection`) is a command a grant may hold, for the
@@ -497,7 +497,7 @@ Bodies are JSON objects; `cutoff` is optional everywhere it appears (§6.3).
 | `sys.collection` | `collection:<name>`                            | a collection definition ([02](02-records.md)); may be encrypted          | `definition` |
 | `sys.key`        | `key:space`                                    | `{ keyId, readKey, earlier }` (§9)                                       | `key`        |
 | `sys.relays`     | `relays:space`                                 | `{ relays: string[] }` (§10)                                             | `relays`     |
-| `sys.keepers`    | `keepers:space`                                | `{ keepers: [{ did, name }], copies: number \| null }` (§10)             | `keepers`    |
+| `sys.carriers`   | `carriers:space`                               | `{ carriers: [{ did, name }] }` (§10)                                    | `carriers`   |
 | `sys.fork`       | `fork:<hex40(writer DID)>`                     | `{ a, b }`: two versions without bodies (§6.5)                           | `fork`       |
 | `sys.stepdown`   | `stepdown:<hex40(account DID)>`                | `{ did, cutoff? }` (§2.5)                                                | `stepdown`   |
 | `sys.succeed`    | `succeed:<hex40(successor id)>`                | `{ space: <successor id> }` (§2.7)                                       | `succeed`    |
@@ -545,7 +545,7 @@ version, not only current ones — and use only those whose collection is the
 one the prefix belongs to (`role:`→`sys.role`, `assign:`→`sys.assign`,
 `remove:`→`sys.remove`, `invite:`→`sys.invite`, `revoke:`→`sys.revoke`,
 `collection:`→`sys.collection`, `key:`→`sys.key`, `relays:`→`sys.relays`,
-`keepers:`→`sys.keepers`, `fork:`→`sys.fork`, `stepdown:`→`sys.stepdown`,
+`carriers:`→`sys.carriers`, `fork:`→`sys.fork`, `stepdown:`→`sys.stepdown`,
 `succeed:`→`sys.succeed`).
 
 A version yields no event when any of these hold:
@@ -564,7 +564,7 @@ Otherwise the event is `{ id: version.id, key: version.key, root, author: versio
 where `cutoff` is `body.cutoff` read as a map from key DID to a map from
 collection to a non-negative integer (absent: empty; anything else, or more
 than 1024 places in all: no event),
-always empty for `role`, `definition`, `invite`, `key`, `relays`, `keepers`,
+always empty for `role`, `definition`, `invite`, `key`, `relays`, `carriers`,
 `fork` and `succeed`, and:
 
 | Kind         | Checks                                                                                                                                                                                                    | Event fields                                                                           |
@@ -576,7 +576,7 @@ always empty for `role`, `definition`, `invite`, `key`, `relays`, `keepers`,
 | `invite`     | no `cutoff`; `key` string, `role` string, `open` boolean, record key = `invite:<hex40(key)>`                                                                                                              | `inviteKey`, `role`, `open`                                                            |
 | `key`        | record key `key:space`, `keyId` string ≤ 64 chars, `readKey` starts with `did:key:`                                                                                                                       | `keyId`, `readKey`                                                                     |
 | `relays`     | record key `relays:space`, `relays` list of strings, ≤ 8                                                                                                                                                  | `relays`                                                                               |
-| `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                                                                          | `keepers`, `copies`                                                                    |
+| `carriers`   | record key `carriers:space`, `checkCarriers(carriers)` passes (§10)                                                                                                                                       | `carriers`                                                                             |
 | `revoke`     | `key` a `did:key`; record key = `revoke:<hex40(key + "\|" + root)>`                                                                                                                                       | `target` = `key`                                                                       |
 | `fork`       | `a` and `b` prove a fork in this space ([02](02-records.md) §4.10, §6.5); key = `fork:<hex40(their author)>`                                                                                              | `writer` = their `author`, `collection` = the forked line's, `from` = its place (§6.5) |
 | `stepdown`   | `did` a string, key = `stepdown:<hex40(did)>`                                                                                                                                                             | `did`                                                                                  |
@@ -631,8 +631,7 @@ State = {
   keys:        [{ keyId, readKey, event }],   // oldest first; last is current
   keyDue:      boolean,
   relays:      string[],
-  keepers:     [{ did, name }],
-  copies:      number | null,
+  carriers:    [{ did, name }],
   successors:  Map<spaceId, accountDid[]>,   // who named each, sorted
 }
 RoleDefinition = { event, by: accountDid | null, title?, grants: Grant[], nests: string[], view: State | null }
@@ -762,23 +761,23 @@ allowed but not valid is dropped as struck. Valid events are **applied**.
 The state of a set of events is the start state with, for each record key,
 the events **latest** on it (no other event on that key saw them) merged:
 
-| Kind                              | Of the latest events on a key                                                                                                                                                                                                                         |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `role`                            | All stand: `roles[name]` = each as a definition `{ event, by: root, title?, grants, nests, view }`, sorted by id, `view` its own view (`V`, or `W` among valid events). More than one are rivals (§2.4).                                              |
-| `assign`                          | If any is `assigned: false`, the role is not assigned. Otherwise it is assigned when some latest one saw every latest `remove` of its account in the set; `assigned[did][role]` = the lowest such id. They decide over the constitution's assignment. |
-| `remove`                          | Change no entry of their own; they decide assignments (above), and end every assignment the constitution made to their account. If any `remove` of a founder in the set has the founder as its root, `founders` loses it.                             |
-| `stepdown`                        | `founders` loses the account.                                                                                                                                                                                                                         |
-| `succeed`                         | `successors[space]` = the roots of every event on the key in the set, sorted: every one stands.                                                                                                                                                       |
-| `invite`                          | Closed if any is closed, or if they name different roles; otherwise open. `invites[inviteDid]` = `{ role, open, event, by }`, `role` and `event` of the lowest closed one, or of the lowest id, and `by` the roots of all the latest ones, sorted.    |
-| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and those who may define it, made: otherwise none (below)                                                                                                     |
-| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                       |
-| `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                       |
+| Kind                               | Of the latest events on a key                                                                                                                                                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `role`                             | All stand: `roles[name]` = each as a definition `{ event, by: root, title?, grants, nests, view }`, sorted by id, `view` its own view (`V`, or `W` among valid events). More than one are rivals (§2.4).                                              |
+| `assign`                           | If any is `assigned: false`, the role is not assigned. Otherwise it is assigned when some latest one saw every latest `remove` of its account in the set; `assigned[did][role]` = the lowest such id. They decide over the constitution's assignment. |
+| `remove`                           | Change no entry of their own; they decide assignments (above), and end every assignment the constitution made to their account. If any `remove` of a founder in the set has the founder as its root, `founders` loses it.                             |
+| `stepdown`                         | `founders` loses the account.                                                                                                                                                                                                                         |
+| `succeed`                          | `successors[space]` = the roots of every event on the key in the set, sorted: every one stands.                                                                                                                                                       |
+| `invite`                           | Closed if any is closed, or if they name different roles; otherwise open. `invites[inviteDid]` = `{ role, open, event, by }`, `role` and `event` of the lowest closed one, or of the lowest id, and `by` the roots of all the latest ones, sorted.    |
+| `definition`, `relays`, `carriers` | the lowest id; for `definition`, only between changes one account, or the first definer and those who may define it, made: otherwise none (below)                                                                                                     |
+| `key`                              | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                       |
+| `revoke`, `fork`                   | change no state                                                                                                                                                                                                                                       |
 
 Where an id picks the event an entry names, the outcome is the same either
 way: two assignments of one role to one account give the same power, a
 closed invite is closed, and rival openers of an invite all stand in `by`.
 No id decides between role definitions, which account holds a role, or who
-first defined a collection. Relays, keepers and the current key are the
+first defined a collection. Relays, carriers and the current key are the
 exception: among the latest changes, which may be different accounts', the
 lowest id picks. Each of their authors could have made its own the latest
 alone, by writing again after the other, so the pick gives nobody more than
@@ -871,7 +870,7 @@ the `keyId` and the `readKey` must both differ from every key already in `keys`.
 
 **`relays`** — `may(S, A, /space/relays, {})`, and the list must pass `checkRelays` (§10).
 
-**`keepers`** — `may(S, A, /space/keepers, {})`, and the list must pass `checkKeepers` (§10).
+**`carriers`** — `may(S, A, /space/carriers, {})`, and the list must pass `checkCarriers` (§10).
 
 ### 4.6 What the replay exposes
 
@@ -1322,7 +1321,7 @@ by a DID in its fragment, no URL twice: the hosts the inviter's account uses,
 and those the space names. A joiner keeps them with the space and holds a
 socket to each besides the hosts its own account uses, so it reaches the
 space through the inviter's host with nobody else online. Once the space's
-history names keepers (§10), it dials only the invite's nodes whose DID is
+history names carriers (§10), it dials only the invite's nodes whose DID is
 one of them. It **MUST NOT** name them in invites of its own: they are the
 inviter's word, not its own. A list that breaks any of these rules is
 ignored whole. A pin means a socket reaches only the node named: anything
@@ -1545,7 +1544,7 @@ In a private space, the body of every version is encrypted **before signing**,
 except in these collections, which stay in the clear:
 
 `sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.key`,
-`sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`, `sys.fork` (§6.5),
+`sys.box`, `sys.memberkey`, `sys.relays`, `sys.carriers`, `sys.fork` (§6.5),
 `sys.stepdown` and `sys.succeed` (§2.5, §2.7): proof every peer must check, holding signed envelopes
 rather than anyone's words.
 
@@ -1553,7 +1552,7 @@ Everything else is encrypted — application records, `sys.collection`
 definitions, `sys.profile`, and the registry's own collections. The envelope
 ([02](02-records.md): `id`, `author`, `collection`, `space`, `key`, `seq`,
 `seen`, `createdAt`, `proof`, `tags`, `files`, `retain`, `deleted`, signature) is
-always in the clear (`files`, so a keeper can fetch and keep the files a
+always in the clear (`files`, so a carrier can fetch and keep the files a
 version names; their bytes are sealed apart, [05](05-sync-and-storage.md) §16.6); `links` are moved inside the ciphertext and omitted from
 the envelope. A delete carries no body.
 
@@ -1778,7 +1777,7 @@ _Source: `packages/core/src/node/space-keys.ts` (`learnKeys`, `malformedKeys`, `
 
 ---
 
-## 10. Relays and keepers
+## 10. Relays and carriers
 
 **`sys.relays`** at `relays:space`: `{ relays: string[] }` — where the
 space's members meet. Valid (`checkRelays`) when it is a list of at most 8
@@ -1789,16 +1788,16 @@ passed over, not refused. Only someone granted `/space/relays` may set it. Until
 names some, members meet on relays they learn elsewhere, such as the invite
 that brought them (§7.4).
 
-**`sys.keepers`** at `keepers:space`: `{ keepers: [{ did, name }], copies }`
-— nodes that hold every record of the space, and how many a write should
-reach before a node holding only part lets go of it. Valid (`checkKeepers`)
-when there are at most 16 keepers, each `did` starts with `did:key:` and is
-at most 200 characters, each `name` a string of at most 80 characters, no
-`did` twice, and `copies` is null or an integer 1–16. Only someone granted
-`/space/keepers` may set it.
-What keepers do is in [05 — Sync and storage](05-sync-and-storage.md).
+**`sys.carriers`** at `carriers:space`: `{ carriers: [{ did, name }] }`
+— the carriers every member of the space may count on: nodes that hold every
+record of it without reading it (§14 is how an account hands its own carriers
+the space). Valid (`checkCarriers`) when there are at most 16 carriers, each
+`did` starts with `did:key:` and is at most 200 characters, each `name` a
+string of at most 80 characters, and no `did` twice. Only someone granted
+`/space/carriers` may set it.
+What carriers do is in [05 — Sync and storage](05-sync-and-storage.md).
 
-_Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkKeepers`, `MAX_RELAYS`, `MAX_KEEPERS`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/node/space-membership.ts` (`setRelays`, `setKeepers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named a keeper…")._
+_Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkCarriers`, `MAX_RELAYS`, `MAX_CARRIERS`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/node/space-membership.ts` (`setRelays`, `setCarriers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named a carrier…")._
 
 ---
 

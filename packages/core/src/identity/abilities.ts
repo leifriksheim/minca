@@ -10,7 +10,7 @@
  *
  * - `/collection/define`: define, change or remove a space's collections;
  * - `/access/change`: anything else in the access history — roles, members,
- *   invites, revocations, the space's key, relays and keepers;
+ *   invites, revocations, the space's key, relays and carriers;
  * - `/account/write`, about the whole account: anything about the account
  *   itself — its own spaces (its list of spaces, a carrier's passes, its
  *   inbox, its knocks), its own place in any space, and its other keys.

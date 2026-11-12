@@ -22,7 +22,7 @@ in [04 — Network](04-network.md). This part only moves and keeps versions.
 6. [The exchange](#6-the-exchange)
 7. [Pushing writes live](#7-pushing-writes-live)
 8. [Taking in versions](#8-taking-in-versions)
-9. [Keepers and caches](#9-keepers-and-caches)
+9. [Carriers and caches](#9-carriers-and-caches)
 10. [The store](#10-the-store)
 11. [Storage adapters](#11-storage-adapters)
 12. [Stores a node opens](#12-stores-a-node-opens)
@@ -379,7 +379,7 @@ _Source: `packages/core/src/sync/sync-messages.ts`, `packages/core/src/sync/sync
 
 A node holds either every collection of a space (`"all"`), or a set of
 collections. Whatever else it holds, **every node holds every `sys.*`
-collection** (the space's own: roles, members, definitions, keys, keepers…,
+collection** (the space's own: roles, members, definitions, keys, carriers…,
 see [03 — Spaces](03-spaces.md)).
 
 - A node MUST say what it holds in every `hello` (`holds`), asked afresh each
@@ -430,28 +430,28 @@ that lives for a session and needs the space's always-on nodes anyway, as an
 agent's. A node that chooses it:
 
 - holds only `sys.*` until it has finished an exchange with any peer, and
-  so knows whether the space names keepers (§9). Any peer will do: two such
+  so knows whether the space names carriers (§9). Any peer will do: two such
   nodes waiting for one that holds the whole space would wait for each
-  other. From a peer behind on the access history it learns the keepers as
+  other. From a peer behind on the access history it learns the carriers as
   that peer has them, until the rest arrives;
-- asks a peer for shallow sets only while one of the space's **keepers**
-  (§9) is connected: that keeper, and any other peer, since the keeper
-  vouches for what they skip. With no keeper connected, it syncs whole, and
-  with every peer when the space names no keeper or names this node;
-- takes a version from a keeper it syncs shallow with without the version
-  its `prev` names, as the keeper's to have checked (§8), and does not ask
-  that keeper for the version before; not in a line, nor in the access
+- asks a peer for shallow sets only while one of the space's **carriers**
+  (§9) is connected: that carrier, and any other peer, since the carrier
+  vouches for what they skip. With no carrier connected, it syncs whole, and
+  with every peer when the space names no carrier or names this node;
+- takes a version from a carrier it syncs shallow with without the version
+  its `prev` names, as the carrier's to have checked (§8), and does not ask
+  that carrier for the version before; not in a line, nor in the access
   history (02 §4.5), which it holds whole and checks as any node does. A
-  version from any other peer waits for a keeper's copy, and with no keeper
-  connected for the version before, as on any node (02 §4.7). So a keeper
+  version from any other peer waits for a carrier's copy, and with no carrier
+  connected for the version before, as on any node (02 §4.7). So a carrier
   that is away slows such a node, and one that is connected and behind
-  holds it back to what that keeper has;
+  holds it back to what that carrier has;
 - does not chase gaps in writers' lines (§9): it lacks the versions below
   what it holds by design;
 - **lacks the space's history** from the first time the space names a
-  keeper for it to ask, and from then on, whatever the space names later:
+  carrier for it to ask, and from then on, whatever the space names later:
   what it skipped it never took. Before it has finished its first exchange
-  it lacks it too. In a space that has named no keeper since, it holds what
+  it lacks it too. In a space that has named no carrier since, it holds what
   any new node holds;
 - MUST NOT write a change that takes power from an account (an `assign`
   taking a role, a `remove`, a `stepdown`) while it lacks the history: the
@@ -465,10 +465,10 @@ agent's. A node that chooses it:
   every shallow set. Until it arrives the verdict is pending, as on any
   node.
 
-A node syncing a space shallow takes its keepers' word for one check only:
+A node syncing a space shallow takes its carriers' word for one check only:
 that the chain below what it holds skips no `seq` (02 §4.7). It still
 checks every signature, the author's standing and the first version, so a
-keeper can withhold, reorder or freeze a record for such a node, never forge
+carrier can withhold, reorder or freeze a record for such a node, never forge
 one.
 
 _Source: `packages/core/src/storage/storage-provider.ts` (`inShallowSet`, `shallowItems`, `shallowSums`), `packages/core/src/sync/sync-engine.ts` (`shallowWith`), `packages/core/src/node/space-holding.ts` (`shallowWith`, `vouches`), `packages/core/src/node/space-holding.ts` (`holdsHistory`), `packages/core/src/node/space-runtime.ts` (`askPeersFor`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-lines.ts` (`cutoffFromWholeLinesFor`). Tests: `packages/core/tests/shallow.test.ts`, `packages/core/tests/sync.test.ts` ("syncs shallow")._
@@ -665,7 +665,7 @@ a data folder (§14.5), or a mirror (§16), a node MUST run
 it through the validation pipeline of [02 — Records](02-records.md) and the
 access rules of [03 — Spaces](03-spaces.md), and MUST NOT store it unless it
 passes. Shape (schema conformance) is **not** a reason to refuse a version on
-arrival; see 02. A node syncing by shallow sets takes a keeper's version
+arrival; see 02. A node syncing by shallow sets takes a carrier's version
 without the version before it (§5.1, [02](02-records.md) §4.7).
 
 The gatekeeper gives one of the four answers of [02](02-records.md) §9.5:
@@ -729,25 +729,25 @@ before its first version counts once the first version comes"),
 
 ---
 
-## 9. Keepers and caches
+## 9. Carriers and caches
 
-A space MAY name **keepers**: nodes that keep it whole (a host, the
-extension), and a number of `copies`. They are named in the space's access
-history (`sys.keepers`, record key `keepers:space`, body `{ keepers:
-[{ did, name }], copies }`; at most 16 keepers; only someone who manages the
+A space MAY name **carriers**: nodes that keep it whole (a host, the
+extension). They are named in the space's access
+history (`sys.carriers`, record key `carriers:space`, body `{ carriers:
+[{ did, name }] }`; at most 16 carriers; only someone who manages the
 space may name them). That record is specified in [03 — Spaces](03-spaces.md).
 
-What is **protocol** here is how a keeper confirms it has a write:
+What is **protocol** here is how a carrier confirms it has a write:
 
 - by `stored` naming its id (§4), or
 - by being **level** with the writer on the write's collection (equal sums in
   a `hello`, or a finished session, §6).
 
-Only a peer whose session DID is among the space's named keepers counts.
+Only a peer whose session DID is among the space's named carriers counts.
 
 How much a node holds is **its own choice** (§5), and so is when it counts
 a write as kept well enough. The library's policy for a node that holds part
-of a space (which part, when a query's result is complete, how many keepers a
+of a space (which part, when a query's result is complete, how many carriers a
 write waits for, when an unused collection is dropped, and the store keys it
 keeps this in) is in
 [The node: holding part of a space](../packages/core/docs/node.md#holding-part-of-a-space).
@@ -762,13 +762,13 @@ writer's newest versions, it learns only from the peers it syncs with:
 withholding those needs every one of them to.
 
 _Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`),
-`packages/core/src/space/roles.ts` (`Keeper`, `checkKeepers`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts`
+`packages/core/src/space/roles.ts` (`SpaceCarrier`, `checkCarriers`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts`
 ("holding part of a space")._
 
 ### 9.1 Planned: caches that fetch by key, and hold subsets
 
 > **Planned.** Not normative. Both need something new on the wire. Widening a
-> cache when keepers go missing, and trimming it by size, are a node's own and
+> cache when carriers go missing, and trimming it by size, are a node's own and
 > planned in [the docs](../packages/core/docs/node.md#planned-caches-that-widen-and-trim).
 
 - **Links outside what is held.** An `include` without `from` can reach any
@@ -777,8 +777,8 @@ _Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`),
   sync; the next run asks again. Sync has no way to ask for a record by key
   (`want` takes version ids), so this needs a new message.
 - **Subsets smaller than a collection**, by topic tag ("only the channels I
-  opened"), which a blind keeper can serve ([02 — Records](02-records.md),
-  topics), or by count: the most recent by each keeper's own arrival order,
+  opened"), which a blind carrier can serve ([02 — Records](02-records.md),
+  topics), or by count: the most recent by each carrier's own arrival order,
   which a writer cannot forge. Never ordered by the writer's clock. A topic
   may bucket a date field the writer chose (`start` → `2026-10`), which is
   acceptable because a bucket only decides what is fetched, never what is
@@ -1261,7 +1261,7 @@ video and attachments are all files; what they mean is the library's
 array of objects `{ "hash": <id>, "size": <bytes> }`: `hash` the file's id
 (below) as 64 lower-case hex characters, `size` an integer from 1 to 2³¹,
 the bytes as stored. Signed, and outside the body, as `links` and `tags`
-are, so a keeper that cannot read a body still knows which files a version
+are, so a carrier that cannot read a body still knows which files a version
 needs and how big they are.
 
 ```json
@@ -1420,7 +1420,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 | `MAX_IDS_PER_REQUEST`          | 200                          | `want`, `versions`        |
 | `stored` ids considered        | 2,000                        | §4                        |
 | Collections per hello          | 1,000                        | §4                        |
-| Keepers per space              | 16                           | §9                        |
+| Carriers per space             | 16                           | §9                        |
 | `CHUNK` (and RFC 8188 `rs`)    | 262,144 bytes                | §16.6                     |
 | Files taken per version        | 16                           | §16.6                     |
 | Largest file                   | 2³¹ bytes                    | §16.6                     |

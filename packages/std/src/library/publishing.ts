@@ -17,7 +17,7 @@ const { about, blob, choice, image, markdown, one, people, person, position, tex
  *
  * `mentions` names who it calls on ("@Sam"), and `replyingTo` whose message
  * it answers. With its channel they are its topics, so "mentions me", "replies
- * to me" and "in #design" can be asked of a keeper that can't read it.
+ * to me" and "in #design" can be asked of a carrier that can't read it.
  */
 export const message = define({
   name: 'std.message',

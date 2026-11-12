@@ -20,14 +20,14 @@ library's and the CLI's use of §3), and
 
 Material specified elsewhere is linked, not repeated:
 
-| Topic                                                                                                                                                                                                                                                                                                                                  | Where                                           |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Seeds, recovery codes, DIDs, the account vault and its wraps, notes, device keys, contact and member keys, phone pairing and the channel it runs on                                                                                                                                                                                    | [01 — Identity](01-identity.md)                 |
-| Records, versions, `seq`, rules, topics and tags                                                                                                                                                                                                                                                                                       | [02 — Records](02-records.md)                   |
-| Spaces, roles and grants, the access log (`sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`, `sys.relays`, `sys.keepers`, `sys.fork`, `sys.stepdown`, `sys.succeed`), the constitution, invites, encryption, the account registry (`sys.joined`, `sys.profile`, `sys.carrier`), profiles | [03 — Spaces](03-spaces.md)                     |
-| Relays, rooms, peer authentication, the network message envelope, the `who` note exchange, live messages and their limits, TURN                                                                                                                                                                                                        | [04 — Network](04-network.md)                   |
-| Negentropy, stores, storage adapters, data folders, mirrors, what a node that holds part of a space says it holds                                                                                                                                                                                                                      | [05 — Sync and storage](05-sync-and-storage.md) |
-| Names, the inbox, the relay mailbox                                                                                                                                                                                                                                                                                                    | [07 — Inbox](07-inbox.md)                       |
+| Topic                                                                                                                                                                                                                                                                                                                                   | Where                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Seeds, recovery codes, DIDs, the account vault and its wraps, notes, device keys, contact and member keys, phone pairing and the channel it runs on                                                                                                                                                                                     | [01 — Identity](01-identity.md)                 |
+| Records, versions, `seq`, rules, topics and tags                                                                                                                                                                                                                                                                                        | [02 — Records](02-records.md)                   |
+| Spaces, roles and grants, the access log (`sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`, `sys.relays`, `sys.carriers`, `sys.fork`, `sys.stepdown`, `sys.succeed`), the constitution, invites, encryption, the account registry (`sys.joined`, `sys.profile`, `sys.carrier`), profiles | [03 — Spaces](03-spaces.md)                     |
+| Relays, rooms, peer authentication, the network message envelope, the `who` note exchange, live messages and their limits, TURN                                                                                                                                                                                                         | [04 — Network](04-network.md)                   |
+| Negentropy, stores, storage adapters, data folders, mirrors, what a node that holds part of a space says it holds                                                                                                                                                                                                                       | [05 — Sync and storage](05-sync-and-storage.md) |
+| Names, the inbox, the relay mailbox                                                                                                                                                                                                                                                                                                     | [07 — Inbox](07-inbox.md)                       |
 
 Terms used here:
 
@@ -117,7 +117,7 @@ list it, or join it from the list, and opens it directly once it hears.
 
 A node holding the account key follows that list, and keeps what carriers
 depend on current: each live carrier's passes and `carry:closed` (§4.2), and
-the account's carriers named as keepers of the spaces it manages (§4.2). A
+the account's carriers named in the spaces it manages (§4.2). A
 carrier sees only what these devices write, so without them it carries stale
 passes or none.
 
@@ -132,7 +132,7 @@ When a node joins, leaves and reconciles, which spaces it hides from its own
 list, and when it publishes the account's profile are the node's own; the
 reference node is in [the node](../packages/core/docs/node.md#following-the-account).
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("the account's list never names its carry space…"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
+_Source: `packages/core/src/node/node.ts` (`reconcileOnce`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `nameOwnCarriers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("the account's list never names its carry space…"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
 
 ## 2. The account home protocol
 
@@ -812,21 +812,23 @@ _Source: `packages/core/src/session/connect-code.ts` (`newConnectCode`, `connect
 
 ## 4. Carriers and hosts
 
-A carrier is a keeper of the account's personal space, its registry (03
-§10): the account names it there as in any space it manages, and so its
-devices hand it a pass to every space it lists (§4.2) and name it a keeper of
-each space they manage. A carry space names none: it holds only a carrier's
-passes. A device that reads, in a host's signed status, that the account's
-subscription there is `lapsed` or gone, and that it won't carry for it as
-things stand ([08](08-hosting.md) §1), removes it as a carrier, and so as a
-keeper. Only that signed word does: a carrier that is silent stays named.
+A carrier keeps spaces whole without reading them. An account names the
+carriers it uses in its registry (`sys.carrier`, [03](03-spaces.md) §13.2):
+its devices hand each a pass to every space the registry lists (§4.2), and
+name it among the carriers of each space they manage (`sys.carriers`, 03
+§10), the registry too, where every member's node counts on it. A carry space
+names none: it holds only a carrier's passes. A device that reads, in a
+host's signed status, that the account's subscription there is `lapsed` or
+gone, and that it won't carry for it as things stand ([08](08-hosting.md)
+§1), removes it as the account's carrier, and so from those spaces. Only
+that signed word does: a carrier that is silent stays named.
 
 ### 4.1 What a carrier holds, and sees
 
 A carrier keeps an account's spaces online and backed up without being able to
 read them. It holds:
 
-- its own P-256 key (its DID is what peers and keepers lists name);
+- its own P-256 key (its DID is what peers see, and what an account or a space names it by);
 - the key of its **carry space**, which holds nothing but passes and
   wakes;
 - for each carried space, a **pass**: the space's constitution and, for a private
@@ -959,12 +961,12 @@ read key seeds it was given, so it can still prove itself to peers and fetch
 ciphertext until each space's key changes ([03](03-spaces.md), `changeKey`).
 Removing a carrier does not change any key by itself.
 
-**Keepers.** A node holding the account key that is granted `/space/keepers` in a space names the account's live carriers as
-its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
-carriers the account removed. Other keepers stay. So apps holding part of a
+**In the spaces it manages.** A node holding the account key that is granted `/space/carriers` in a space names the account's live carriers among
+the space's (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
+those the account removed. Others the space names stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `syncPasses`, `passAll`, `nameOwnCarriers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 

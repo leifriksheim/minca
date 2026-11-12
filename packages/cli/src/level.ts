@@ -11,13 +11,13 @@ import type { P2PNode } from '@minca/core';
 /** How long a call waits for its node to be level with an always-on node in its space */
 const CATCH_UP_MS = 15_000;
 
-/** How long a call that writes waits for the space's keepers to have what it wrote */
+/** How long a call that writes waits for the space's carriers to have what it wrote */
 const KEPT_MS = 10_000;
 
 /**
- * Waits up to `waitMs` for the node to be level with the space's keepers
+ * Waits up to `waitMs` for the node to be level with the space's carriers
  * connected now, and at least one: nothing in flight either way, so it holds
- * what they hold. Only keepers count, the nodes the space names to keep it
+ * what they hold. Only carriers count, the nodes the space names to keep it
  * whole: any member may connect and never answer. In a space that names
  * none, any one peer that is level will do. False when it wasn't, in time.
  */
@@ -26,21 +26,21 @@ async function levelIn(node: P2PNode, space: string, waitMs: number): Promise<bo
   for (;;) {
     const left = deadline - Date.now();
     if (left <= 0) return false;
-    const [peers, keepers] = await Promise.all([
+    const [peers, carriers] = await Promise.all([
       node.spaces.status(space).then(
         (status) => status.peers,
         () => [],
       ),
       node.spaces.access(space).then(
-        (access) => new Set(access.keepers.map((keeper) => keeper.did)),
+        (access) => new Set(access.carriers.map((carrier) => carrier.did)),
         () => new Set<string>(),
       ),
     ]);
-    const asked = keepers.size > 0 ? peers.filter((peer) => keepers.has(peer)) : peers;
+    const asked = carriers.size > 0 ? peers.filter((peer) => carriers.has(peer)) : peers;
     const level = await Promise.all(
       asked.map((peer) => node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)),
     );
-    if (keepers.size > 0 ? level.length > 0 && level.every(Boolean) : level.some(Boolean)) return true;
+    if (carriers.size > 0 ? level.length > 0 && level.every(Boolean) : level.some(Boolean)) return true;
     await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
   }
 }
@@ -65,12 +65,12 @@ export async function catchUp(node: P2PNode, space: string): Promise<void> {
 
 /**
  * Waits for a write made since `since` to be kept elsewhere. Null when the
- * space's keepers have it; what to say when only a member's device does.
+ * space's carriers have it; what to say when only a member's device does.
  * @throws When nobody has it yet: read it back before writing it again
  */
 export async function keptAfter(node: P2PNode, space: string, since: number): Promise<string | null> {
   const by = await node.spaces.kept(space, KEPT_MS, since);
-  if (by === 'keepers') return null;
+  if (by === 'carriers') return null;
   if (by === 'peer')
     return (
       'Kept by a device of this space that is online now, not by an always-on host: it reaches the others ' +

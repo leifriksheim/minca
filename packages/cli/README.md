@@ -341,13 +341,13 @@ own network, besides those its operator gives it (`MINCA_NODES`,
 `MINCA_RELAYS`). A call in a space runs once the
 node is level with them there (it waits up to 15 seconds, then says to try
 again): a node behind would miss records, and could start a line of payments
-that already has one. A call that writes is done once the space's keepers
-(06 `sys.keepers`; your hosts, named by your home) have what it wrote;
+that already has one. A call that writes is done once the space's carriers
+(06 `sys.carriers`; your hosts, named by your home) have what it wrote;
 otherwise the app is told, and should read it back before writing it again.
-In a space that names no keepers, where every member's device is a copy, a
+In a space that names no carriers, where every member's device is a copy, a
 write is done once a device of the space online now has it, your open tab or
 a member's, and the app is told it is only that. After 10 minutes without
-a call the node stops, and what it held goes; one waiting for the keepers to
+a call the node stops, and what it held goes; one waiting for the carriers to
 have its writes waits up to an hour first. At most 32 nodes run at once. So
 while the app is working, whoever runs the service can read those spaces, as
 the chat app's maker can read what its model sees.
@@ -387,7 +387,7 @@ app nobody connected through goes after a day.
 is the account home the consent page suggests, and `MINCA_MCP_APPS` more chat
 apps a sign-in may go back to.
 
-_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `sessions.ts`, `redirects.ts`, `server.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`, `packages/cli/tests/remote-mcp-keepers.test.ts`, `packages/cli/tests/remote-mcp-failures.test.ts`._
+_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `sessions.ts`, `redirects.ts`, `server.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`, `packages/cli/tests/remote-mcp-carriers.test.ts`, `packages/cli/tests/remote-mcp-failures.test.ts`._
 
 ### From this computer
 

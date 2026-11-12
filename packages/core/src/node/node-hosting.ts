@@ -128,7 +128,7 @@ export function createNodeHosting(ctx: NodeContext) {
     }
   }
 
-  /** Stops using a host as a carrier: no passes, and no longer named a keeper anywhere (`nameKeepers`) */
+  /** Stops using a host as a carrier: no passes, and no longer named in any space (`nameOwnCarriers`) */
   async function removeCarrierOf(host: string): Promise<void> {
     const carrier = (await ctx.carrying.liveCarriers()).find(({ body }) => body.did === host);
     if (carrier) await ctx.carrying.carriers.remove(carrier.carry.space.id);
@@ -312,14 +312,14 @@ export function createNodeHosting(ctx: NodeContext) {
 
   /**
    * The nodes the invite that brought this node here named: the inviter's hosts, reached before the
-   * space's records are. Once the space names keepers, only those: an invite is unauthenticated.
+   * space's records are. Once the space names carriers, only those: an invite is unauthenticated.
    */
   async function invitedNodes(spaceId: string, open: Promise<SpaceRuntime>): Promise<string[]> {
     const named = (await registry.get(spaceId))?.nodes ?? [];
     if (named.length === 0) return [];
     const access = await (await open).access().catch(() => null);
-    const keepers = new Set((access?.keepers ?? []).map((keeper) => keeper.did));
-    return named.filter((node) => keepers.size === 0 || keepers.has(nodeDid(node)));
+    const carriers = new Set((access?.carriers ?? []).map((carrier) => carrier.did));
+    return named.filter((node) => carriers.size === 0 || carriers.has(nodeDid(node)));
   }
 
   /**

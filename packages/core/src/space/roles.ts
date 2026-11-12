@@ -37,7 +37,7 @@ import {
   ROLE_ASSIGN,
   ROLE_DEFINE,
   ROLE_UNASSIGN,
-  SPACE_KEEPERS,
+  SPACE_CARRIERS,
   SPACE_RELAYS,
   SPACE_SUCCEED,
   type FoundingRole,
@@ -57,7 +57,7 @@ export const KEY_COLLECTION = 'sys.key';
 /** The relays the space's members meet at */
 export const RELAYS_COLLECTION = 'sys.relays';
 /** Nodes that hold the whole space, and how many a write should reach */
-export const KEEPERS_COLLECTION = 'sys.keepers';
+export const SPACE_CARRIERS_COLLECTION = 'sys.carriers';
 /** A fork proof: two versions one key signed at one place in its line (02 §4.10) */
 export const FORK_COLLECTION = 'sys.fork';
 /** A founder stepping down: it keeps its roles, and is a founder no more */
@@ -88,7 +88,7 @@ export const ACCESS_KINDS: Readonly<Record<AccessEvent['kind'], ReturnType<typeo
     definition: accessKind(DEFINITION_COLLECTION, 'collection:', false),
     key: accessKind(KEY_COLLECTION, 'key:'),
     relays: accessKind(RELAYS_COLLECTION, 'relays:'),
-    keepers: accessKind(KEEPERS_COLLECTION, 'keepers:'),
+    carriers: accessKind(SPACE_CARRIERS_COLLECTION, 'carriers:'),
     fork: accessKind(FORK_COLLECTION, 'fork:'),
     stepdown: accessKind(STEPDOWN_COLLECTION, 'stepdown:'),
     succeed: accessKind(SUCCEED_COLLECTION, 'succeed:'),
@@ -156,40 +156,35 @@ export type AccessEvent = EventBase &
     | { readonly kind: 'key'; readonly keyId: string; readonly readKey: string }
     | ({ readonly kind: 'fork' } & ForkedLine)
     | { readonly kind: 'relays'; readonly relays: ReadonlyArray<string> }
-    /** `copies`: how many keepers a write should reach; null for the default */
-    | { readonly kind: 'keepers'; readonly keepers: ReadonlyArray<Keeper>; readonly copies: number | null }
+    | { readonly kind: 'carriers'; readonly carriers: ReadonlyArray<SpaceCarrier> }
   );
 
 /** A node that keeps a space whole: its key, as it appears to peers, and a name for people */
-export interface Keeper {
+export interface SpaceCarrier {
   readonly did: string;
   readonly name: string;
 }
 
-/** How many keepers a space may name */
-export const MAX_KEEPERS = 16;
+/** How many carriers a space may name */
+export const MAX_CARRIERS = 16;
 
-/** Why a list of keepers can't be a space's, or null */
-export function checkKeepers(keepers: unknown, copies: unknown = null): string | null {
-  if (!Array.isArray(keepers) || keepers.length > MAX_KEEPERS)
-    return `A space names at most ${MAX_KEEPERS} keepers`;
-  const list: unknown[] = keepers;
-  for (const keeper of list) {
-    if (!isObject(keeper) || !isKeeperDid(keeper.did)) return 'A keeper is named by its did:key';
-    if (typeof keeper.name !== 'string' || keeper.name.length > 80)
-      return 'A keeper has a name of at most 80 characters';
+/** Why a list of carriers can't be a space's, or null */
+export function checkCarriers(carriers: unknown): string | null {
+  if (!Array.isArray(carriers) || carriers.length > MAX_CARRIERS)
+    return `A space names at most ${MAX_CARRIERS} carriers`;
+  const list: unknown[] = carriers;
+  for (const carrier of list) {
+    if (!isObject(carrier) || !isCarrierDid(carrier.did)) return 'A carrier is named by its did:key';
+    if (typeof carrier.name !== 'string' || carrier.name.length > 80)
+      return 'A carrier has a name of at most 80 characters';
   }
-  const dids = new Set(list.map((keeper) => isObject(keeper) && keeper.did));
-  if (dids.size !== list.length) return 'A keeper is named twice';
-  if (copies !== null && !isCopies(copies)) return `Copies is a whole number from 1 to ${MAX_KEEPERS}`;
+  const dids = new Set(list.map((carrier) => isObject(carrier) && carrier.did));
+  if (dids.size !== list.length) return 'A carrier is named twice';
   return null;
 }
 
-const isKeeperDid = (did: unknown) =>
+const isCarrierDid = (did: unknown) =>
   typeof did === 'string' && did.startsWith('did:key:') && did.length <= 200;
-
-const isCopies = (copies: unknown) =>
-  typeof copies === 'number' && Number.isSafeInteger(copies) && copies >= 1 && copies <= MAX_KEEPERS;
 
 /** How many relays a space may name */
 export const MAX_RELAYS = 8;
@@ -270,9 +265,7 @@ export interface AccessState {
   /** Whether someone lost their place since the current key, so a new one is due: the current state's only */
   readonly keyDue: boolean;
   readonly relays: ReadonlyArray<string>;
-  readonly keepers: ReadonlyArray<Keeper>;
-  /** How many keepers a write should reach; null for whatever each node defaults to */
-  readonly copies: number | null;
+  readonly carriers: ReadonlyArray<SpaceCarrier>;
   /** Spaces named as successors → the accounts that named each, sorted. Every one stands. */
   readonly successors: ReadonlyMap<string, ReadonlyArray<string>>;
 }
@@ -369,8 +362,7 @@ interface MutableState {
   keys: SpaceKeyEpoch[];
   keyDue: boolean;
   relays: ReadonlyArray<string>;
-  keepers: ReadonlyArray<Keeper>;
-  copies: number | null;
+  carriers: ReadonlyArray<SpaceCarrier>;
   successors: Map<string, ReadonlyArray<string>>;
 }
 
@@ -414,8 +406,7 @@ function startState(genesis: AccessGenesis): MutableState {
     keys: genesis.key ? [{ ...genesis.key, event: genesis.id }] : [],
     keyDue: false,
     relays: [],
-    keepers: [],
-    copies: null,
+    carriers: [],
     successors: new Map(),
   };
 }
@@ -643,9 +634,9 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
       return may(state, root, SPACE_RELAYS, {})
         ? checkRelays(event.relays)
         : 'Its author may not change where the space meets';
-    case 'keepers':
-      return may(state, root, SPACE_KEEPERS, {})
-        ? checkKeepers(event.keepers, event.copies)
+    case 'carriers':
+      return may(state, root, SPACE_CARRIERS, {})
+        ? checkCarriers(event.carriers)
         : 'Its author may not change who keeps the space';
   }
 }
@@ -868,9 +859,8 @@ function change(event: AccessEvent, state: MutableState, view: AccessState): voi
     case 'relays':
       state.relays = [...event.relays];
       return;
-    case 'keepers':
-      state.keepers = event.keepers.map((k) => ({ did: k.did, name: k.name }));
-      state.copies = event.copies;
+    case 'carriers':
+      state.carriers = event.carriers.map((k) => ({ did: k.did, name: k.name }));
       return;
   }
 }
@@ -1023,7 +1013,7 @@ function merge(
       case 'definition':
         mergeDefinitions(tops, group, saw, state);
         continue;
-      // `relays` and `keepers`: an id picks among lists any of their authors could have set alone.
+      // `relays` and `carriers`: an id picks among lists any of their authors could have set alone.
       default:
         change(win, state, state);
     }

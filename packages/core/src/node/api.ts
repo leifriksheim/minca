@@ -50,7 +50,7 @@ export const API = Object.freeze({
     closeInvite: 'close invites',
     changeKey: "change a space's key",
     setRelays: "change a space's relays",
-    setKeepers: 'change who keeps a copy',
+    setCarriers: 'change who keeps a copy',
     revoke: 'revoke notes',
     hold: 'scoped',
     // It would arrive as the person: a live message carries no note of its own to say "via agent".

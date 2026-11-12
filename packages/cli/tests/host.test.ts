@@ -620,7 +620,7 @@ describe('an account using a host, end to end over sockets', () => {
     assert.equal(offline.name, 'Test Hosting');
   });
 
-  test('a host that dropped the subscription is no longer a carrier, nor a keeper of any space', async () => {
+  test('a host that dropped the subscription is no longer the account’s carrier, nor named in any space', async () => {
     const billing = createStripeBilling({
       secretKey: 'sk_test_x',
       webhookSecret: 'whsec_test',
@@ -634,8 +634,8 @@ describe('an account using a host, end to end over sockets', () => {
     const laptop = await onSockets(me, served.port);
     const notes = await laptop.spaces.create({ name: 'Notes', visibility: 'private' });
     const registry = (await laptop.account.space())!;
-    const keeperDids = async (spaceId: string) =>
-      (await laptop.spaces.access(spaceId)).keepers.map((k) => k.did);
+    const carrierDids = async (spaceId: string) =>
+      (await laptop.spaces.access(spaceId)).carriers.map((k) => k.did);
 
     const { subscription } = await laptop.hosting.use(url);
     const body = JSON.stringify({
@@ -659,7 +659,8 @@ describe('an account using a host, end to end over sockets', () => {
     });
     const host = (await laptop.hosting.use(url)).host;
     await until(
-      async () => (await keeperDids(registry)).includes(host) && (await keeperDids(notes.id)).includes(host),
+      async () =>
+        (await carrierDids(registry)).includes(host) && (await carrierDids(notes.id)).includes(host),
       10_000,
       'the host to keep the personal space and Notes',
     );
@@ -679,7 +680,7 @@ describe('an account using a host, end to end over sockets', () => {
     assert.equal(seen.status?.state, 'none');
     await until(
       async () =>
-        !(await keeperDids(registry)).includes(host) && !(await keeperDids(notes.id)).includes(host),
+        !(await carrierDids(registry)).includes(host) && !(await carrierDids(notes.id)).includes(host),
       10_000,
       'the host to keep neither any more',
     );

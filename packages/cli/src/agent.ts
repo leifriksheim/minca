@@ -441,7 +441,7 @@ export async function startGrantedAgent(params: {
   readonly keys: CryptoKeyPair;
   readonly stores: NodeConfig['stores'];
   readonly network: NodeConfig['network'];
-  /** Sync each space with its keepers by shallow sets: for a node that lives for a call or a session */
+  /** Sync each space with its carriers by shallow sets: for a node that lives for a call or a session */
   readonly shallow?: boolean;
 }): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   const { grant, keys: sessionKey } = params;

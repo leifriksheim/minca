@@ -29,7 +29,7 @@ import type { WriterKeySource } from './writer-keys.js';
 import type { StoreFactory } from './stores.js';
 import type { FileLimits } from '../files/space-files.js';
 import type { JsonSchema, SchemaIssue } from '../schema/collection-def.js';
-import type { Keeper } from '../space/roles.js';
+import type { SpaceCarrier } from '../space/roles.js';
 import type { OwnAutomation } from '../space/own-automations.js';
 import type {
   FundOffer,
@@ -111,19 +111,19 @@ export interface NodeConfig {
   /** How often to look for another process's writes to a folder store, ms. 0 disables. Default 2000. */
   readonly watchIntervalMs?: number;
   /**
-   * Fetch and keep every file of any size, as a keeper does. Default: others'
+   * Fetch and keep every file of any size, as a carrier does. Default: others'
    * files up to 5 MiB, dropping the least used past 256 MiB a space (spec 05 §16.6).
    * `setFileLimits` changes either while the node runs.
    */
   readonly fetchFiles?: 'all';
-  /** Hold only the collections this node uses, once a space names a keeper to hold the rest */
+  /** Hold only the collections this node uses, once a space names a carrier to hold the rest */
   readonly cache?: CacheConfig;
   /**
-   * Sync spaces with their keepers by shallow sets (05 §5.1): each record's
+   * Sync spaces with their carriers by shallow sets (05 §5.1): each record's
    * current and first versions and what its writer retained, not every
    * superseded stub. For a node that lives for a session and needs the
-   * space's always-on nodes anyway, as an agent's: it takes its keepers'
-   * word for the history it skips, and takes power from nobody. A space that names no keepers, or this node among them, is held whole.
+   * space's always-on nodes anyway, as an agent's: it takes its carriers'
+   * word for the history it skips, and takes power from nobody. A space that names no carriers, or this node among them, is held whole.
    */
   readonly shallow?: boolean;
 }
@@ -134,7 +134,7 @@ export interface CacheConfig {
   readonly collections?: ReadonlyArray<string>;
   /** Drop a collection no query touched for this many days, unless it holds unsent writes. Default 30. */
   readonly unusedAfterDays?: number;
-  /** How many keepers a write must reach before it can be dropped; only raises the space's `copies` (default 2) */
+  /** How many carriers a write must reach before it can be dropped, when more than 2 */
   readonly copies?: number;
 }
 
@@ -229,9 +229,7 @@ export interface SpaceAccess {
   /** Where members meet: the relays it names, else the ones its invite did */
   readonly relays: ReadonlyArray<string>;
   /** The nodes that keep the space whole: a host, an extension */
-  readonly keepers: ReadonlyArray<Keeper>;
-  /** How many keepers a write should reach before it may be dropped; null for the default */
-  readonly copies: number | null;
+  readonly carriers: ReadonlyArray<SpaceCarrier>;
   /** Keys proven to have forked their line in a collection; what they signed from `from` on no longer counts (spec 02 §4.10) */
   readonly forks: ReadonlyArray<{
     readonly writer: string;
@@ -326,7 +324,7 @@ export interface NodeCollection {
   readonly contract?: CollectionContract;
   /** Values derived from what links to its records; absent when it has none */
   readonly computed?: ComputedFields;
-  /** Fields whose values are tagged on each record's outside, so keepers can match them unread */
+  /** Fields whose values are tagged on each record's outside, so carriers can match them unread */
   readonly topics: ReadonlyArray<string>;
   readonly records: number;
 }
@@ -429,7 +427,7 @@ export interface SpaceStatus {
   readonly rejected: number;
   /** What this node holds of the space: `all`, or the collections it uses, sorted */
   readonly holds: 'all' | ReadonlyArray<string>;
-  /** Writes of this node's that haven't reached enough keepers yet */
+  /** Writes of this node's that haven't reached enough carriers yet */
   readonly pending: number;
 }
 
@@ -530,8 +528,8 @@ export interface NodeSpaces {
   changeKey(spaceId: string): Promise<void>;
   /** Names the relays (wss://, at most 8) the space's members meet on. Needs `/space/relays` */
   setRelays(spaceId: string, relays: ReadonlyArray<string>): Promise<void>;
-  /** Names the nodes that keep the space whole (at most 16), and how many a write should reach. Needs `/space/keepers` */
-  setKeepers(spaceId: string, keepers: ReadonlyArray<Keeper>, copies?: number | null): Promise<void>;
+  /** Names the nodes that keep the space whole (at most 16). Needs `/space/carriers` */
+  setCarriers(spaceId: string, carriers: ReadonlyArray<SpaceCarrier>): Promise<void>;
   /**
    * Revokes one of this account's keys, by DID: nothing it writes counts from then on.
    * With `waitMs`, waits that long for a peer to take it in: true when one did, or with no wait.
@@ -548,12 +546,12 @@ export interface NodeSpaces {
   reached(spaceId: string, peer: string, waitMs: number): Promise<boolean>;
   /**
    * Waits up to `waitMs` (at most a minute) for this node's writes in a space
-   * to be kept elsewhere: by the space's keepers, every write from `since`
-   * (ms) on, all by default (`'keepers'`); or, in a space that names none,
+   * to be kept elsewhere: by the space's carriers, every write from `since`
+   * (ms) on, all by default (`'carriers'`); or, in a space that names none,
    * where every member's node is a copy, by a peer connected now that holds
    * all this node does (`'peer'`). Null when nobody had, in time.
    */
-  kept(spaceId: string, waitMs: number, since?: number): Promise<'keepers' | 'peer' | null>;
+  kept(spaceId: string, waitMs: number, since?: number): Promise<'carriers' | 'peer' | null>;
   /** How a node serving this space checks connecting peers and signs its welcome; null for a space it does not hold */
   authenticator(spaceId: string): Promise<ServerAuth | null>;
   /** The name each person gave in this space; yours is published from the account's name */

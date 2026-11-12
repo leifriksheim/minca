@@ -364,7 +364,7 @@ describe('a host’s MCP endpoint', () => {
     const space = await ada.node.spaces.create({ name: 'Lunch club', visibility: 'private' });
     await hold(ada.node, space.id);
     // Her node keeps the space, as her free host does: what the chat app writes is done once it has it.
-    await ada.node.spaces.setKeepers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
+    await ada.node.spaces.setCarriers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
     const host = await aHost(hub);
 
     const app = await anApp(host.resource);
@@ -423,7 +423,7 @@ describe('a host’s MCP endpoint', () => {
     assert.notEqual(did, ada.did);
   });
 
-  test('in a space that names no keeper, a write is kept by a member online, and the app is told it is only that', async () => {
+  test('in a space that names no carrier, a write is kept by a member online, and the app is told it is only that', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const space = await ada.node.spaces.create({ name: 'Notes', visibility: 'private' });
@@ -747,7 +747,7 @@ describe('a host’s MCP endpoint', () => {
     // Made after the chat app connected: nobody connects it again.
     const later = await ada.node.spaces.create({ name: 'Made later', visibility: 'private' });
     await hold(ada.node, later.id);
-    await ada.node.spaces.setKeepers(later.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
+    await ada.node.spaces.setCarriers(later.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
     await until(
       async () => textOf(await client.callTool({ name: 'spaces_list', arguments: {} })).includes(later.id),
       10_000,
@@ -908,12 +908,12 @@ describe('a session’s node', () => {
     return { sessions, starts };
   }
 
-  test('a member who connects and goes silent doesn’t stop the chat app: only the space’s keepers are waited for', async () => {
+  test('a member who connects and goes silent doesn’t stop the chat app: only the space’s carriers are waited for', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const space = await ada.node.spaces.create({ name: 'Club', visibility: 'private' });
     await hold(ada.node, space.id);
-    await ada.node.spaces.setKeepers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
+    await ada.node.spaces.setCarriers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
     const { sessions } = await someSessions(hub);
     const key = await browserKey();
     const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));

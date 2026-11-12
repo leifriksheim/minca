@@ -377,7 +377,7 @@ the writer.
 A comment can carry all three: `respondingTo`, `replyingTo` and `mentions`.
 
 Some annotations name nobody. A `std.report` doesn't, so whoever is
-reported isn't told, and a keeper can't tell whom it's about. Highlights,
+reported isn't told, and a carrier can't tell whom it's about. Highlights,
 pins and tags are the writer's own. What tracks the writer's own life
 (`std.progress`, `std.checkin`, `std.visit`, `std.meal`, `std.time-entry`,
 `std.reminder`) answers nobody.
@@ -434,7 +434,7 @@ read `data`. Write and read it through `node.direct`
 A chat groups direct messages into conversations by everyone in them: `to`
 plus the writer. One it can't open must show as unreadable, not disappear.
 `to` is a topic, so "direct messages to me" can be an automation of the
-account's own that a keeper matches unread.
+account's own that a carrier matches unread.
 
 ## Positions
 
@@ -468,7 +468,7 @@ and latitude bits interleaved, longitude first, five to a character of
 `0123456789bcdefghjkmnpqrstuvwxyz`.
 
 `std.event` and `std.listing` name `place.cells` as a topic, and `std.place`
-names `cells`. So a keeper that can't read a private space can still hand
+names `cells`. So a carrier that can't read a private space can still hand
 over "listings in these cells". Tags match only when equal, which is why
 each size is written out instead of one long geohash.
 

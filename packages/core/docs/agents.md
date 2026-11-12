@@ -173,7 +173,7 @@ Each call starts a node in memory from what the token opens
 (`startGrantedAgent`), and opens a space only when a call names it. It reaches only the always-on nodes and relays the
 person's invites and spaces name at public addresses, and the service's own
 (`network.reach`, see [The node](node.md)). A write is done once the space's
-keepers have it (`spaces.kept`). The one thing kept between calls is where
+carriers have it (`spaces.kept`). The one thing kept between calls is where
 the key has signed, so the next node doesn't sign at a place it used.
 
 Nothing new goes over the wire between the home and the page. See

@@ -5,10 +5,10 @@
  * (`link:channel`). When a record is written, each value of each topic — a
  * field's value, a link's target key — becomes a tag on the outside of the
  * record: a keyed hash of the collection, the topic and the value. Someone who wants "messages in #design" or "messages that mention
- * me" works out the same tag and hands it to a keeper, which compares tags
+ * me" works out the same tag and hands it to a carrier, which compares tags
  * without learning what any of them stand for.
  *
- * The key comes from the space's key in a private space, so a keeper can't
+ * The key comes from the space's key in a private space, so a carrier can't
  * guess tags by hashing likely values; it learns only which records share a
  * topic, and how often. In a public space it comes from the space id: anyone
  * can work the tags out, as anyone can read the records. The precedent is a
