@@ -244,6 +244,16 @@ export async function createCarryCore(config: CarryCoreConfig) {
   const direct = new Map<string, SpaceRecord>();
 
   const mesh = meshFor(config.network, session);
+  /**
+   * What a space is opened from. A carrier that meets peers on the mesh
+   * proves read with the pass's key, so a private pass without one is no use
+   * to it. One that is only dialled proves nothing: it takes the space from a
+   * pass and nothing else, so no pass handed to it can change how it carries.
+   */
+  const recordFrom = (pass: OpenedPass): SpaceRecord | null => {
+    if (!mesh) return carriedRecord({ space: pass.space, read: null });
+    return pass.space.visibility === 'private' && !pass.read ? null : carriedRecord(pass);
+  };
   const open = (
     record: SpaceRecord,
     stores: StoreFactory,
@@ -409,8 +419,10 @@ export async function createCarryCore(config: CarryCoreConfig) {
     for (const pass of passesToCarry(carrySpace, entry, passes)) {
       // Counted as it goes, so one handed over with thousands of passes takes no more than it may.
       if (config.most !== undefined && wants.size >= config.most) continue;
+      const record = recordFrom(pass);
+      if (!record) continue;
       wants.add(pass.space.id);
-      preferLater(wanted, carriedRecord(pass));
+      preferLater(wanted, record);
     }
     entry.wants = wants;
   }
@@ -516,7 +528,9 @@ export async function createCarryCore(config: CarryCoreConfig) {
       const pass = await openPass(value, provider);
       if (!pass) throw new Error('That is not a pass for a space.');
       if (carries.has(pass.space.id)) throw new Error('That is a carry space, not a space to carry.');
-      direct.set(pass.space.id, carriedRecord(pass));
+      const record = recordFrom(pass);
+      if (!record) throw new Error('That pass brings no read key to prove with.');
+      direct.set(pass.space.id, record);
       await refresh();
       return pass.space.id;
     },

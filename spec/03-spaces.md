@@ -1947,11 +1947,14 @@ sys.pass at pass:<hex40(spaceId)>
 A pass holds no space key, no invite secret and no note. A carrier **MUST**
 accept a pass only if `v` is 1, the space passes `checkSpace`, and — for a
 private space whose pass has `read` — the read seed gives a read DID equal to
-`space.readKey` or to the pass's `readKey`. A pass for a private space MAY
-leave `read` out: a carrier that devices dial proves nothing with it
-([04](04-network.md) §6.1). A pass says nothing of who wrote it, so a carrier
-**MUST NOT** take from it the read key it checks peers against: that is the
-constitution's, then whatever the space's history names (04 §6.3).
+`space.readKey` or to the pass's `readKey`. A pass handed to a carrier that
+devices dial (a host, [08](08-hosting.md) §2) MAY leave `read` out: such a
+carrier proves nothing ([04](04-network.md) §6.1), and takes nothing from a
+pass but the space. A carrier that meets peers through relays proves read
+with it, and passes over a private space's pass without one. A pass says
+nothing of who wrote it, so no carrier takes from it the read key it checks
+peers against: that is the constitution's, then whatever the space's history
+names (04 §6.3).
 
 When the account stops using a carrier, it deletes the passes, writes
 `sys.pass` at `carry:closed` with `{ v: 1, closed: true }`, and sets

@@ -933,8 +933,8 @@ deleted.
 A carrier MUST accept a pass only if the space hashes to its id and, for a
 private space whose pass has `read`, the read seed's DID equals
 `space.readKey` or the pass's `readKey` ([03](03-spaces.md) §14). Only pass records verified as written by the carried account count.
-When two accounts name one space, a pass for a later key wins over one for the
-first key.
+When two accounts name one space, a carrier that proves read uses a pass for
+a later key over one for the first key.
 
 **Removing a carrier**: delete every pass, write `sys.pass` key `carry:closed`
 with body `{ "v": 1, "closed": true }`, then write the `sys.carrier` record
