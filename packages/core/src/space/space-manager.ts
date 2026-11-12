@@ -144,7 +144,7 @@ export interface SpaceManager {
    * Refuses a space whose id does not match what it says about itself, and
    * a key that does not belong to it. An invite's secret is held until it is used.
    */
-  join(invite: string): Promise<SpaceRecord>;
+  join(invite: string, memberKey?: Uint8Array): Promise<SpaceRecord>;
   /** Forgets an invite's secret once it has been used */
   clearInvite(spaceId: string): Promise<void>;
   /** Remembers the role this account holds, for listing */
@@ -154,8 +154,6 @@ export interface SpaceManager {
    * one it writes with. Keys already held are kept.
    */
   addKeys(spaceId: string, keys: ReadonlyArray<SpaceKey>, current: string): Promise<void>;
-  /** Keeps this account's member key for a space (`SpaceRecord.memberKey`) */
-  setMemberKey(spaceId: string, memberKey: Uint8Array): Promise<void>;
   /** Keeps where the space's members meet (`SpaceRecord.relays`) */
   setRelays(spaceId: string, relays: ReadonlyArray<string>): Promise<void>;
 }
@@ -350,7 +348,7 @@ export function createSpaceManager(
       return encodeSpaceInvite(record, signer, provider, options);
     },
 
-    async join(invite: string): Promise<SpaceRecord> {
+    async join(invite: string, memberKey?: Uint8Array): Promise<SpaceRecord> {
       const parsed = parseSpaceInvite(invite);
 
       // Signed by the account it names, with a note that lets it invite there: so are its relays and nodes.
@@ -379,8 +377,9 @@ export function createSpaceManager(
       if (secret) await deriveInviteKey(secret, provider);
 
       const space: Space = Object.freeze({ ...parsed.space });
-      await writeSpace(space);
       if (key) await writeKey(space.id, key);
+      if (memberKey)
+        await adapter.put(`${MEMBER_KEY_PREFIX}${space.id}`, utf8Encode(base64UrlEncode(memberKey)));
       // Joining again with a secret while one is waiting keeps the newer one.
       if (secret) await adapter.put(`${INVITE_PREFIX}${space.id}`, utf8Encode(base64UrlEncode(secret)));
       // Only a hint, but a checked one: a relay list the space itself could not hold is dropped.
@@ -396,6 +395,8 @@ export function createSpaceManager(
       const nodes = checkInviteNodes(parsed.nodes);
       if (nodes && nodes.length > 0 && !(await readText(NODES_PREFIX, space.id)))
         await adapter.put(`${NODES_PREFIX}${space.id}`, utf8Encode(JSON.stringify(nodes)));
+      // The space itself last: nothing lists it until its keys are held, so whatever opens it can read.
+      await writeSpace(space);
 
       return (await load(space.id))!;
     },
@@ -417,11 +418,6 @@ export function createSpaceManager(
     async setRelays(spaceId: string, relays: ReadonlyArray<string>): Promise<void> {
       if (!(await readSpace(spaceId)) || checkRelays(relays) !== null) return;
       await adapter.put(`${RELAYS_PREFIX}${spaceId}`, utf8Encode(JSON.stringify(relays)));
-    },
-
-    async setMemberKey(spaceId: string, memberKey: Uint8Array): Promise<void> {
-      if (!(await readSpace(spaceId))) return;
-      await adapter.put(`${MEMBER_KEY_PREFIX}${spaceId}`, utf8Encode(base64UrlEncode(memberKey)));
     },
 
     async setRole(spaceId: string, role: string | null): Promise<void> {

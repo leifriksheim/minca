@@ -197,7 +197,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const contactsSpaceId = contactsRecord?.space.id ?? config.contactsSpace ?? null;
   // Kept in the node's own list like a joined space, so it can be shared with an app like one.
   if (contactsRecord && !(await registry.get(contactsRecord.space.id))) {
-    await joinRegistry(await encodeSpaceInvite(contactsRecord, looseSigner(), provider));
+    await registry.join(await encodeSpaceInvite(contactsRecord, looseSigner(), provider));
   }
   async function kindOf(spaceId: string): Promise<OwnSpaceKind | null> {
     if (spaceId === accountSpaceId) return 'registry';
@@ -355,8 +355,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * record that makes the difference may be the one that arrived meanwhile.
    */
   const joining = new Map<string, () => Promise<void>>();
-  async function joinRegistry(invite: string): Promise<SpaceRecord> {
-    const record = await registry.join(invite);
+  async function joinRegistry(invite: string, memberKey?: Uint8Array): Promise<SpaceRecord> {
+    const spaceId = parseSpaceInvite(invite).space.id;
+    const heldBefore = (await registry.get(spaceId)) !== null;
+    // Not held, the only runtime there can be is one still open from leaving it, which can't read
+    // under the new key. None opens after it until the space is listed, and by then its keys are held.
+    if (!heldBefore) await closeRuntime(spaceId);
+    const record = await registry.join(invite, memberKey);
+    // Held already, one may have opened under the keys from before.
+    if (heldBefore) await closeRuntime(spaceId);
     noInviteWaiting.delete(record.space.id);
     return record;
   }
@@ -537,8 +544,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (!membership.deleted && !held.has(spaceId)) {
         try {
           await joinRegistry(membership.body!.invite);
-          // One still open from leaving it can't read under the new key.
-          await closeRuntime(spaceId);
           changed = true;
         } catch {
           // An unreadable invite; the next version written for it will do.
@@ -695,10 +700,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async join(invite, options = {}) {
-      const record = await joinRegistry((await carrying.resolveInvite(invite)).long);
-      if (options.memberKey) await registry.setMemberKey(record.space.id, options.memberKey);
-      // A runtime opened before the key arrived would still be unable to read.
-      await closeRuntime(record.space.id);
+      const record = await joinRegistry((await carrying.resolveInvite(invite)).long, options.memberKey);
       await remember(record.space.id);
       // Uses the invite now if its record is here already — otherwise when it arrives.
       await finishJoining(record.space.id);
