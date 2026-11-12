@@ -823,7 +823,7 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     down ends founder status, and does nothing else", "a revoke stops the
     key…").
 - **By design** (the principle above).
-  - A browser keeps an app's key, a carrier's key in the extension, and an
+  - A browser keeps an app's key, the Chrome extension's among them, and an
     account home's lasting writer key, as the seed it is derived from. A
     script running in that origin can copy the key, not only sign with it
     while it runs. A copied app key does what its grant allows. A copied
@@ -1057,6 +1057,19 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     those it replaced, never to be revoked (06 §2.9, §2.10,
     [#165](https://github.com/leifriksheim/minca/issues/165)). By design.
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/minca/issues/165)).
+  - The Chrome extension (`apps/extension`) is such an app, given the whole
+    account for records, for up to a year, and running whenever the browser
+    does. It keeps the account key and its grant in the browser profile,
+    unsealed. Whoever copies the profile, or ships an update of the
+    extension, reads every space the account is in or joins, and nothing
+    takes that back; they write records as the account until it is
+    disconnected. As a carrier it held sealed records and passes. Every
+    install has one origin, so the home keeps them as one connection: a
+    second profile's key replaces the first's, which works until its note
+    runs out, and disconnecting revokes both (06 §2.10). A home shows any
+    extension's request as from a browser extension, with its id and the
+    name it gives itself, so a lookalike asks as the real one does
+    ([#165](https://github.com/leifriksheim/minca/issues/165)). By design.
   - A version it writes in one of the account's own spaces (the registry,
     contacts, carry spaces) without `/account/write` is refused by the
     account's devices, but a carrier, host or mirror reader that can't tell

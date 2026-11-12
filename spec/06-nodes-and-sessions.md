@@ -969,7 +969,7 @@ _Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `syncPasses`, `p
 
 ### 4.3 Connecting a carrier through the account home
 
-A carrier (a browser extension) asks the home with `access: "carry"` (§2.4),
+A carrier asks the home with `access: "carry"` (§2.4),
 from a page that stays open until the answer comes. The home removes any
 earlier carrier from the same origin with another `audience`, adds the
 carrier (§4.2) with `did` = the request's `audience`, and answers with a
@@ -1022,13 +1022,14 @@ account's own devices may show a match there itself, saying no more than it
 sees: which space, which kind of record, and the wake's `open`. None sends a
 match to another device yet: that is what the wakes are for (below).
 
-_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/shared/src/notify.ts` (`createNotifier`), `apps/extension/src/worker.ts` (`notify`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
+_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier")._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). The account's own
 > automations are the account's and apps propose them (above); which device shows a match is
 > not modeled yet. Today only an app that is running shows a match (§2.11),
-> so nothing reaches a device where it is closed, and an app with
+> or one given the whole account that runs for the others, as the Chrome
+> extension does, so nothing reaches a device where neither runs, and an app with
 > `scope: spaces`, which cannot read the registry, shows nothing. The plan:
 >
 > - Each device registers as a **receiver** in its own record, apart from

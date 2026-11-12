@@ -189,7 +189,7 @@ function podSection(connected: Grant): HTMLElement {
         );
       await rememberPod(picked);
       await savePickedPod({ dataPath: account.dataPath, folder: picked.directory?.name ?? 'your pod' });
-      await ask({ to: 'offscreen', type: 'reload' });
+      await ask({ to: 'offscreen', type: 'pod-picked' });
     });
   const resume = () =>
     run(async () => {

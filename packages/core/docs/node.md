@@ -981,7 +981,9 @@ An app shows its own notifications with
 `watchNotifications(node, { origin?, onNotify })`. It needs the account key,
 so an app with `scope: account`. It reads the account's automations for the
 app's origin, and calls `onNotify({ automation, record })` for each record
-that arrives matching one.
+that arrives matching one. With `origin: null` it reads every app's
+automations and the person's own: for something that speaks for every app
+while none is open, as the Chrome extension does.
 
 A record matches when the automation isn't paused, and the record is in its
 collection and one of its spaces, created after `since` and within the last

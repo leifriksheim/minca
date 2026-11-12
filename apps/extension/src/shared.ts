@@ -91,6 +91,8 @@ export type Request =
   | { readonly to: 'offscreen'; readonly type: 'status' }
   /** The grant or the pod changed: start again from what is stored */
   | { readonly to: 'offscreen'; readonly type: 'reload' }
+  /** Another folder was picked as the pod: write everything into it, from nothing */
+  | { readonly to: 'offscreen'; readonly type: 'pod-picked' }
   /** Forget everything */
   | { readonly to: 'offscreen'; readonly type: 'disconnect' };
 

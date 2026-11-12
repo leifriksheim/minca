@@ -342,10 +342,9 @@ the person chooses:
 `forgetBrowserCopy()` then deletes the browser's copy. Other accounts in the
 pod are never touched.
 
-The page writes to the pod only while it is open. A carrier given the same
-folder, such as the Chrome extension, keeps it up to date while the page is
-closed. It learns of the pod when it connects, so one that connected before
-the move must connect again.
+The page writes to the pod only while it is open. The Chrome extension, given
+the same folder, keeps it up to date while the page is closed: the person
+picks the folder there, and it finds the account in it.
 
 ## Removing an account
 
@@ -492,8 +491,9 @@ revokes an app just because its time has passed.
 
 A program connected by code at the home's own origin (`via: 'code'`) is kept
 by its key instead, so each such program is its own (`connectionKey`). A
-carrier is kept apart from the app at its origin, and connecting one never
-replaces the other.
+carrier is kept by its key too. One connecting leaves the app at its origin;
+an app connecting from a carrier's origin is that program now holding keys,
+and the home removes the carrier.
 
 ### Disconnecting
 

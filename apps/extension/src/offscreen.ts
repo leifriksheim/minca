@@ -236,6 +236,17 @@ async function followPodPermission(): Promise<void> {
 }
 
 /**
+ * Starts again with nothing remembered of what the pod holds: what it wrote
+ * into the folder picked before is not in this one.
+ */
+async function startOnPickedPod(): Promise<void> {
+  generation++;
+  await stop();
+  if (grant) await deleteBrowserData(`${storePrefix(grant.did)}:folder:`);
+  await start();
+}
+
+/**
  * Forgets everything: the node's copy, its key, the grant, the folder.
  * @param options.byAccount The account disconnected it, rather than the person here
  */
@@ -258,6 +269,7 @@ chrome.runtime.onMessage.addListener((message: Request, _sender, respond) => {
   const answer = () => respond(status);
   if (message.type === 'status') answer();
   else if (message.type === 'reload') void start().then(answer, answer);
+  else if (message.type === 'pod-picked') void startOnPickedPod().then(answer, answer);
   else if (message.type === 'disconnect') void forget({ byAccount: false }).then(answer, answer);
   return message.type !== 'status';
 });

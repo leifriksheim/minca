@@ -2025,11 +2025,11 @@ A carrier treats every wake alike, whatever its key. A
 wake carries no words of the person's and no topic values, only their tags,
 at most 16 for a space; a device that would need more leaves that space
 without an entry.
-A carrier on one of the account's own devices may show a match there itself,
-as the Chrome extension's does; a wake is also what a carrier needs to wake an app
+A carrier on one of the account's own devices may show a match there itself;
+a wake is also what a carrier needs to wake an app
 that is closed ([06](06-nodes-and-sessions.md) §4.4).
 
-_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`), `packages/core/src/node/node-carriers.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/shared/src/notify.ts`, `apps/extension/src/worker.ts` (`notify`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `apps/desktop/tests/notify.test.ts`._
+_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`), `packages/core/src/node/node-carriers.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else")._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). Delivery moves to
