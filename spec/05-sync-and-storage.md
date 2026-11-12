@@ -907,8 +907,11 @@ and all sealed (§15):
 | `spacerole:<id>`      | UTF-8 role name this account last held (a listing hint)                                                         |
 | `spacememberkey:<id>` | UTF-8 base64url of this account's member key for the space                                                      |
 | `spacerelays:<id>`    | UTF-8 JSON array of relay URLs                                                                                  |
+| `spacenodes:<id>`     | UTF-8 JSON array of the node hints an invite carried                                                            |
 
-Forgetting a space deletes all six.
+A space is listed by its `space:<id>` entry. Joining a space, a node MUST
+write that entry after the space's other entries, so whoever finds the space
+finds its keys too. Forgetting a space deletes all seven.
 
 In a data folder, only the `registry` store is kept in the folder, as entry
 files at `<dataPath>/registry` (§14.3), sealed under the account's local key
@@ -921,7 +924,7 @@ on disk, a host's store) is its own; the library's are in
 _Source: `packages/core/src/node/stores.ts`, `packages/core/src/session/places.ts` (`storesFor`),
 `packages/core/src/space/space-manager.ts`, `packages/core/src/node/node.ts`, `packages/core/src/node/space-runtime.ts`.
 Tests: `packages/core/tests/account-vault.test.ts` ("encryption at rest"),
-`packages/core/tests/node.test.ts`._
+`packages/core/tests/node.test.ts`, `packages/core/tests/space.test.ts` ("a joined space is listed only once its key is held")._
 
 ---
 

@@ -1,7 +1,6 @@
 /**
- * A carrier added before carry spaces were derived names its space and an
- * invite to it. Opening that space on a device that doesn't hold it yet joins
- * it on the way, and must not wait on itself.
+ * Joining a space while the node has spaces open: a join must not wait on the
+ * space it is opening, and an invite that is refused must close nothing.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +10,10 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { passKey } from '../src/space/pass.js';
+import { decodeLoose } from '../src/records/loose.js';
+import { base64UrlEncode, utf8Encode } from '../src/utils/encoding.js';
 import { memoryStores } from './helpers/memory-stores.js';
+import * as z from 'zod';
 
 async function account() {
   const seed = generateSeed();
@@ -87,4 +89,40 @@ test('opening a legacy carrier space this device does not hold yet settles', asy
     Promise.all([node.close(), carrierNode.close()]),
     new Promise((r) => setTimeout(r, 2000)),
   ]);
+});
+
+test('an invite that is refused closes no space the node has open', async () => {
+  const me = await account();
+  const stranger = await account();
+  const strangerNode = await createNode({
+    signer: stranger.signer,
+    stores: memoryStores(),
+    watchIntervalMs: 0,
+  });
+  const node = await createNode({
+    signer: me.signer,
+    stores: memoryStores(),
+    accountKey: me.accountKey,
+    watchIntervalMs: 0,
+  });
+  const registryId = (await node.account.space())!;
+  const release = await node.spaces.hold(registryId);
+  await node.records.put(registryId, 'app.marker', { here: true });
+
+  // The stranger's own invite, naming the account registry instead: open here, but not a space the node lists.
+  const bait = await strangerNode.spaces.create({ name: 'Bait', visibility: 'public' });
+  const [signed = '', ...rest] = (await strangerNode.spaces.invite(bait.id, { write: false })).split('.');
+  const version = z
+    .looseObject({ body: z.looseObject({ space: z.looseObject({ id: z.string() }) }) })
+    .parse(decodeLoose(signed));
+  version.body.space.id = registryId;
+  const forged = [base64UrlEncode(utf8Encode(JSON.stringify(version))), ...rest].join('.');
+
+  const openedBefore = runtimesSeen.length;
+  await assert.rejects(node.spaces.join(forged));
+  await node.records.put(registryId, 'app.marker', { here: 'still' });
+  assert.equal(runtimesSeen.length, openedBefore, 'the registry was closed and opened again');
+
+  await release();
+  await Promise.all([node.close(), strangerNode.close()]);
 });

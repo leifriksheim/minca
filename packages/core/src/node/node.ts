@@ -355,20 +355,23 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * record that makes the difference may be the one that arrived meanwhile.
    */
   const joining = new Map<string, () => Promise<void>>();
-  const joinsInTurn = new Map<string, ReturnType<typeof queue>>();
-  /** Joins a space in the registry, one join of a space at a time, leaving no runtime open under keys from before it */
+  const registryTurns = new Map<string, ReturnType<typeof queue>>();
+  /** One join or removal of a space at a time: a removal amid a join would leave the space listed without its keys */
+  function inTurnFor<T>(spaceId: string, change: () => Promise<T>): Promise<T> {
+    let inTurn = registryTurns.get(spaceId);
+    if (!inTurn) registryTurns.set(spaceId, (inTurn = queue()));
+    return inTurn(change);
+  }
+  /** Joins a space in the registry, leaving no runtime open under what the node held of it before */
   async function joinRegistry(invite: string, memberKey?: Uint8Array): Promise<SpaceRecord> {
     const spaceId = parseSpaceInvite(invite).space.id;
-    let inTurn = joinsInTurn.get(spaceId);
-    if (!inTurn) joinsInTurn.set(spaceId, (inTurn = queue()));
-    return inTurn(async () => {
+    return inTurnFor(spaceId, async () => {
       const heldBefore = (await registry.get(spaceId)) !== null;
-      // Not held, the only runtime there can be is one still open from leaving it, which can't read
-      // under the new key. None opens after it until the space is listed, and by then its keys are held.
-      if (!heldBefore) await closeRuntime(spaceId);
+      const openBefore = runtimes.get(spaceId);
       const record = await registry.join(invite, memberKey);
-      // Held already, one may have opened under the keys from before.
-      if (heldBefore) await closeRuntime(spaceId);
+      // Held already, or still open from leaving it, what is open may lack the keys that came. One
+      // opened since the join listed the space has them all, and is left open: someone is using it.
+      if (heldBefore || (openBefore && runtimes.get(spaceId) === openBefore)) await closeRuntime(spaceId);
       noInviteWaiting.delete(spaceId);
       return record;
     });
@@ -513,7 +516,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Opened while its record is here: a runtime needs it to open.
     const open = runtime(spaceId);
     await open.catch(() => null);
-    await registry.remove(spaceId);
+    await inTurnFor(spaceId, () => registry.remove(spaceId));
     inBackground(
       giveUpPlace(spaceId).then(async () => {
         // Joined again meanwhile, it was closed for the new key: leave the new one open.
@@ -722,7 +725,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         await giveUpPlace(spaceId);
         await forget(spaceId);
         await closeRuntime(spaceId);
-        await registry.remove(spaceId);
+        await inTurnFor(spaceId, () => registry.remove(spaceId));
       } finally {
         leaving.delete(spaceId);
       }
