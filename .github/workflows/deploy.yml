@@ -52,24 +52,24 @@ jobs:
           - app: minca-host
             dir: .
             config: packages/cli/fly.toml
-            paths: '^(packages/(core|relay|cli)/|apps/(home|example|extension)/package\.json$|package(-lock)?\.json$|\.github/workflows/deploy\.yml$)'
+            paths: '^(packages/(core|relay|cli|std|actions)/|apps/(home|example|extension)/package\.json$|package(-lock)?\.json$|\.github/workflows/deploy\.yml$)'
           - app: minca-mcp
             dir: .
             config: packages/cli/fly.mcp.toml
-            paths: '^(packages/(core|relay|cli)/|apps/(home|example|extension)/package\.json$|package(-lock)?\.json$|\.github/workflows/deploy\.yml$)'
+            paths: '^(packages/(core|relay|cli|std|actions)/|apps/(home|example|extension)/package\.json$|package(-lock)?\.json$|\.github/workflows/deploy\.yml$)'
           # minca.social, home.minca.social, app.minca.social and minca.dev.
           - app: minca-site
             dir: apps/site
             out: dist
-            paths: '^(apps/(site|shared)/|packages/(core|ui)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
+            paths: '^(apps/(site|shared)/|packages/(core|ui|std|actions)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
           - app: minca-home
             dir: apps/home
             out: dist
-            paths: '^(apps/(home|shared)/|packages/(core|ui|react)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
+            paths: '^(apps/(home|shared)/|packages/(core|ui|react|auth)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
           - app: minca-app
             dir: apps/example
             out: dist
-            paths: '^(apps/(example|shared)/|packages/(core|ui|react|calls)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
+            paths: '^(apps/(example|shared)/|packages/(core|ui|react|calls|std|actions|auth)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/deploy\.yml$)'
           # The docs come from every package's docs and API, and the spec.
           - app: minca-docs
             dir: apps/docs
