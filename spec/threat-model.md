@@ -215,7 +215,7 @@ reference implementation, or any implementation, honestly.
     no more until it pays; past its free room an account's balance, and a
     community's fund, pay for its size while they have money (08 §1,
     §1.1, Room, §2;
-    `packages/core/tests/host-limits.test.ts`, "over its room…", "the notice
+    `packages/cli/tests/host-limits.test.ts`, "over its room…", "the notice
     is the account's…", "a carry space over its room by itself…";
     `packages/cli/tests/host.test.ts`, "past its notice, the host holds back
     an account's largest space…"). Every space a member names counts against
@@ -224,7 +224,7 @@ reference implementation, or any implementation, honestly.
     which may be their own rather than the shared one, and keeps carrying a
     held space for any member with room. A held space's bucket copy goes
     after `keepDays`, and goes back whole once it is carried again
-    (`packages/core/tests/host-limits.test.ts`, "a space held back for
+    (`packages/cli/tests/host-limits.test.ts`, "a space held back for
     keepDays…"; `packages/core/tests/mirror.test.ts`, "taken out of the
     store and mirrored again…", "a mirror that only ever read…", "a host
     that only read its space back…"). A writer also drains a community's fund,
@@ -273,7 +273,7 @@ reference implementation, or any implementation, honestly.
     after. Accepted: it costs the stranger money, and the fund's status says
     when it runs out. Letting go of
     a space for an hour does not reset its line
-    (`packages/core/tests/host-limits.test.ts`, "a space nobody names for a
+    (`packages/cli/tests/host-limits.test.ts`, "a space nobody names for a
     while keeps its line").
   - Anyone who knows a space's id learns from the host's open status
     whether it carries the space, how many wrote and read there, and, asking
@@ -689,7 +689,7 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     a space under the line through its last days is not stopped; removing
     someone for an hour as the date passes does not ("removing a member for
     an hour as the date passes buys nothing…")
-    (`packages/core/tests/host-limits.test.ts`, "a member removed no longer
+    (`packages/cli/tests/host-limits.test.ts`, "a member removed no longer
     counts as a writer", "pushed over by joiners removed within the hour…");
     after `until` it is stopped, and is free again only through its fund or
     once the host forgets it. A space whose grace is spent gets only 7 days'
@@ -1394,7 +1394,7 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
   - A host with limits that stops carrying a space over its free line takes
     nothing from its members: their copies, and their syncing with each
     other, are as before, and an account's subscription still names the
-    space (08 §1.1; `packages/core/tests/host-limits.test.ts`, "past until,
+    space (08 §1.1; `packages/cli/tests/host-limits.test.ts`, "past until,
     members' subscriptions no longer carry it; members keep what they hold").
     What it stops is being there for them: members meet only when two are
     online, wakes for the space stop, and after `keepDays` its copy goes.

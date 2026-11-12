@@ -192,6 +192,7 @@ export type { FolderAccessMode } from './storage/directory-access.js';
 
 // Spaces
 export { createSpaceManager, parseSpaceInvite } from './space/space-manager.js';
+export { openPass } from './space/pass.js';
 export {
   deriveAccountRegistry,
   deriveContactsSpace,
@@ -363,7 +364,7 @@ export {
 export { sha256, cidFromBytes } from './utils/hash.js';
 export { protocolError, isProtocolError } from './utils/errors.js';
 export type { ProtocolError, ProtocolErrorCode } from './utils/errors.js';
-export { createEmitter } from './utils/events.js';
+export { createEmitter, createListeners } from './utils/events.js';
 export type { Emitter } from './utils/events.js';
 
 // Files: how much of others' files a device fetches ahead and keeps
@@ -393,9 +394,7 @@ export {
   PERSON_ONLY,
   checkActionInput,
   createCarrierNode,
-  createHostNode,
-  spaceSubscription,
-  NotAllowedError,
+  createCarryCore,
   watchNotifications,
 } from './node/index.js';
 export { MAX_PROPOSALS, checkAppAutomation, checkOwnAutomation, ownQuery } from './space/own-automations.js';
@@ -451,13 +450,9 @@ export type {
   CarrierNode,
   CarriedSpace,
   CarrierEvent,
-  HostConfig,
-  HostNode,
   NodeHosting,
   HostingView,
   SpaceHostingView,
-  Subscription,
-  SubscriptionState,
   Keeper,
   CacheConfig,
   NodeAutomations,

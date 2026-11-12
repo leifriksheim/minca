@@ -289,7 +289,7 @@ What a relay, or a link holder, can do to a link:
    invite and deleting the record on a key change or at `until`; the copy in
    carry spaces; `mailbox.fetch` reads every page for invite topics.
 4. `packages/relay/relay.mjs` (an option to answer a topic from elsewhere),
-   `packages/cli/src/serve.ts` and `packages/core/src/node/host.ts`: the
+   `packages/cli/src/serve.ts` and `packages/cli/src/host-node.ts`: the
    host's mailbox answers from carry-space records. The relay's duplicate
    check skips expired copies: today a drop in the 15 s before the sweep
    answers `dropped` and stores nothing, which 07 §5 doesn't allow.

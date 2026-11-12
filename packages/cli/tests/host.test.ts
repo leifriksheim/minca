@@ -13,7 +13,7 @@ import { createHmac } from 'node:crypto';
 import { createServer, type IncomingMessage, type RequestListener } from 'node:http';
 
 import { createNode } from '../../core/src/node/node.js';
-import { createHostNode, type HostNode } from '../../core/src/node/host.js';
+import { createHostNode, type HostNode } from '../src/host-node.js';
 import type { P2PNode } from '../../core/src/node/types.js';
 import { createIdentityManager } from '../../core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';

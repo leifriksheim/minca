@@ -7,31 +7,31 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createNode } from '../src/node/node.js';
-import { createHostNode, spaceSubscription, type HostConfig, type HostNode } from '../src/node/host.js';
-import type { P2PNode } from '../src/node/types.js';
-import type { HostLimits } from '../src/session/hosting.js';
-import { createIdentityManager } from '../src/identity/identity-manager.js';
-import { createLocalRootSigner } from '../src/identity/root-signer.js';
-import { createP256Provider } from '../src/identity/crypto-p256.js';
-import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveAccountKey } from '../src/identity/account-vault.js';
+import { createNode } from '../../core/src/node/node.js';
+import { createHostNode, spaceSubscription, type HostConfig, type HostNode } from '../src/host-node.js';
+import type { P2PNode } from '../../core/src/node/types.js';
+import type { HostLimits } from '../../core/src/session/hosting.js';
+import { createIdentityManager } from '../../core/src/identity/identity-manager.js';
+import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
+import { createP256Provider } from '../../core/src/identity/crypto-p256.js';
+import { generateSeed } from '../../core/src/identity/recovery-code.js';
+import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
 import {
   newSubscriptionSeed,
   readStatus,
   signStatus,
   subscriptionKey,
   type HostStatus,
-} from '../src/session/hosting.js';
-import { didOf } from '../src/identity/did.js';
-import { parseSpaceInvite } from '../src/space/space-manager.js';
-import { createMemoryBlobStore } from '../src/storage/blob/memory.js';
-import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
-import { until } from './helpers/until.js';
-import { joined } from './helpers/joined.js';
-import { hold } from './helpers/hold.js';
-import { team } from '../src/space/presets.js';
+} from '../../core/src/session/hosting.js';
+import { didOf } from '../../core/src/identity/did.js';
+import { parseSpaceInvite } from '../../core/src/space/space-manager.js';
+import { createMemoryBlobStore } from '../../core/src/storage/blob/memory.js';
+import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
+import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
+import { until } from '../../core/tests/helpers/until.js';
+import { joined } from '../../core/tests/helpers/joined.js';
+import { hold } from '../../core/tests/helpers/hold.js';
+import { team } from '../../core/src/space/presets.js';
 
 const provider = createP256Provider();
 const DAY = 86_400;

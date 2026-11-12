@@ -15,7 +15,8 @@
  * (`MINCA_MAIL_API_KEY`, `MINCA_MAIL_FROM`), or any server that takes the same
  * JSON at `MINCA_MAIL_URL`.
  */
-import type { BlobStore, StorageAdapter, Subscription, SubscriptionState } from '@minca/core';
+import type { BlobStore, StorageAdapter } from '@minca/core';
+import type { Subscription, SubscriptionState } from './host-node.js';
 import { messageOf } from './json.js';
 
 /** Sends one plain-text mail */
