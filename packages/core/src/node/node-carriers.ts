@@ -338,8 +338,9 @@ export function createNodeCarriers(ctx: NodeContext) {
   const derivedCarry = new Map<string, Promise<SpaceRecord>>();
   /** A carrier's carry space: derived, or for one added before they were, the one its invite names */
   async function carrySpaceOf(carrier: Carrier): Promise<SpaceRecord | null> {
+    // Through the registry alone: this runs while the space's runtime opens, which a join through the node would wait on.
     if (carrier.invite && carrier.space)
-      return (await registry.get(carrier.space)) ?? ctx.joinRegistry(carrier.invite).catch(() => null);
+      return (await registry.get(carrier.space)) ?? registry.join(carrier.invite).catch(() => null);
     const { accountKey } = config;
     if (!accountKey) return null;
     const gen = carrier.gen ?? 0;
