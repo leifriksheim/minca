@@ -81,7 +81,10 @@ export function RelatedRecords({
             key={record.key}
             className={styles.pill}
             data-hue={hueOfText(record.key)}
-            onClick={() => onOpen(record)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(record);
+            }}
           >
             {titleOf(record)}
           </button>

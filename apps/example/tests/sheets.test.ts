@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { FIRST_LOOK, readLook, type Look } from '../src/derive/look';
 import { newViewBody, readViews, sheetView, tablesOf } from '../src/components/sheets/views';
 import { shownFields, tableFields } from '../src/components/sheets/fields';
-import { includesOf, relatedRecords } from '../src/components/sheets/relations';
+import { includesOf, linksWith, linksWithout, relatedRecords } from '../src/components/sheets/relations';
 import { addTemplate, type Template } from '../src/components/apps/launcher';
 import { setup } from './helpers';
 
@@ -79,7 +79,7 @@ describe('Sheets', () => {
     const co_op = await alice.node.records.put(space, 'app.organization', { name: 'The co-op' });
     await alice.node.records.put(space, 'app.organization', { name: 'Nobody yet' });
     const linked = { links: [{ rel: 'organization', to: co_op.key }] };
-    await alice.node.records.put(space, 'app.place', { name: 'Bakery' }, linked);
+    const bakery = await alice.node.records.put(space, 'app.place', { name: 'Bakery' }, linked);
     await alice.node.records.put(space, 'app.place', { name: 'Garden' }, linked);
     await alice.node.records.put(space, 'app.place', { name: 'Shed' });
 
@@ -113,6 +113,19 @@ describe('Sheets', () => {
       ['Name', 'Places'],
     );
     assert.deepEqual(await titlesByRow('app.organization', 'Places'), [[], ['Bakery', 'Garden']]);
+
+    const guild = await alice.node.records.put(space, 'app.organization', { name: 'Bakers guild' });
+    const organizationOf = columnsOf('app.place').find((c) => c.label === 'Organization')!.ownLink!;
+    const relink = async (links: ReadonlyArray<{ rel: string; to: string }>) =>
+      alice.node.records.update(space, bakery.key, bakery.body, { links });
+    await relink(linksWith(bakery.links, organizationOf, guild.key));
+    assert.deepEqual(
+      await titlesByRow('app.place', 'Organization'),
+      [['Bakers guild'], ['The co-op'], []],
+      'a place has one organization, so linking another takes the place of the first',
+    );
+    await relink(linksWithout([{ rel: 'organization', to: guild.key }], 'organization', guild.key));
+    assert.deepEqual(await titlesByRow('app.place', 'Organization'), [[], ['The co-op'], []]);
   });
 });
 

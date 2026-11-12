@@ -1,15 +1,16 @@
 import type { ReactNode } from 'react';
 import { Icon } from '@minca/app-shared/Icon';
 import { recordLabel, valueOf } from '../../derive/schema-ui';
-import { GridCell, RelatedRecords } from './Cell';
+import { GridCell } from './Cell';
 import { fieldMark } from './fields';
 import { NewRow } from './NewRow';
-import { relatedRecords } from './relations';
+import { RelationCell } from './RelationCell';
 import type { LayoutProps } from './layout';
 import styles from './Sheets.module.css';
 
 /** The records as rows and the shown fields as columns, a plain value changed in its cell */
 export function Grid({
+  spaceId,
   rows,
   fields,
   schema,
@@ -17,6 +18,7 @@ export function Grid({
   people,
   mayEdit,
   onSave,
+  onRelink,
   onOpen,
   onAdd,
   addColumn,
@@ -52,13 +54,15 @@ export function Grid({
                     </button>
                   )}
                   {field.related ? (
-                    <div className={styles.cell}>
-                      <RelatedRecords
-                        records={relatedRecords(record, field)}
-                        collections={collections}
-                        onOpen={onOpen}
-                      />
-                    </div>
+                    <RelationCell
+                      spaceId={spaceId}
+                      record={record}
+                      column={field}
+                      collections={collections}
+                      mayEdit={mayEdit}
+                      onOpen={onOpen}
+                      onRelink={onRelink}
+                    />
                   ) : (
                     <GridCell
                       field={field}

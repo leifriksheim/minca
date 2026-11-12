@@ -81,6 +81,8 @@ export function SheetTable({
     });
   const save = (record: QueryRecord, field: Field, value: unknown) =>
     void run(() => node.records.update(space.id, record.key, withValue(bodyOf(record), field.name, value)));
+  const relink = (record: QueryRecord, links: QueryRecord['links']) =>
+    void run(() => node.records.update(space.id, record.key, record.body, { links }));
   /** Adds a record from its title at once, or opens the whole form when something else must be filled in */
   const add = async (values: Readonly<Record<string, unknown>>, title: string) => {
     const quick = quickAddBody(collection.schema, title);
@@ -93,6 +95,7 @@ export function SheetTable({
   };
 
   const layoutProps: LayoutProps = {
+    spaceId: space.id,
     rows: rows ?? [],
     fields,
     schema: collection.schema,
@@ -100,6 +103,7 @@ export function SheetTable({
     people,
     mayEdit: space.writable,
     onSave: save,
+    onRelink: relink,
     onOpen,
     onAdd: add,
   };

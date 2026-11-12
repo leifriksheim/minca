@@ -5,6 +5,7 @@ import type { People } from '../../derive/people';
 
 /** What every layout of a view is handed: the rows it shows, and what it may do with them */
 export interface LayoutProps {
+  readonly spaceId: string;
   readonly rows: ReadonlyArray<QueryRecord>;
   /** The columns the view shows, in its order */
   readonly fields: ReadonlyArray<Column>;
@@ -15,6 +16,8 @@ export interface LayoutProps {
   /** Whether the person looking may write in the space at all; each write is still judged by its rules */
   readonly mayEdit: boolean;
   readonly onSave: (record: QueryRecord, field: Field, value: unknown) => void;
+  /** Writes a record again with these links in place of its own */
+  readonly onRelink: (record: QueryRecord, links: QueryRecord['links']) => void;
   readonly onOpen: (record: QueryRecord) => void;
   /** A new record, with these values and the title typed */
   readonly onAdd: (values: Readonly<Record<string, unknown>>, title: string) => Promise<unknown>;

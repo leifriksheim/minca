@@ -307,6 +307,10 @@
     cursor: text;
   }
 
+  &[data-linkable] {
+    cursor: pointer;
+  }
+
   &[data-numeric] {
     justify-content: flex-end;
   }
@@ -377,6 +381,15 @@ form.newRow {
   font-size: 0.8125rem;
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* A record a row links to, in the panel that changes them: its title, and a way to unlink it */
+.linkedRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-tight);
+  padding-inline-start: 6px;
 }
 
 button.pill {
