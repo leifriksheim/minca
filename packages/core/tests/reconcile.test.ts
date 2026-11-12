@@ -14,6 +14,7 @@ import type { SyncMessage } from '../src/sync/sync-messages.js';
 import { base32Decode, base32Encode, cidDigest, cidFromBytes, cidOfDigest } from '../src/utils/hash.js';
 import { bytesToHex } from '../src/utils/encoding.js';
 import type { Version } from '../src/types.js';
+import { until } from './helpers/until.js';
 
 const hex = (b: Uint8Array) => bytesToHex(b);
 
@@ -219,9 +220,16 @@ describe('sync by reconciliation', () => {
     await a.storage.addVersion(extra);
 
     b.sync.notifyPeers(['a']);
-    await settle();
+    // Hashing 2,000 fingerprints for the hello outlasts the quiet `settle` waits for on a slow machine.
+    await until(
+      async () => {
+        await settle();
+        return (await b.storage.getVersion(extra.id)) !== null;
+      },
+      20_000,
+      'the one version reaching b',
+    );
 
-    assert.notEqual(await b.storage.getVersion(extra.id), null);
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
     // Two hellos, a few rounds of 16 fingerprints, and one version — not 2,000 ids.
     assert.ok(sent.bytes < 8_000, `${sent.bytes} bytes`);
