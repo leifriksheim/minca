@@ -1,6 +1,6 @@
 /**
- * Joining a space while the node has spaces open: a join must not wait on the
- * space it is opening, and an invite that is refused must close nothing.
+ * Joining a space while the node has spaces open: an invite that is refused
+ * must close nothing.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +9,6 @@ import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
-import { passKey } from '../src/space/pass.js';
 import { decodeLoose } from '../src/records/loose.js';
 import { base64UrlEncode, utf8Encode } from '../src/utils/encoding.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -26,8 +25,7 @@ async function account() {
   };
 }
 
-// Stands in for an older node that wrote a legacy sys.carrier: catch the space runtimes the node opens.
-// The node writes `sys.carrier` itself, so the record an older node left is put through the registry's runtime, caught as the node freezes it.
+// The space runtimes the node opens, caught as the node freezes each.
 type Rt = {
   get: (key: string) => Promise<unknown>;
   upsertSystem: (c: string, k: string, b: unknown) => Promise<unknown>;
@@ -40,56 +38,6 @@ Object.freeze = function <T>(value: T): T {
     runtimesSeen.push(value as unknown as Rt);
   return freeze(value);
 };
-
-test('opening a legacy carrier space this device does not hold yet settles', async () => {
-  const me = await account();
-  const carrierAccount = await account();
-  const carrierNode = await createNode({
-    signer: carrierAccount.signer,
-    stores: memoryStores(),
-    watchIntervalMs: 0,
-  });
-  const carry = await carrierNode.spaces.create({ name: 'Carry', visibility: 'private' });
-  const carryInvite: string = await carrierNode.spaces.invite(carry.id);
-
-  const node = await createNode({
-    signer: me.signer,
-    stores: memoryStores(),
-    accountKey: me.accountKey,
-    watchIntervalMs: 0,
-  });
-  const registryId = (await node.account.space())!;
-  const marker = await node.records.put(registryId, 'app.marker', { here: true });
-  let registryRt: Rt | undefined;
-  for (const rt of runtimesSeen) if (await rt.get(marker.key)) registryRt = rt;
-  assert.ok(registryRt, 'found the account registry runtime');
-
-  await registryRt.upsertSystem('sys.carrier', (await passKey(carry.id)).replace(/^pass:/, 'carrier:'), {
-    did: carrierAccount.did,
-    name: 'Old carrier',
-    since: new Date().toISOString(),
-    space: carry.id,
-    invite: carryInvite,
-  });
-
-  const opened = node.spaces.hold(carry.id).then(
-    () => 'opened',
-    (error: unknown) => `refused: ${String(error)}`,
-  );
-  const outcome = await Promise.race([
-    opened,
-    new Promise((resolve) => setTimeout(() => resolve('hung'), 5000)),
-  ]);
-  assert.notEqual(
-    outcome,
-    'hung',
-    'runtime(carry) never settles: closeRuntime awaits the open that is joining',
-  );
-  await Promise.race([
-    Promise.all([node.close(), carrierNode.close()]),
-    new Promise((r) => setTimeout(r, 2000)),
-  ]);
-});
 
 test('an invite that is refused closes no space the node has open', async () => {
   const me = await account();

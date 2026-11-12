@@ -883,6 +883,16 @@ again keeps what it holds, and is never sent `carry:closed` (below) for a
 space it is still using. One added again after it was removed gets a new
 carry space, one `gen` past its removed record's.
 
+A `sys.carrier` record whose key does not name the carry space derived from
+its `did` and `gen` names no carrier: a node ignores it.
+
+> **Known defect:** a record written before carry spaces were derived names
+> a carry space made for it, so it is ignored, and its carrier can no longer
+> be listed, removed or told to forget. It keeps the read seeds it was
+> handed until each space's key changes, and gets no new ones; connecting it
+> again gives it a derived carry space
+> ([#170](https://github.com/leifriksheim/minca/issues/170)).
+
 A removal made on a device that is offline can cross a reconnect made
 through another device that has not heard of it yet. The removal wins: once
 it arrives, the carrier reads `carry:closed`, forgets what it held and says

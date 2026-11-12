@@ -1467,6 +1467,9 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     for someone with more than they hold, and an automation's own words are
     its maker's ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - A removed carrier keeps proving read until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
+  - A carrier added before carry spaces were derived can't be removed or told
+    to forget: its record is ignored, so it keeps its read seeds until each
+    key changes (06 §4.2, [#170](https://github.com/leifriksheim/minca/issues/170)).
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what
     (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)).

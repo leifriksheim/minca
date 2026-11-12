@@ -615,7 +615,6 @@ export function createNodeCarriers(ctx: NodeContext) {
       await inCarryTurn(async () => {
         const live = await liveCarriers();
         const did = live.find(({ carry }) => carry.space.id === spaceId)?.body.did;
-        // Every carry space it has: one added on two devices at once, before they were derived, has two.
         for (const { key, body, carry } of live.filter((one) => one.body.did === did)) {
           const rt = await ctx.runtime(carry.space.id);
           // Passes gone first, then the word to forget everything, then the carrier's record.
