@@ -6,9 +6,16 @@ import { readFileSync } from 'node:fs';
 
 // The spec, and the code and tests its Source lines cite. A change to the first
 // group is always a protocol change; one to the second may say it isn't.
-const PROTOCOL = [/^spec\//, /^packages\/core\/src\//, /^packages\/core\/tests\//, /^packages\/relay\//];
+const PROTOCOL = [
+  /^spec\//,
+  /^packages\/core\/src\//,
+  /^packages\/core\/tests\//,
+  /^packages\/relay\//,
+  /^packages\/auth\/src\//,
+];
 const NEAR = [
   /^packages\/cli\/(src|tests)\//,
+  /^packages\/(std|actions)\/src\//,
   /^apps\/(home|example)\/src\//,
   // The review process itself.
   /^\.claude\/agents\//,
