@@ -8,7 +8,7 @@ import * as z from 'zod';
 
 import { matches, checkQuery } from '../src/query/filter.js';
 import { createNode } from '../src/node/node.js';
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import type { NodeRecord, P2PNode } from '../src/node/types.js';
 import type { QueryResult, Typed } from '../src/query/types.js';
 

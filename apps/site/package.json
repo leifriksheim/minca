@@ -9,12 +9,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@minca/actions": "*",
     "@minca/app-shared": "*",
     "@minca/core": "*",
+    "@minca/ui": "*",
     "@tanstack/react-router": "^1.170.46",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "@minca/ui": "*"
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

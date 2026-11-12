@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { offeredActions, type NodeAction } from '@minca/core';
+import { offeredActions, type NodeAction } from '@minca/actions';
 import { Shape } from '@minca/app-shared/shapes';
 import { MCP_URL, addToClaude, addToCursor } from '@minca/app-shared/mcp';
 import { AppLogo, type AppLogoName } from '@minca/app-shared/AppLogo';

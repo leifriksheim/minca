@@ -2,7 +2,7 @@
   "name": "@minca/core",
   "version": "0.2.0",
   "type": "module",
-  "description": "Self-sovereign P2P protocol for the browser — identity, schemas, storage, networking, and gossip sync",
+  "description": "Self-sovereign P2P protocol for the browser \u2014 identity, schemas, storage, networking, and gossip sync",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/leifriksheim/minca.git",
@@ -55,12 +55,13 @@
   "scripts": {
     "build": "rm -rf dist && tsc",
     "typecheck": "tsc --noEmit && tsc -p tests",
-    "test": "node --experimental-vm-modules --import tsx --test --test-concurrency=8 --test-timeout=60000 --test-force-exit tests/*.test.ts",
+    "test": "node --experimental-vm-modules --conditions=@minca/source --import tsx --test --test-concurrency=8 --test-timeout=60000 --test-force-exit tests/*.test.ts",
     "prepack": "node ../../scripts/npm-readme.mjs",
     "postpack": "rm -f README.md",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
+    "@minca/actions": "*",
     "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2",
     "tsx": "^4.19.0",

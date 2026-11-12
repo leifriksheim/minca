@@ -23,7 +23,7 @@ import { createSigner } from '../../core/src/schema/signer.js';
 import { createVersion } from '../../core/src/schema/version.js';
 import { generateSeed, recoveryCodeToSeed } from '../../core/src/identity/recovery-code.js';
 import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
-import { NODE_ACTIONS, PERSON_ONLY } from '../../core/src/node/actions.js';
+import { NODE_ACTIONS, PERSON_ONLY } from '@minca/actions';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { team } from '../../core/src/space/presets.js';
 import { hold } from '../../core/tests/helpers/hold.js';

@@ -130,7 +130,10 @@ export {
   proposeCollections,
   applyBlueprint,
   copyBlueprint,
+  tryContracts,
 } from './blueprints.js';
+export type { ContractExample } from './blueprints.js';
+export { CHOOSING, lookalikes } from './choosing.js';
 export { guidesOf, writeGuide } from './guides.js';
 export {
   automation,

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 import * as z from 'zod';
-import { NODE_ACTIONS } from '../src/node/actions.js';
+import { NODE_ACTIONS } from '@minca/actions';
 import { isRecord } from '../src/utils/guards.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));

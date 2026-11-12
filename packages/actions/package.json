@@ -1,0 +1,23 @@
+{
+  "name": "@minca/actions",
+  "private": true,
+  "type": "module",
+  "description": "A Minca node's operations, each with a name, a sentence and a JSON Schema, so a command line, an MCP server and WebMCP offer the same ones. A library on the protocol, not protocol.",
+  "exports": {
+    ".": {
+      "@minca/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@minca/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT"
+}

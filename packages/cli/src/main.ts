@@ -14,14 +14,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface as createPromiseInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
-import {
-  isValidRecoveryCode,
-  NODE_ACTIONS,
-  PEER_CONTENT_NOTE,
-  runAction,
-  type NodeAction,
-  type P2PNode,
-} from '@minca/core';
+import { isValidRecoveryCode, type P2PNode } from '@minca/core';
+import { NODE_ACTIONS, PEER_CONTENT_NOTE, runAction, type NodeAction } from '@minca/actions';
 import { suggestedAutomations } from '@minca/core/schemas';
 import { homeAddress } from '@minca/core/session';
 import { runCarrier } from './carry.js';

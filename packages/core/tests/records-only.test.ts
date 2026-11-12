@@ -12,7 +12,7 @@ import * as z from 'zod';
 
 import { createNode } from '../src/node/node.js';
 import { profileKey } from '../src/node/space-profiles.js';
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { noteTerms } from '../src/identity/abilities.js';

@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runAction } from '../src/node/actions.js';
+import { runAction } from '@minca/actions';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { contactKeyPair, deriveMemberKeyBytes } from '../src/identity/contact-key.js';

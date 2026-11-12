@@ -25,7 +25,7 @@
  */
 import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill';
 import type { InputSchema } from '@mcp-b/webmcp-types';
-import { NODE_ACTIONS, callAction, checkActionInput } from '@minca/core';
+import { NODE_ACTIONS, callAction, checkActionInput } from '@minca/actions';
 import { getNode } from './minca';
 import { ask } from '@minca/app-shared/Ask';
 
