@@ -594,10 +594,12 @@ export function grantSigner(grant: Grant | (() => Grant | null)): RootSigner {
     get did() {
       return current()?.did ?? '';
     },
-    async delegate() {
+    async delegate({ audience }) {
       const now = current();
       if (!now || grantExpired(now))
         throw new Error('Access has run out. Connect to your account home again.');
+      if (now.note.payload.aud !== audience)
+        throw new Error('The key this app was connected with is gone. Connect to your account home again.');
       return now.note;
     },
   };

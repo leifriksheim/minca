@@ -116,6 +116,22 @@ describe('connecting an app to an account home', () => {
     assert.equal(auth.connections()[0]?.origin, 'https://todo.test');
   });
 
+  test('a grant starts no node for a key other than the one it was made out to', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node } = auth.getState().session!;
+    const groceries = await node.spaces.create({ name: 'Groceries', visibility: 'private' });
+    const key = await newAppKey();
+    const request: ConnectRequest = await asked(
+      { v: 1, audience: key.did, name: 'Todo', access: 'write' },
+      key,
+    );
+    const grant = await auth.grant({ origin: 'https://todo.test', request, spaceIds: [groceries.id] });
+
+    // The app's key was lost, and another made in its place.
+    await assert.rejects(app(hub, grant, await newAppKey()), /key this app was connected with is gone/);
+  });
+
   test('the app writes in its space, and the account sees it; it cannot write anywhere else', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
