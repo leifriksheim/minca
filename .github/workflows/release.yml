@@ -41,7 +41,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
-      - run: npm pack -w @minca/core -w @minca/cli --pack-destination "$RUNNER_TEMP/npm"
+      - run: mkdir "$RUNNER_TEMP/npm" && npm pack -w @minca/core -w @minca/cli --pack-destination "$RUNNER_TEMP/npm"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-packages
