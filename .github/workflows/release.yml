@@ -1,10 +1,19 @@
 name: Release
 
-# A version tag (`npm run release` pushes it once npm has both packages) builds
-# the downloads and puts them on a GitHub Release, under names that stay the
-# same from one release to the next, so the site links to
+# A version tag (`npm run release` makes and pushes it) is the whole release:
+# it tests the tagged commit, publishes @minca/core and @minca/cli to npm, and
+# puts the downloads on a GitHub Release, under names that stay the same from
+# one release to the next, so the site links to
 # releases/latest/download/<file>. A tag with a `-` (v0.2.0-rc.1) makes a
-# pre-release, which `latest` skips.
+# pre-release, which `latest` skips, on GitHub and on npm.
+#
+# Nothing is published until the tests pass and every download builds. A run
+# that stopped is run again (`gh run rerun --failed`): each step skips what is
+# already out.
+#
+# npm trusts this file by name (each package's Settings → Trusted publishing on
+# npmjs.com: this repository, `release.yml`), so there is no token to keep.
+# Renaming the file means changing that setting.
 on:
   push:
     tags: ['v*']
@@ -17,14 +26,74 @@ permissions:
   contents: read
 
 jobs:
+  # The checks, then the two packages as npm would publish them.
+  packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - run: npm pack -w @minca/core -w @minca/cli --pack-destination "$RUNNER_TEMP/npm"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-packages
+          path: ${{ runner.temp }}/npm/*.tgz
+          if-no-files-found: error
+
   build:
     uses: ./.github/workflows/build.yml
     with:
       desktop: true
       windows: true
 
+  # Only the packed files and npm itself run here: no checkout and no install,
+  # so nothing a dependency brings can publish as us.
+  npm:
+    needs: [packages, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write # what npm's trusted publishing checks
+    steps:
+      # Trusted publishing needs npm 11.5.1, which Node 24 brings.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+      - env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=${TAG#v}
+          dist_tag=latest
+          [[ "$TAG" == *-* ]] && dist_tag=next
+          ls -l
+          for package in core cli; do
+            if [[ ! -f "minca-$package-$version.tgz" ]]; then
+              echo "::error::The tag is $TAG, but @minca/$package is packed at another version."
+              exit 1
+            fi
+          done
+          for package in core cli; do
+            if [[ "$(npm view "@minca/$package@$version" version 2>/dev/null)" == "$version" ]]; then
+              echo "@minca/$package@$version is already on npm."
+            else
+              npm publish "minca-$package-$version.tgz" --tag "$dist_tag"
+            fi
+          done
+
   release:
-    needs: build
+    needs: [build, npm]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -32,8 +101,10 @@ jobs:
       id-token: write # signing the attestations
       attestations: write
     steps:
+      # Every artifact build.yml made; the npm packages are on npm.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
+          pattern: '[Mm]inca*'
           path: out
           merge-multiple: true
       - working-directory: out

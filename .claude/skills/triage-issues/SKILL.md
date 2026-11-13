@@ -1,6 +1,6 @@
 ---
 name: triage-issues
-description: Sweep the open GitHub issues and bring the backlog back under its cap of 40. Folds related issues into umbrellas, parks ideas, records accepted limitations in the spec, closes what is done or stale. Use when asked to clean up or triage issues, monthly, and before a release.
+description: Sweep the open GitHub issues and bring the backlog back under its cap of 40. Folds related issues into umbrellas, parks ideas, records accepted limitations in the spec, closes what is done or stale. Use when asked to clean up or triage issues, monthly, and before a minor release.
 ---
 
 # Triaging the backlog

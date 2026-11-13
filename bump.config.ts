@@ -4,9 +4,8 @@ import { defineConfig } from 'bumpp';
  * Both packages, the desktop app and the Chrome extension share one version.
  * bumpp asks for the next one, writes it to each, refreshes the lockfile, and
  * commits and tags it (`v0.1.2`), locally. `npm run release`
- * (scripts/release.mjs) runs it only when the current version is already on
- * npm, then publishes and pushes; the tag builds the downloads
- * (.github/workflows/release.yml).
+ * (scripts/release.mjs) runs it and pushes; the tag publishes to npm and
+ * builds the downloads (.github/workflows/release.yml).
  */
 export default defineConfig({
   files: [
@@ -20,6 +19,6 @@ export default defineConfig({
   all: true,
   commit: 'Release v%s',
   tag: 'v%s',
-  // Pushed only once both are published, so a failed publish leaves nothing half-released on GitHub.
+  // scripts/release.mjs pushes main and the tag together, or neither.
   push: false,
 });
