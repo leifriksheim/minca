@@ -33,7 +33,7 @@
     "README.md"
   ],
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.135.0",
+    "@anthropic-ai/sdk": "^1.5.0",
     "@clack/prompts": "^1.8.1",
     "@minca/actions": "*",
     "@minca/core": "*",
