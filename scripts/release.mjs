@@ -23,8 +23,10 @@ function read(command, args) {
 }
 
 function refuseUnlessCleanAndAtOriginMain() {
-  if (read('git', ['status', '--porcelain', '--untracked-files=no']))
-    throw new Error('Tracked files have changes. Commit or stash them first.');
+  if (read('git', ['status', '--porcelain']))
+    throw new Error(
+      'The working tree has changes or new files, and bumpp would commit them all. Commit, stash or ignore them first.',
+    );
   const branch = read('git', ['branch', '--show-current']);
   if (branch !== 'main') throw new Error(`Releases are cut from main; this is ${branch || 'no branch'}.`);
   run('git', ['fetch', '--quiet', 'origin', 'main']);
