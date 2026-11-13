@@ -3,6 +3,7 @@ import type { AuthState, MincaSession } from '@minca/auth';
 import { useAuth } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Info } from '@minca/app-shared/Info';
+import { Loader } from '@minca/app-shared/Loader';
 import { Problem, Step, Way } from './SignInParts';
 
 /* The phone's side of pairing: it arrives here from the QR code `PairPhone` shows on the computer. */
@@ -28,8 +29,19 @@ function describe(stage: PairingStage): string {
   }
 }
 
+/** How a pairing is going, in a line: over a bar filling as the spaces are added, when that is what it is doing */
 export function PairingLine({ stage }: { stage: PairingStage }) {
-  return stage.kind === 'failed' ? <p role="alert">{stage.reason}</p> : <small>{describe(stage)}</small>;
+  if (stage.kind === 'failed') return <p role="alert">{stage.reason}</p>;
+  const isWorking = stage.kind === 'waiting' || stage.kind === 'sending' || stage.kind === 'joining';
+  return (
+    <div className="stack" data-gap="tight" role="status">
+      {stage.kind === 'joining' && <progress value={stage.joined} max={stage.total} />}
+      <small className="row">
+        {isWorking && <Loader size={10} decorative />}
+        {describe(stage)}
+      </small>
+    </div>
+  );
 }
 
 /**

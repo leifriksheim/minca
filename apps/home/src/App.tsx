@@ -7,6 +7,7 @@ import { Settings } from './components/Settings';
 import { SignIn } from './components/SignIn';
 import { HostingDue } from './components/Hosting';
 import { Wordmark } from '@minca/app-shared/Wordmark';
+import { Opening } from '@minca/app-shared/Opening';
 import { TABS, useTab } from './tabs';
 import { AccountTheme } from '@minca/app-shared/theme';
 import styles from './App.module.css';
@@ -16,7 +17,10 @@ export function App() {
   const { state } = useMinca();
   const [tab, openTab] = useTab();
 
-  if (state?.stage !== 'ready') {
+  if (!state || state.stage === 'starting')
+    return <Opening title={state?.signingOut ? 'Signing out' : 'Looking for your accounts'} />;
+
+  if (state.stage !== 'ready') {
     return (
       <main className={styles.signIn}>
         <Wordmark />

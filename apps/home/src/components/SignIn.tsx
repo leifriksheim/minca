@@ -7,7 +7,7 @@ import { Accounts, Existing, Restore, Welcome } from './GettingIn';
 import { Create, PodOffer, Recovery, Unlock } from './NewAccount';
 import { PairArrival } from './PairArrival';
 
-/** Each stage of the sign-in flow, drawn; `ready` is the account itself, `starting` the loader */
+/** Each stage of the sign-in flow, drawn; `ready` is the account itself, and `starting` the whole window's (`App`) */
 const SCREENS: Partial<Record<AuthStage, () => ReactNode>> = {
   welcome: Welcome,
   existing: Existing,
@@ -23,12 +23,7 @@ const SCREENS: Partial<Record<AuthStage, () => ReactNode>> = {
 /** The sign-in flow, a screen at a time, drawn on `createMincaAuth`'s state */
 export function SignIn() {
   const { state } = useMinca();
-  if (!state || state.stage === 'starting')
-    return (
-      <p>
-        <Loader label={state?.signingOut ? 'Signing out' : 'Looking for your accounts'} showLabel />
-      </p>
-    );
+  if (!state) return null;
   // The claim runs right after the account is made: its few seconds get a screen of their own.
   if (state.stage === 'recovery' && state.username?.status === 'claiming')
     return <Claiming username={state.username.username} />;

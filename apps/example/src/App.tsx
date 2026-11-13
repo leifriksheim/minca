@@ -26,6 +26,8 @@ import { RelayDown } from './components/RelayNotice';
 import { GroupRow, SpaceCount, SpaceDialog, SpaceList } from './components/SpaceList';
 import { PersonRow } from './components/PeopleParts';
 import { Loading } from './components/Loading';
+import { Opening } from '@minca/app-shared/Opening';
+import { AccountSync } from '@minca/app-shared/AccountSync';
 import { ago } from '@minca/ui/time';
 import { byRecent, useLastActive } from './recent';
 import { CallLayer } from './components/calls/Calls';
@@ -59,7 +61,11 @@ export function App() {
     );
   // A kept account opens in a moment: the sign-in page is for when there is something to do or say.
   const openingKeptAccount = state.status === 'starting' && !state.error;
-  return openingKeptAccount ? <Loading label="Opening your account" /> : <ConnectScreen />;
+  return openingKeptAccount ? (
+    <Opening title="Opening your account" detail="Picking up where you left off." />
+  ) : (
+    <ConnectScreen />
+  );
 }
 
 /** Connected: your spaces for every page, notifications and automations running, and calls drawn over it all */
@@ -254,13 +260,16 @@ export function AllPage() {
       {loading && spaces.length === 0 ? (
         <Loading label="Opening your chats" />
       ) : rows.length === 0 ? (
-        <div className="empty">
-          <h3>Nothing here yet</h3>
-          <p>Start a group, or find someone by their username under People.</p>
-          <button data-intent="primary" onClick={() => setNaming(true)}>
-            New group
-          </button>
-        </div>
+        <>
+          <AccountSync />
+          <div className="empty">
+            <h3>Nothing here yet</h3>
+            <p>Start a group, or find someone by their username under People.</p>
+            <button data-intent="primary" onClick={() => setNaming(true)}>
+              New group
+            </button>
+          </div>
+        </>
       ) : (
         <ul role="list" aria-label="Groups and people">
           {rows.map(({ space, pair }) =>

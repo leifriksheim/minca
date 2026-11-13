@@ -1,0 +1,75 @@
+/* A quiet card: the two devices and what passes between them, over a line saying which */
+.sync {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-loose);
+  padding: 20px;
+  border-radius: var(--radius-surface);
+  background: color-mix(in srgb, var(--color-hue-1) 10%, var(--color-page));
+  text-align: center;
+
+  &[data-syncing] {
+    background: color-mix(in srgb, var(--color-hue-4) 16%, var(--color-page));
+  }
+
+  & small {
+    color: var(--color-text-muted);
+  }
+}
+
+/* The other device on the left, this one on the right */
+.wire {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  /* Nobody at the other end: its shape is only an outline of where one would be */
+  .sync:not([data-syncing]) & > svg:first-child {
+    opacity: 0.18;
+  }
+}
+
+/* Three dots between them, still until something is coming, then running towards this device */
+.dots {
+  display: flex;
+  gap: 8px;
+
+  & > i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-field);
+  }
+
+  .sync[data-syncing] & > i {
+    background: var(--color-text-strong);
+    animation: pass 1.2s ease-in-out infinite;
+  }
+
+  .sync[data-syncing] & > i:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .sync[data-syncing] & > i:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+}
+
+@keyframes pass {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync[data-syncing] .dots > i {
+    animation: none;
+  }
+}

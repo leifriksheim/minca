@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { adHocName, nameFromUsername } from '@minca/core/inbox';
 import { useAuth } from '@minca/react';
+import { AccountSync } from '@minca/app-shared/AccountSync';
 import { Choices } from '@minca/app-shared/Choices';
 import { Info } from '@minca/app-shared/Info';
 import { usernameStatus } from '@minca/app-shared/UsernamePicker';
@@ -219,6 +220,7 @@ export function Unlock() {
           would replace it. Keep the code where you had it.
         </small>
       )}
+      {(state.setup === 'restored' || state.setup === 'paired') && <AccountSync />}
       {state.setup === 'paired' && (
         <>
           {state.pairingStage && <PairingLine stage={state.pairingStage} />}
