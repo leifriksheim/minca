@@ -88,31 +88,41 @@ that covers it, and link it from the PR: `Fixes #N` when the PR closes it,
 
 ## Releasing
 
-`@minca/core` (`packages/core/`) and `@minca/cli` (`packages/cli/`) are
-released together, always with the same version:
+`@minca/core` (`packages/core/`), `@minca/cli` (`packages/cli/`), the desktop
+app and the Chrome extension are released together, always with the same
+version:
 
 ```bash
-npm run release
+npm run release            # asks for the next version
+npm run release -- patch   # or minor, major, 0.3.0-rc.1: asks nothing
 ```
 
-It checks you're logged in to npm first (and runs `npm login` if not),
-typechecks and runs the tests, then [bumpp](https://github.com/antfu-collective/bumpp)
-asks for the next version, writes it to both packages, and commits and tags it
-(`v0.1.2`), locally. Both are published (each builds itself first: `dist/` for
-the core, one bundled file for the CLI), and only then are the commit and tag
-pushed. The root README is `@minca/core`'s page on npm too
-(`scripts/npm-readme.mjs` copies it in, with its links made absolute).
+On a clean `main` that matches `origin/main`,
+[bumpp](https://github.com/antfu-collective/bumpp) writes the version to each
+of them, commits and tags it (`v0.1.2`), and the script pushes both. That is
+all it does (`scripts/release.mjs`; bumpp's settings are in `bump.config.ts`).
 
-If a release stops partway (npm login, a one-time password, the network), fix
-it and run `npm run release` again. It sees the version isn't fully on npm yet
-and publishes what's missing, instead of bumping again.
-`npm run release -- --dry-run` does everything but publish and push. The
-script is `scripts/release.mjs`; bumpp's settings are in `bump.config.ts`.
+The tag is the release. `.github/workflows/release.yml` runs the checks and
+the tests on it, builds the downloads, and only when all of that passed
+publishes both packages to npm, then makes the GitHub Release. The root README
+is `@minca/core`'s page on npm too (`scripts/npm-readme.mjs` copies it in, with
+its links made absolute).
+
+npm takes the packages from that workflow without a token: each package names
+this repository and `release.yml` as its trusted publisher (Settings → Trusted
+publishing on npmjs.com), and npm marks what it gets with where it was built.
+
+If a release stops partway, `gh run rerun --failed` picks it up: what is on
+npm already is skipped. If it stopped because the commit is broken, nothing
+was published: fix `main` and release the next version. A tag is never moved.
+
+When to release, and which number, is the `release` skill
+(`.claude/skills/release/SKILL.md`).
 
 The desktop app (`apps/desktop`) and the Chrome extension (`apps/extension`)
-carry the same version, and the tag builds them: `.github/workflows/release.yml`
-puts the Mac `.dmg`, the Windows installer (a preview), the extension's zip and
-`SHA256SUMS` on a GitHub Release, each with a build attestation. Their names
+are built from the tag too: the workflow puts the Mac `.dmg`, the Windows
+installer (a preview), the extension's zip and `SHA256SUMS` on a GitHub
+Release, each with a build attestation. Their names
 don't change between releases, so the site's `/download` page links to
 `releases/latest/download/<file>`. A tag with a `-` (`v0.2.0-rc.1`) makes a
 pre-release, which those links skip. The desktop app updates itself from

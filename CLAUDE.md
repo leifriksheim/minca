@@ -69,7 +69,8 @@ npm run dev          # node, host, home and example together (scripts/dev.mjs)
 node --experimental-vm-modules --import tsx --test tests/sync.test.ts
 ```
 
-Releasing is `npm run release`; see CONTRIBUTING.md before running it.
+Releasing is `npm run release -- patch`, which tags a version for CI to
+publish. The `release` skill (`.claude/skills/release/SKILL.md`) says when.
 
 A pre-commit hook runs oxlint and Prettier on staged files.
 
@@ -162,7 +163,7 @@ or merged:
 Design against the threat model, not only against the issue at hand: ask its
 §5 questions while designing, not only at review.
 
-Diffs only show what changed. Before each release, and whenever the threat
+Diffs only show what changed. Before each minor release, and whenever the threat
 model changes, audit the whole spec for soundness: one reviewer per adversary
 in the threat model's §2, in parallel, each trying to break every "Holds"
 claim about it and every rule it could abuse, spec against spec and spec
@@ -182,7 +183,7 @@ most 40 open, each P0, P1 or P2.
   `gh issue create` without its body sections, a priority, or room under the
   cap.
 - Sweep the backlog with the `triage-issues` skill monthly, before each
-  release, and whenever it reaches the cap.
+  minor release, and whenever it reaches the cap.
 
 Before starting, look for an issue that covers the work. A PR links every
 related issue in its description: `Fixes #N` when it closes one, `Refs #N`
