@@ -172,10 +172,13 @@ async function grantFrom(
   return { request, grant };
 }
 
+/** A file being written whole is a `.tmp` beside it until it is renamed: the node is still running */
+const isBeingWritten = (name: string) => name.endsWith('.tmp');
+
 async function filesUnder(dir: string): Promise<string[]> {
   const found: string[] = [];
   for (const entry of await readdir(dir, { withFileTypes: true, recursive: true }))
-    if (entry.isFile()) found.push(path.join(entry.parentPath, entry.name));
+    if (entry.isFile() && !isBeingWritten(entry.name)) found.push(path.join(entry.parentPath, entry.name));
   return found;
 }
 
