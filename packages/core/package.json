@@ -1,6 +1,6 @@
 {
   "name": "@minca/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Self-sovereign P2P protocol for the browser \u2014 identity, schemas, storage, networking, and gossip sync",
   "repository": {
