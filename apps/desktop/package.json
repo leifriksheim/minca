@@ -17,6 +17,6 @@
     "@minca/core": "*"
   },
   "devDependencies": {
-    "electrobun": "1.18.1"
+    "electrobun": "2.0.6"
   }
 }
