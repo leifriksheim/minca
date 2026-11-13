@@ -78,10 +78,9 @@ What changes for the person:
   back from a device is #165. The desktop app holds the same keys, sealed
   under one in the system keychain; a browser has no such place.
 - **Its connection runs out.** The home grants a year at most, and renewing
-  needs the home's window. Past its note the extension keeps syncing until
-  the next key change in a space, and is then let go of there (04 §6.3). A
-  carrier today has no expiry. The extension says so on its badge and in a
-  notification before and when it happens.
+  needs the home's window. Past its note the extension stops its node, as
+  the desktop app does. A carrier today has no expiry. The extension says so
+  on its badge and in a notification, two weeks before and when it happens.
 - **It shows as the person** to peers, as their other apps do. Today it
   shows as nobody (06 §4.1).
 - **It can show what a notification is about**, reading the account's
@@ -89,8 +88,10 @@ What changes for the person:
 - **Disconnecting it** revokes its key (06 §2.10); it sees the revoke and
   forgets what it held.
 
-Each install connects as its own connection, by its key, as a program
-connected by code does: every install shares one origin.
+Every install shares one origin, so the home keeps them as one connection,
+as it does an app open in two browsers: a second install's key replaces the
+first's, which keeps working until its note runs out, and disconnecting
+revokes both (06 §2.10).
 
 **Coming from a carrier.** The extension makes a new key. When it connects,
 the home removes the carrier at that origin (06 §4.2), so it is told to
@@ -171,10 +172,10 @@ To be gone through against every "Holds" claim before this is Planned.
 
 ## 7. Open, and found on the way
 
-- **The pod.** The extension writes the account's sealed records into the
-  data folder its carry grant names. An app is never given the folder's
-  local key (05 §15), so it can write sealed segments and no more, which is
-  what it does now. How an app's grant names the folder is to be worked out.
+- **The pod.** Settled: the person picks the folder, and the extension
+  finds the account in it by its DID. An app is never given the folder's
+  local key (05 §15), so it writes sealed segments and no more, which is
+  what a carrier did.
 - **Notifications from the account's automations.** An app that may write
   the account's own records can add an automation whose words and link a
   device then shows. The desktop app has this today; the extension joins it.

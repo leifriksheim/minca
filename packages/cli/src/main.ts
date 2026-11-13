@@ -18,7 +18,6 @@ import { isValidRecoveryCode, type P2PNode } from '@minca/core';
 import { NODE_ACTIONS, PEER_CONTENT_NOTE, runAction, type NodeAction } from '@minca/actions';
 import { suggestedAutomations } from '@minca/std';
 import { homeAddress } from '@minca/core/session';
-import { runCarrier } from './carry.js';
 import { runAppNode, stdinLines } from './app-node.js';
 import { chooseAccount, createAccount, homePath, nodeFor, openHome, unlock, type Unlocked } from './home.js';
 import { findBot, listBots, newBotFolder, type KeptBot } from './bots.js';
@@ -107,7 +106,6 @@ Run a service:
   minca mcp-server [--port 8788] [--host 127.0.0.1]   the MCP service chat apps connect to
 
 Started for you:
-  minca carry --data DIR                     one account's spaces, from a folder the desktop app connected
   minca app-node --data DIR                  the desktop app's node; the desktop shell runs it
 
 Agents:
@@ -221,7 +219,6 @@ const COMMANDS = new Map<string, Command>([
   ['actions', listActions],
   ['init', init],
   ['run', run],
-  ['carry', carry],
   ['app-node', appNode],
   ['host', host],
   ['mcp-server', mcpServer],
@@ -354,20 +351,6 @@ async function createIfEmpty(globals: Globals): Promise<void> {
   await writeFile(file, `${code}\n`, { mode: 0o600, flag: 'wx' });
   stderr(`The recovery code was not printed, because this output is not a terminal. It is in ${file}`);
   stderr('Copy it somewhere safe — a password manager — and then delete that file.');
-}
-
-async function carry(args: string[]): Promise<number> {
-  const data = dataFolder(args, 'minca carry needs --data DIR: the folder it carries from.');
-  const running = await runCarrier({
-    data,
-    // One line per change for whatever started it. Taken off by the account, it is done.
-    status: (status) => {
-      process.stdout.write(`${JSON.stringify(status)}\n`);
-      if (status.state === 'removed') process.exit(0);
-    },
-    log: logLine,
-  });
-  return running ? untilStopped(running) : 0;
 }
 
 /** For the desktop shell: it says init first, on stdin, and reads one JSON line per message */

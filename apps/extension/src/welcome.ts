@@ -1,29 +1,38 @@
 /**
  * The extension's own tab: connecting to the account home, picking the pod,
- * and seeing what is carried. Opened on install, and from the toolbar popup.
+ * and seeing what is kept online. Opened on install, and from the toolbar popup.
  *
  * Connecting happens here rather than in the popup because the popup closes
  * the moment the home's window takes focus, and the home's answer would have
  * nowhere to arrive.
  */
-import { appKey, connectCarrier, homeAddress, type CarryGrant } from '@minca/core/session';
-import { pickDataFolder, rememberDataFolder, type DirectoryHandleLike } from '@minca/core/storage';
+import {
+  connectToHome,
+  homeAddress,
+  listAccounts,
+  pickPod,
+  rememberPod,
+  type Grant,
+} from '@minca/core/session';
 import {
   ask,
+  CONNECT_REQUEST,
+  daysLeft,
   DEFAULT_HOME,
-  EXTENSION_NAME,
   KEY_NAME,
   loadGrant,
+  RENEW_WITHIN_DAYS,
   saveGrant,
+  savePickedPod,
   setRemoved,
-  type CarrierStatus,
+  type ExtensionStatus,
   type StatusChanged,
 } from './shared';
 import { accountLine, h, mark, podLine, resumePod, spaceList, summary } from './ui';
 
 const app = document.getElementById('app')!;
-let status: CarrierStatus | null = null;
-let grant: CarryGrant | null = null;
+let status: ExtensionStatus | null = null;
+let grant: Grant | null = null;
 let error: string | null = null;
 let busy = false;
 
@@ -32,7 +41,7 @@ function render(): void {
   app.replaceChildren(mark(), ...view.filter((node): node is Node => node !== null));
 }
 
-async function update(next?: CarrierStatus): Promise<void> {
+async function update(next?: ExtensionStatus): Promise<void> {
   status = next ?? (await ask({ to: 'offscreen', type: 'status' }));
   grant = await loadGrant();
   render();
@@ -52,6 +61,9 @@ async function run(task: () => Promise<void>): Promise<void> {
   }
 }
 
+/** Asks a home with this extension's key: the one it has, so connecting again renews it */
+const askHome = (home: string) => connectToHome({ home, request: CONNECT_REQUEST, keyName: KEY_NAME });
+
 // ─── Not connected ────────────────────────────────────────────────────
 
 function connectView(): Array<Node | null> {
@@ -63,10 +75,7 @@ function connectView(): Array<Node | null> {
   });
   const connect = () =>
     run(async () => {
-      const home = homeAddress(input.value);
-      const key = await appKey(KEY_NAME);
-      const received = await connectCarrier({ home, key, name: EXTENSION_NAME });
-      await saveGrant(received);
+      await saveGrant(await askHome(homeAddress(input.value)));
       await setRemoved(false);
       await ask({ to: 'offscreen', type: 'reload' });
     });
@@ -79,7 +88,7 @@ function connectView(): Array<Node | null> {
     h(
       'p',
       {},
-      'While Chrome is open, this keeps your Minca spaces in sync with your other devices and the people you share with — even with no app open. It can’t read them.',
+      'While Chrome is open, this keeps your Minca spaces in sync with your other devices and the people you share with — even with no app open.',
     ),
     h(
       'section',
@@ -101,7 +110,7 @@ function connectView(): Array<Node | null> {
     h(
       'small',
       {},
-      'It holds your spaces as they travel, private ones still locked. It never gets your password or the keys that open them.',
+      'It connects like an app you use for your whole account: this browser profile holds the keys to your spaces, and can write records in them as you. It never gets your password. Its connection lasts up to a year, then it asks you again.',
     ),
   ];
 }
@@ -122,15 +131,15 @@ function connectedView(): Array<Node | null> {
             account,
             h(
               'button',
-              { disabled: busy, onClick: () => void switchAccount() },
-              busy ? 'Waiting…' : 'Switch account',
+              {
+                'data-intent': runsOutSoon() ? 'primary' : undefined,
+                disabled: busy,
+                onClick: () => void connectAgain(),
+              },
+              busy ? 'Waiting…' : 'Connect again',
             ),
           ),
-          h(
-            'p',
-            {},
-            'It keeps one account online at a time. If your apps show a different account or picture, switch to that one.',
-          ),
+          h('p', {}, connectionLine()),
         )
       : null,
     status?.state === 'error'
@@ -147,7 +156,7 @@ function connectedView(): Array<Node | null> {
       status ? h('small', {}, summary(status)) : null,
       status ? spaceList(status) : null,
     ),
-    grant?.pod ? podSection(grant.pod) : grant ? noPodSection() : null,
+    grant ? podSection(grant) : null,
     h(
       'section',
       {},
@@ -168,14 +177,19 @@ function connectedView(): Array<Node | null> {
   ];
 }
 
-function podSection(pod: NonNullable<CarryGrant['pod']>): HTMLElement {
-  const state = status?.pod.state ?? 'not-picked';
+function podSection(connected: Grant): HTMLElement {
+  const pod = status?.pod ?? { state: 'not-picked', folder: null };
   const choose = () =>
     run(async () => {
-      const folder = await pickDataFolder({ id: 'minca-pod' });
-      await checkPod(folder, pod.dataPath, pod.folder);
-      await rememberDataFolder(folder);
-      await ask({ to: 'offscreen', type: 'reload' });
+      const picked = await pickPod();
+      const account = (await listAccounts(picked)).find((kept) => kept.did === connected.did);
+      if (!account)
+        throw new Error(
+          'That folder doesn’t hold this account. Choose the folder your account home keeps it in.',
+        );
+      await rememberPod(picked);
+      await savePickedPod({ dataPath: account.dataPath, folder: picked.directory?.name ?? 'your pod' });
+      await ask({ to: 'offscreen', type: 'pod-picked' });
     });
   const resume = () =>
     run(async () => {
@@ -194,81 +208,65 @@ function podSection(pod: NonNullable<CarryGrant['pod']>): HTMLElement {
         label,
       ),
     );
-  const body =
-    state === 'writing'
-      ? [button('Choose another folder', choose, true)]
-      : state === 'needs-permission'
-        ? [
-            h(
-              'aside',
-              {},
-              'When Chrome asks, choose ',
-              h('strong', {}, 'Allow on every visit'),
-              '. Then it keeps writing to your pod without asking again.',
-            ),
-            button('Resume pod sync', resume),
-          ]
-        : [button('Choose your pod folder', choose)];
-
+  if (pod.state === 'not-picked')
+    return h(
+      'section',
+      {},
+      h('h2', {}, 'A folder'),
+      h(
+        'small',
+        {},
+        'If your account home keeps your account in a folder, choose that folder here. This then keeps it up to date while Chrome is open, so it holds everything even when your account home is closed.',
+      ),
+      button('Choose your pod folder', choose, true),
+    );
   return h(
     'section',
     {},
     h('h2', {}, 'Your pod'),
-    podLine(state === 'none' ? 'not-picked' : state, pod.folder),
-    ...body,
+    podLine(pod.state, pod.folder),
+    ...(pod.state === 'writing'
+      ? [button('Choose another folder', choose, true)]
+      : [
+          h(
+            'aside',
+            {},
+            'When Chrome asks, choose ',
+            h('strong', {}, 'Allow on every visit'),
+            '. Then it keeps writing to your pod without asking again.',
+          ),
+          button('Resume pod sync', resume),
+        ]),
   );
 }
 
-/**
- * The account lived in the home's browser storage when this connected. The
- * home may have moved it into a folder since, which it can only tell this
- * extension by connecting again.
- */
-function noPodSection(): HTMLElement {
-  return h(
-    'section',
-    {},
-    h('h2', {}, 'A folder'),
-    h(
-      'small',
-      {},
-      'If your account home keeps your account in a folder, this extension can keep that folder up to date while Chrome is open, so it holds everything even when your account home is closed. Choose “Keep in a folder” in your account home first, then connect again here.',
-    ),
-    h(
-      'div',
-      { class: 'actions' },
-      h(
-        'button',
-        { disabled: busy, onClick: () => void switchAccount() },
-        busy ? 'Waiting…' : 'Connect again',
-      ),
-    ),
-  );
+const runsOutSoon = () =>
+  status?.state === 'expired' || (grant !== null && daysLeft(grant.expiresAt) <= RENEW_WITHIN_DAYS);
+
+/** How long its connection has left, and what connecting again is for */
+function connectionLine(): string {
+  if (!grant) return '';
+  const left = daysLeft(grant.expiresAt);
+  if (status?.state === 'expired' || left < 0)
+    return 'Its connection to your account ran out, so nothing is syncing. Connect again to go on.';
+  const lasts = left < 1 ? 'runs out today' : `lasts ${left} more day${left === 1 ? '' : 's'}`;
+  const reach =
+    grant.scope === 'account'
+      ? ''
+      : ' You gave it only some spaces: it keeps those online, and can’t tell you what arrives. Connect again and choose every space for the rest.';
+  return `Its connection to your account ${lasts}. Connecting again renews it. To use another account here, disconnect first.${reach}`;
 }
 
-/** Refuses a folder that does not hold this account, before anything is written to it. */
-async function checkPod(folder: DirectoryHandleLike, dataPath: string, expected: string): Promise<void> {
-  let at = folder;
-  for (const part of dataPath.split('/')) {
-    try {
-      at = await at.getDirectoryHandle(part);
-    } catch {
-      throw new Error(`That folder doesn’t hold this account. Choose the folder called “${expected}”.`);
-    }
-  }
-}
-
-/**
- * Connects to an account again — another one, or the same one through another
- * home. Moving to another account forgets the old one's copy first: one
- * extension carries one account.
- */
-async function switchAccount(): Promise<void> {
-  const home = grant?.home ?? homeAddress(DEFAULT_HOME);
+/** Renews the connection, with the key it has. Another account needs a key of its own: disconnect first. */
+async function connectAgain(): Promise<void> {
+  const connected = grant;
+  if (!connected) return;
   await run(async () => {
-    const key = await appKey(KEY_NAME);
-    const received = await connectCarrier({ home, key, name: EXTENSION_NAME });
-    if (received.did !== grant?.did) await ask({ to: 'offscreen', type: 'forget-account' });
+    const received = await askHome(connected.home);
+    if (received.did !== connected.did)
+      throw new Error(
+        `Your account home answered as ${received.name}, and this is connected as ${connected.name}. To use ${received.name} here, disconnect first.`,
+      );
     await saveGrant(received);
     await ask({ to: 'offscreen', type: 'reload' });
   });

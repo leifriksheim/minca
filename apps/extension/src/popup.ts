@@ -3,11 +3,11 @@
  * Anything that opens the account home happens in a tab instead — this popup
  * closes as soon as another window takes focus.
  */
-import { ask, type CarrierStatus, type StatusChanged } from './shared';
+import { ask, daysLeft, RENEW_WITHIN_DAYS, type ExtensionStatus, type StatusChanged } from './shared';
 import { accountLine, h, mark, podLine, spaceList, summary } from './ui';
 
 const app = document.getElementById('app')!;
-let status: CarrierStatus | null = null;
+let status: ExtensionStatus | null = null;
 /**
  * Anything that asks Chrome for the pod happens in the welcome tab. Asked from
  * this popup, Chrome grants the folder silently but only until the popup
@@ -37,12 +37,22 @@ function render(): void {
   }
 
   const pod = status.pod;
+  const runsOutSoon =
+    status.state === 'expired' ||
+    (status.expiresAt !== undefined && daysLeft(status.expiresAt) <= RENEW_WITHIN_DAYS);
 
   const parts: Array<Node | null> = [
     mark(),
     status.account ? h('section', {}, accountLine(status.account)) : null,
     h('section', {}, h('small', {}, summary(status)), spaceList(status)),
-    pod.state === 'none'
+    runsOutSoon
+      ? h(
+          'div',
+          { class: 'actions' },
+          h('button', { 'data-intent': 'primary', class: 'wide', onClick: openWelcome }, 'Connect again'),
+        )
+      : null,
+    pod.state === 'not-picked'
       ? null
       : h(
           'section',

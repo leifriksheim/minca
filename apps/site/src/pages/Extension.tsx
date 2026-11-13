@@ -120,8 +120,8 @@ export function Extension() {
               shape: 'group',
             },
             {
-              title: 'It can’t read them',
-              body: 'Your spaces stay encrypted while it carries them.',
+              title: 'Yours to switch off',
+              body: 'Disconnect it in your account home, and it forgets everything it held.',
               shape: 'lock',
             },
             {

@@ -39,8 +39,8 @@ export interface ActivityMatch extends NotifyMatch {
 }
 
 export interface WatchNotificationsOptions {
-  /** The app's origin, as the home saw it. Default: this page's. */
-  readonly origin?: string;
+  /** The app's origin, as the home saw it. Default: this page's. Null for every app's automations, and the person's own. */
+  readonly origin?: string | null;
   readonly onNotify: (match: NotifyMatch) => void;
   /** What the automations match now, newest first, a record once: called after each change */
   readonly onActivity?: (matches: ReadonlyArray<ActivityMatch>) => void;
@@ -62,7 +62,8 @@ const AHEAD_MS = 5 * 60 * 1000;
  * @returns Stops it
  */
 export function watchNotifications(node: P2PNode, options: WatchNotificationsOptions): () => void {
-  const origin = options.origin ?? globalThis.location?.origin;
+  const origin = options.origin === undefined ? globalThis.location?.origin : options.origin;
+  const isWatched = (own: OwnAutomationView) => origin === null || own.app?.origin === origin;
   let stopped = false;
   let automations: ReadonlyArray<OwnAutomationView> = [];
   let spaces = new Set<string>();
@@ -156,7 +157,7 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
   }
 
   async function reload(): Promise<void> {
-    automations = (await node.automations.list()).filter((own) => !own.paused && own.app?.origin === origin);
+    automations = (await node.automations.list()).filter((own) => !own.paused && isWatched(own));
     spaces = new Set((await node.spaces.list()).map((space) => space.id));
     // Every automation still on looks again below; what one paused or removed matched goes.
     matching.clear();

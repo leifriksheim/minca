@@ -1,19 +1,19 @@
 /**
- * Notifications from a carrier, in the Chrome extension: what it says a wake matched, shown by the system. The carrier
- * sees a record from outside only, so a notification says where something
- * arrived and what kind of thing, never what it says; the app shows that.
+ * Notifications in the Chrome extension: what one of the account's
+ * automations matched, shown by the system. A notification says where
+ * something arrived and what kind of thing; the app shows what it says.
  *
- * A burst in one space, for one app, is one notification: a carrier that was
+ * A burst in one space, for one app, is one notification: a node that was
  * away catches up all at once.
  */
 
-/** What the carrier says a wake matched */
+/** A record one of the account's automations matched */
 export interface Woke {
   /** The space's name */
   readonly space: string;
   readonly collection: string;
   readonly at: string;
-  /** The app the wake's notification leads to */
+  /** The app the notification leads to */
   readonly open?: string;
 }
 
