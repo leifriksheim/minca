@@ -816,11 +816,7 @@ _Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finis
 > `paidUntil` and once when the grace period starts. Email is the host's own
 > business: the reference host takes an address with `…/remind` (§1,
 > `packages/cli/src/reminders.ts`), and every device already shows the date
-> it holds. The protocol route is Web Push through the carry space ([06](06-nodes-and-sessions.md) §4.4,
-> Planned): when the person allows it, the home writes a record in the carry
-> space, apart from wakes ([03](03-spaces.md) §15), asking for reminders about
-> hosting, and the host pushes `{ kind: "hosting", host, paidUntil }`,
-> signed like a status. No new call between home and host. Depends on Web Push.
+> it holds.
 >
 > **Paying without being linked to the account.** Today the host can tie a
 > payment to the carry space it is then handed. Privacy Pass tokens (RFC 9576)

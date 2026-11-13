@@ -157,8 +157,7 @@ watches what it reads:
 
 - an [automation](automations.md) sets off when the 👍 is written (after its
   `since`);
-- an app's own notifications say so then, once;
-- a carrier wakes the app on a new 👍 as well as on a new to-do.
+- an app's own notifications say so then, once.
 
 ## Cost
 

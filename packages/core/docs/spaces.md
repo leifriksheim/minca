@@ -327,8 +327,3 @@ await connection.propose([
 `checkOwnAutomation` says whether one can be kept. `matches(record, filter)`
 says whether a filter holds, so you can show what it would have matched
 before proposing it.
-
-A carrier wakes the app only on a condition on a topic field, at the top of
-`where` or in an `$and` there. The app judges the rest. With no such
-condition, a carrier wakes the app for every new record of the collection,
-and the app turns down the rest.

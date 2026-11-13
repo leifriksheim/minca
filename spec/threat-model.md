@@ -1400,21 +1400,17 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     (05 §16.6; `packages/core/tests/files.test.ts`, "a chunk that is not the
     one its list names is dropped…", "a list of inner hashes, or of the wrong
     length, is refused").
-  - From the account's wakes it learns a collection, spaces, topic tags,
-    whether only others' records wake, since when, whether paused, and which
-    app's address a click leads to; never the values behind a private
-    space's tags nor the person's words for what they want to hear about
-    (03 §15; `packages/core/tests/carrier.test.ts`, "a carrier gets tags,
-    never the values it matches"). Any `where` condition on a field declared
-    a topic becomes tags. In a public space a tag can be worked out from the
-    space id, so a guessed value can be checked against it (02 §8.2).
+  - From a record's tags (02 §8) it learns which records of a private space
+    share a topic value, and how often, never the value. In a public space a
+    tag can be worked out from the space id, so a guessed value can be
+    checked against it (02 §8.2).
   - A host with limits that stops carrying a space over its free line takes
     nothing from its members: their copies, and their syncing with each
     other, are as before, and an account's subscription still names the
     space (08 §1.1; `packages/cli/tests/host-limits.test.ts`, "past until,
     members' subscriptions no longer carry it; members keep what they hold").
     What it stops is being there for them: members meet only when two are
-    online, wakes for the space stop, and after `keepDays` its copy goes.
+    online, and after `keepDays` its copy goes.
 - **Does not hold yet.**
   - A node syncing a space by shallow sets (05 §5.1) takes a keeper's word
     for the chain below each version it sends, outside lines and the access
@@ -1441,7 +1437,7 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     with the first of them, with nothing to choose, when that host keeps
     accounts with nothing paid (`packages/core/docs/sign-in.md`). It is handed
     the account's DID, passes for the registry, the contacts and every space
-    joined later, its wakes and links, and is named a keeper, all as a host
+    joined later, its links, and is named a keeper, all as a host
     the person chose would be; and it sees what a host sees of each (below).
     Stopping it on the account page tells it to forget, but a host that
     doesn't keeps the read seeds it was given, proving itself and fetching

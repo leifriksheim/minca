@@ -12,7 +12,7 @@ export { browserWriterKeys } from './writer-keys.js';
 export type { ClaimedWriter, HeadStore, WriterKeySource } from './writer-keys.js';
 export { copyAccountData } from './copy.js';
 export { createCarrierNode, createCarryCore } from './carrier.js';
-export type { CarrierConfig, CarrierNode, CarriedSpace, CarrierEvent, WakeView } from './carrier.js';
+export type { CarrierConfig, CarrierNode, CarriedSpace, CarrierEvent } from './carrier.js';
 export type {
   AutomationProposal,
   AppAutomation,

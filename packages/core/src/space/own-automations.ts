@@ -1,6 +1,5 @@
 /**
- * The account's own automations: "let me know when…", across its spaces,
- * noticed by nodes that can't read.
+ * The account's own automations: "let me know when…", across its spaces.
  *
  * Kept in the account registry (`sys.automation`) rather than a space, one
  * is the account's alone, and looks at the spaces it names, or all of them.
@@ -8,26 +7,14 @@
  * filter matches. Automations that act in a space are `std.automation`, in
  * `@minca/std`, and nothing here knows them.
  *
- * The account's carriers are the ones online to notice, and they can't read.
- * So every device holding the account key copies each automation into each
- * carry space as a **wake** (`sys.wake`): the collection, the spaces, and the
- * tags of the topic values its `where` asks for, never the values. That much
- * is protocol (spec 03 §15).
- *
  * Only an app proposes them (`AutomationProposal`), when the person asks; the
  * home writes them into the registry once the person says yes.
  */
-import type { Version, Link } from '../types.js';
-import type { SpaceKey } from '../privacy/space-encryption.js';
-import { parseDelegation } from '../identity/ucan.js';
-import { topicKey, topicTag } from '../records/topics.js';
+import type { Link } from '../types.js';
 import { checkFilter, matches } from '../query/filter.js';
 import type { Filter } from '../query/types.js';
 import { COLLECTION_NAME, schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import { isObject } from '../utils/guards.js';
-
-/** Wakes, as a carrier holds them in its carry space, at `wake:<the automation's key>` */
-export const WAKE_COLLECTION = 'sys.wake';
 
 /** In a filter, whoever it is read for: the account, for one of its own automations */
 export const ME = '$me';
@@ -240,163 +227,10 @@ function withDefaults(proposal: Readonly<Record<string, unknown>>): Record<strin
   };
 }
 
-/** A space the account follows, as far as a wake needs: its id, its current key when private, and the topics it declares */
-export interface WakeSpace {
-  readonly id: string;
-  readonly key: SpaceKey | null;
-  readonly visibility: 'public' | 'private';
-  /** The topic fields a collection declares in this space */
-  readonly topics: (collection: string) => ReadonlyArray<string>;
-}
-
-/** At most this many tags a wake holds for one space; a `where` that names more values wakes on any record there */
-const MAX_WAKE_TAGS = 16;
-
-/** An automation as a carrier holds it: no values, only tags */
-export interface Wake {
-  readonly v: 1;
-  readonly collection: string;
-  readonly spaces: AutomationSpaces;
-  /**
-   * Per space: a record matches only when it carries one of these. A space
-   * with no entry: any record of the collection.
-   */
-  readonly tags?: Readonly<Record<string, ReadonlyArray<string>>>;
-  readonly others: boolean;
-  readonly open?: string;
-  readonly paused: boolean;
-  readonly since: string;
-}
-
-/**
- * The topic values a filter requires of a declared topic field: the first
- * condition on one that names values — `field: v`, `$eq`, `$contains` or
- * `$in` — at its top or in an `$and` there. Those all hold, so a record the
- * filter matches carries a tag for one of these values.
- */
-function requiredValues(
-  where: Filter | undefined,
-  topics: ReadonlyArray<string>,
-): { field: string; values: Array<string | number | boolean> } | null {
-  if (!where) return null;
-  for (const [field, condition] of Object.entries(where)) {
-    if (field === '$and' && Array.isArray(condition)) {
-      for (const part of condition) {
-        const found = isObject(part) ? requiredValues(part, topics) : null;
-        if (found) return found;
-      }
-      continue;
-    }
-    if (field.startsWith('$') || !topics.includes(field)) continue;
-    if (isScalar(condition)) return { field, values: [condition] };
-    if (!isObject(condition)) continue;
-    if (isScalar(condition.$eq)) return { field, values: [condition.$eq] };
-    if (isScalar(condition.$contains)) return { field, values: [condition.$contains] };
-    if (Array.isArray(condition.$in) && condition.$in.length > 0 && condition.$in.every(isScalar))
-      return { field, values: condition.$in };
-  }
-  return null;
-}
-
-const isScalar = (v: unknown): v is string | number | boolean =>
-  typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
-
-/** The spaces an automation looks at, of those given */
-function lookedAt(own: OwnAutomation, spaces: ReadonlyArray<WakeSpace>): ReadonlyArray<WakeSpace> {
-  const only = own.spaces;
-  return only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id));
-}
-
-/**
- * What a carrier gets: the automation, with each value its `where` requires
- * of a topic replaced by the space's tag for it. A private space whose key
- * this device doesn't hold gets an empty list, so it never matches — better
- * quiet than wrong. A space where `where` names no topic gets no entry: every
- * new record wakes, and the app turns down what `where` doesn't match.
- */
-export async function wakeFor(
-  own: OwnAutomation,
-  spaces: ReadonlyArray<WakeSpace>,
-  account: string,
-): Promise<Wake> {
-  const { collection, where } = own.when.query;
-  const resolved = where === undefined ? undefined : asRunner(where, account);
-  const tags: Record<string, string[]> = {};
-  for (const space of lookedAt(own, spaces)) {
-    const spaceTags = await wakeTags(space, collection, resolved);
-    if (spaceTags) tags[space.id] = spaceTags;
-  }
-  return {
-    v: 1,
-    collection,
-    spaces: own.spaces,
-    ...(Object.keys(tags).length > 0 ? { tags } : {}),
-    others: own.when.others ?? false,
-    ...(own.open ? { open: own.open } : {}),
-    paused: own.paused ?? false,
-    since: own.since,
-  };
-}
-
-/** The tags a space's records must carry one of to wake, or undefined when any record wakes */
-async function wakeTags(
-  space: WakeSpace,
-  collection: string,
-  where: Filter | undefined,
-): Promise<string[] | undefined> {
-  // Without its key a device can read neither the space's records nor its topics: never wake there.
-  if (space.visibility === 'private' && !space.key) return [];
-  const required = requiredValues(where, space.topics(collection));
-  if (!required) return undefined;
-  const values = new Set(required.values);
-  if (values.size > MAX_WAKE_TAGS) return undefined;
-  const spaceKey = space.visibility === 'private' ? space.key : null;
-  const key = await topicKey(spaceKey ? { spaceKey: spaceKey.raw } : { spaceId: space.id });
-  return Promise.all([...values].map((value) => topicTag(key, collection, required.field, value)));
-}
-
-const WAKE: JsonSchema = {
-  type: 'object',
-  properties: {
-    v: { const: 1 },
-    collection: { type: 'string', pattern: COLLECTION_NAME.source },
-    spaces: {
-      anyOf: [{ const: 'all' }, { type: 'array', minItems: 1, maxItems: 256, items: { type: 'string' } }],
-    },
-    tags: {
-      type: 'object',
-      additionalProperties: {
-        type: 'array',
-        maxItems: MAX_WAKE_TAGS,
-        items: { type: 'string', maxLength: 64 },
-      },
-    },
-    others: { type: 'boolean' },
-    open: { type: 'string' },
-    paused: { type: 'boolean' },
-    since: { type: 'string' },
-  },
-  required: ['v', 'collection', 'spaces', 'others', 'paused', 'since'],
-};
-
-/** A wake as read back from a carry space, or null when it isn't one */
-export function readWake(body: unknown): Wake | null {
-  if (schemaProblem(WAKE, body) !== null || !isObject(body)) return null;
-  if (String(body.collection).startsWith('sys.') || !Number.isFinite(Date.parse(String(body.since))))
-    return null;
-  // eslint-disable-next-line typescript/consistent-type-assertions -- checked against WAKE just above
-  return body as unknown as Wake;
-}
-
-/** Who a version was written for: the account that issued its note, else its own key */
-function rootOf(version: Version): string {
-  return parseDelegation(version.proof)?.payload.iss ?? version.author;
-}
-
-/** How long after it was written a record may still notify: a carrier catching up on last week stays quiet */
+/** How long after it was written a record may still notify: a node catching up on last week stays quiet */
 const NOTIFY_WITHIN_MS = 24 * 60 * 60 * 1000;
 
-/** What a carrier and an app both check: it is on, looks at the space, and the record is new enough */
+/** It is on, looks at the space, and the record is new enough */
 function inWindow(
   own: { readonly paused?: boolean; readonly spaces?: AutomationSpaces; readonly since: string },
   space: string,
@@ -407,25 +241,6 @@ function inWindow(
   if (own.paused || (spaces !== 'all' && !spaces.includes(space))) return false;
   const written = Date.parse(createdAt);
   return Number.isFinite(written) && written >= Date.parse(own.since) && now - written <= NOTIFY_WITHIN_MS;
-}
-
-/**
- * Whether a record that just arrived in a space is one a wake asks about —
- * decided from its outside alone.
- */
-export function wakes(
-  wake: Wake,
-  spaceId: string,
-  version: Version,
-  account: string,
-  now = Date.now(),
-): boolean {
-  if (version.collection !== wake.collection || version.seq !== 0 || version.deleted) return false;
-  if (!inWindow(wake, spaceId, version.createdAt, now)) return false;
-  if (wake.others && rootOf(version) === account) return false;
-  const wanted = wake.tags?.[spaceId];
-  if (wanted && !version.tags?.some((tag) => wanted.includes(tag))) return false;
-  return true;
 }
 
 /** What an app sees of a record, enough to match an automation: its outside and, where it can open it, its body */
@@ -455,8 +270,7 @@ export interface Trigger {
 /**
  * Whether one of the account's own automations holds for a record: it is in
  * the collection, and `where` holds of its body and computed fields. The app
- * can read, so this is judged on the body: never fewer records than a
- * carrier's wake lets through, only fewer.
+ * can read, so this is judged on the body.
  */
 export function holdsFor(own: OwnAutomation, record: ReadableRecord, account: string): boolean {
   const { collection, where } = own.when.query;

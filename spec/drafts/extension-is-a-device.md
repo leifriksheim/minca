@@ -121,10 +121,10 @@ and deleted when it leaves.
 
 ### 3.4 No wakes
 
-Only a carrier matched wakes (03 §15), and only on the person's own machine.
+Done. Only a carrier matched wakes, and only on the person's own machine.
 An app's node reads the account's automations itself. So `sys.wake`, copying
 automations into carry spaces as wakes, and the rules for matching one from
-a record's outside go. A carry space holds passes and kept links.
+a record's outside went. A carry space holds passes and kept links.
 
 ### 3.5 Who a node counts on
 

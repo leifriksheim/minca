@@ -125,7 +125,7 @@ What step 4 settled at implementation, each with a test:
   explicitly whether members may change each other's records
   (`packages/core/src/space/presets.ts`).
 
-Still open: an argument that tells a new record from an edit (03 §17).
+Still open: an argument that tells a new record from an edit (03 §16).
 
 ## 3. Contracts
 
@@ -274,7 +274,7 @@ Open:
 Settled at implementation in step 4, with tests: policies on a body a peer
 can't read, int against float equality, membership as a role, and the
 templates' default for `/record/write` (§2). Still open: create versus edit
-(03 §17).
+(03 §16).
 
 ## 8. Plan
 

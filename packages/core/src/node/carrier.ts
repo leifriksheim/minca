@@ -34,7 +34,6 @@ import {
   PASS_COLLECTION,
   type OpenedPass,
 } from '../space/pass.js';
-import { readWake, wakes, WAKE_COLLECTION, type Wake } from '../space/own-automations.js';
 import { isKeptLink, LINK_COLLECTION } from '../space/account-registry.js';
 import { linkTopic, pinOf } from '../space/invite-link.js';
 import type { Version } from '../types.js';
@@ -82,17 +81,7 @@ export type CarrierEvent =
   /** Records arrived, or peers came and went, in a space */
   | { readonly type: 'status'; readonly space: string }
   /** The account stopped using this carrier: forget everything */
-  | { readonly type: 'closed' }
-  /**
-   * A record arrived that one of the account's wakes asks about. Only what
-   * the carrier can see: which wake, which space, which record.
-   */
-  | {
-      readonly type: 'wake';
-      readonly wake: WakeView;
-      readonly space: { readonly id: string; readonly name: string };
-      readonly record: { readonly key: string; readonly collection: string; readonly createdAt: string };
-    };
+  | { readonly type: 'closed' };
 
 /**
  * A kind of record a carried space holds, as far as the carrier can tell. Its
@@ -106,16 +95,6 @@ export interface CarriedCollection {
   readonly topics: ReadonlyArray<string>;
   /** How many records it holds now */
   readonly records: number;
-}
-
-/** A wake as the carrier holds it: what it looks at, where a click goes */
-export interface WakeView {
-  readonly id: string;
-  readonly collection: string;
-  /** The spaces it looks at, by name; empty for every space */
-  readonly spaces: ReadonlyArray<string>;
-  readonly open?: string;
-  readonly paused: boolean;
 }
 
 interface Carried {
@@ -132,8 +111,6 @@ interface Carry {
   wants: ReadonlySet<string>;
   /** Every space its passes named, carried or not */
   named: ReadonlySet<string>;
-  /** Its wakes, by key, as last read */
-  wakes: ReadonlyMap<string, Wake>;
   /** The short links it keeps, by the topic each blob's own hash gives: served from a host's mailbox */
   links: ReadonlyMap<string, { readonly blob: string; readonly until?: number }>;
 }
@@ -200,15 +177,6 @@ function preferLater(wanted: Map<string, SpaceRecord>, record: SpaceRecord): voi
   const later = (read: SpaceRecord['read']) => !!read && read.did !== record.space.readKey;
   const known = wanted.get(record.space.id);
   if (!known || (!later(known.read) && later(record.read))) wanted.set(record.space.id, record);
-}
-
-function wakesIn(records: ReadonlyArray<{ key: string; body: unknown }>): Map<string, Wake> {
-  const found = new Map<string, Wake>();
-  for (const record of records) {
-    const wake = readWake(record.body);
-    if (wake) found.set(record.key, wake);
-  }
-  return found;
 }
 
 /**
@@ -314,50 +282,13 @@ export async function createCarryCore(config: CarryCoreConfig) {
         if (event.type === 'records' || event.type === 'status') emit({ type: 'status', space: spaceId });
         if (event.type === 'records' && carries.has(spaceId)) void refresh();
       },
-      (version) => {
-        config.onArrived?.(spaceId, version);
-        arrived(record, version);
-      },
+      (version) => config.onArrived?.(spaceId, version),
     );
     if (closed) return void (await runtime.close());
     const entry: Carried = { record, hub, runtime, pod: null };
     carried.set(spaceId, entry);
     if (podStores) entry.pod = openPod(record, hub, podStores);
   }
-
-  /** Records already said something about — one can arrive twice, from a peer and from the pod */
-  const noticed = new Set<string>();
-
-  /** A record arrived in a space: does any wake of an account carrying it ask about it? */
-  function arrived(record: SpaceRecord, version: Version): void {
-    const spaceId = record.space.id;
-    if (noticed.has(version.id) || carries.has(spaceId)) return;
-    for (const entry of carries.values()) {
-      if (!entry.wants.has(spaceId)) continue;
-      for (const [id, wake] of entry.wakes) {
-        if (!wakes(wake, spaceId, version, entry.account)) continue;
-        noticed.add(version.id);
-        if (noticed.size > 1000) noticed.delete(noticed.values().next().value!);
-        emit({
-          type: 'wake',
-          wake: view(id, wake),
-          space: { id: spaceId, name: record.space.name },
-          record: { key: version.key, collection: version.collection, createdAt: version.createdAt },
-        });
-      }
-    }
-  }
-
-  const view = (id: string, sub: Wake): WakeView => ({
-    id,
-    collection: sub.collection,
-    spaces:
-      sub.spaces === 'all'
-        ? []
-        : sub.spaces.map((space) => carried.get(space)?.record.space.name ?? 'a space'),
-    ...(sub.open ? { open: sub.open } : {}),
-    paused: sub.paused,
-  });
 
   async function drop(spaceId: string): Promise<void> {
     const entry = carried.get(spaceId);
@@ -390,7 +321,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
     if (opened || released) emit({ type: 'spaces' });
   }
 
-  /** Reads one carry space again: its wakes, its links, and the spaces its passes name, into `wanted` */
+  /** Reads one carry space again: its links, and the spaces its passes name, into `wanted` */
   async function readCarry(
     carrySpace: string,
     entry: Carry,
@@ -410,7 +341,6 @@ export async function createCarryCore(config: CarryCoreConfig) {
       config.onClosed(carrySpace);
       return;
     }
-    entry.wakes = wakesIn(await own(WAKE_COLLECTION));
     entry.links = await linksIn(carryRuntime, entry.account);
 
     const passes = await passesIn(records, openedNow);
@@ -509,7 +439,6 @@ export async function createCarryCore(config: CarryCoreConfig) {
           account,
           wants: new Set(),
           named: new Set(),
-          wakes: new Map(),
           links: new Map(),
         });
       await carry(record);
@@ -584,12 +513,6 @@ export async function createCarryCore(config: CarryCoreConfig) {
       return found;
     },
 
-    /** The account's wakes, as this carrier holds them */
-    wakes: async (): Promise<ReadonlyArray<WakeView>> => {
-      await refresh.done();
-      return [...carries.values()].flatMap((entry) => [...entry.wakes].map(([id, wake]) => view(id, wake)));
-    },
-
     /** What a carried space holds, by kind — what the extension can offer to notify about. Empty for a space it doesn't carry. */
     collections: async (spaceId: string): Promise<ReadonlyArray<CarriedCollection>> => {
       const entry = carried.get(spaceId);
@@ -650,7 +573,6 @@ export async function createCarrierNode(config: CarrierConfig) {
     carrySpace,
     spaces: core.spaces,
     usePod: core.setPod,
-    wakes: core.wakes,
     collections: core.collections,
     subscribe: events.subscribe,
     async close() {

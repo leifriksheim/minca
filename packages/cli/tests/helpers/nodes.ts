@@ -21,7 +21,7 @@ if (!process.env.MINCA_LOCAL) {
 }
 after(async () => {
   await Promise.all(nodes.splice(0).map((node) => node.close()));
-  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true, maxRetries: 5 })));
 });
 
 /** A folder of its own under the system's temporary one */

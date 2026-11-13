@@ -188,7 +188,7 @@ function watch(started: P2PNode, under: Grant): void {
       void started.spaces
         .get(record.space)
         .then((space) =>
-          notifier.woke({
+          notifier.matched({
             space: space?.name ?? '',
             collection: record.collection,
             at: record.createdAt,

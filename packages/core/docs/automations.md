@@ -341,34 +341,3 @@ While your app runs, it shows what they match itself (`watchNotifications`).
 
 [Spec 06 §2.11](../../../spec/06-nodes-and-sessions.md) defines the
 `Proposal` shape.
-
-### Waking an app through a carrier
-
-A carrier can't read, so it can't tell which records match. Instead, each
-device with the account key copies each automation into every carry space as
-a wake (`sys.wake`). A wake holds the collection, the spaces, `others`, and,
-in each space, the tags of the topic values its `where` requires. When a
-matching record arrives, the carrier wakes the app, and the app judges it.
-
-A condition requires values when it is on a field the space declares a topic,
-at the top of `where` or in an `$and` there: `field: value`, `$eq`,
-`$contains` or `$in`. The first such condition gives the tags, one per value.
-So "near me" as `{ "place.cells": { "$in": [nine cells] } }` is nine tags.
-
-- A space where `where` requires no topic value gets no tags. Any new record
-  of the collection wakes the app, which turns down what `where` doesn't
-  match.
-- A private space whose key the device lacks gets an empty list, and wakes
-  nothing.
-
-A wake is for the automation's own collection only. A `where` that names a
-computed field changes when what the field reads is written, like a 👍 that
-makes a to-do done: an app that is running notices that, and a carrier does
-not.
-
-A wake can only let through more than the app would, never less, with two
-exceptions. One is the computed field above. The other is `$contains` on a
-text field, which matches part of it, where a tag matches only a whole value. Mark as topics only fields that hold whole values: people,
-links, cells.
-
-[Spec 03 §15](../../../spec/03-spaces.md).

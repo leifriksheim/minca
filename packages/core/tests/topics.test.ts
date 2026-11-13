@@ -26,7 +26,6 @@ import {
   checkProposal,
   matchesRecord,
   notifyOn,
-  wakeFor,
   type OwnAutomation,
 } from '../src/space/own-automations.js';
 
@@ -583,7 +582,7 @@ describe('a standard message’s topics', () => {
 });
 
 describe('an automation of the account’s own: its where', () => {
-  test('narrows what an app is told about to records the condition holds for, and only a topic’s tag is carried', async () => {
+  test('narrows what an app is told about to records the condition holds for', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'private' });
@@ -601,14 +600,6 @@ describe('an automation of the account’s own: its where', () => {
     for (const record of [urgent, later, unset]) if (matchesRecord(when, record, bob)) told.push(record.key);
     // A missing priority is not compared: it is simply not a match.
     assert.deepEqual(told, [urgent.key]);
-
-    const space1 = { id: space, key: null, visibility: 'public' as const, topics: () => task.topics ?? [] };
-    const wake = await wakeFor(when, [space1], bob);
-    assert.equal(JSON.stringify(wake).includes('priority'), false, 'priority is no topic: never carried');
-    assert.equal(wake.tags, undefined);
-    const mine = await wakeFor(own(task.name, { assignees: { $contains: '$me' } }, since), [space1], bob);
-    assert.equal(mine.tags?.[space]?.length, 1, 'a topic’s value, as its tag');
-    assert.equal(JSON.stringify(mine).includes(bob), false);
   });
 
   test('is refused when it is not a filter, or reads what a record doesn’t have', () => {

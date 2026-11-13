@@ -1,6 +1,6 @@
 /**
  * @module node-carriers
- * The account's carriers and the automations they wake it for, and the
+ * The account's carriers and its own automations, and the
  * invites and short links (spec 03 §7.7) they serve while every device is away.
  */
 import { cached } from '../utils/map.js';
@@ -39,14 +39,7 @@ import {
   type KeptLink,
 } from '../space/account-registry.js';
 import { CARRY_CLOSED_KEY, makePass, PASS_COLLECTION, passKey, type SpacePass } from '../space/pass.js';
-import {
-  checkOwnAutomation,
-  OWN_AUTOMATIONS,
-  WAKE_COLLECTION,
-  wakeFor,
-  type OwnAutomation,
-  type WakeSpace,
-} from '../space/own-automations.js';
+import { checkOwnAutomation, OWN_AUTOMATIONS, type OwnAutomation } from '../space/own-automations.js';
 import { base64UrlDecode, bytesToHex, hexToBytes } from '../utils/encoding.js';
 import { base32Encode } from '../utils/hash.js';
 import { unref } from '../utils/guards.js';
@@ -358,11 +351,10 @@ export function createNodeCarriers(ctx: NodeContext) {
   /** The carriers the account uses now */
   const liveCarriers = async () => (await carrierRecords()).filter(({ body }) => !body.removed);
 
-  /** Makes a carrier's space hold exactly the account's passes, kept links and wakes as they are now */
+  /** Makes a carrier's space hold exactly the account's passes and kept links as they are now */
   async function syncPasses(carrier: CarrierEntry): Promise<void> {
     if (!account || ctx.narrowNote) return;
-    const owned = await ownAutomations();
-    const { passes, spaces } = await passesFor(account);
+    const passes = await passesFor(account);
     // Removed meanwhile, on this device or another: its passes stay deleted.
     if (!(await liveCarriers()).some((live) => live.key === carrier.key)) return;
     const carry = await ctx.runtime(carrier.carry.space.id);
@@ -370,50 +362,27 @@ export function createNodeCarriers(ctx: NodeContext) {
     // The links the account keeps, for the carrier to serve while every device is away.
     const links = new Map((await keptLinks()).map((link) => [link.key, link.body]));
     await writeExactly(carry, LINK_COLLECTION, links, (key) => key.startsWith('link:'));
-    await writeExactly(carry, WAKE_COLLECTION, await wakesOf(owned, spaces), () => true);
   }
 
   /**
    * A pass for each of the account's spaces, its registry and contacts too so a
-   * restore can come through a carrier; and what a wake needs of each space.
+   * restore can come through a carrier.
    */
   async function passesFor(account: SpaceRecord) {
     const passes = new Map<string, SpacePass>();
-    const spaces: WakeSpace[] = [];
     for (const own of ctx.contactsRecord ? [account, ctx.contactsRecord] : [account])
       passes.set(await passKey(own.space.id), await makePass(own));
     for (const membership of await ctx.memberships()) {
       if (membership.deleted || !membership.body || (await ctx.kindOf(membership.body.space))) continue;
       const record = await registry.get(membership.body.space);
       if (!record) continue;
-      spaces.push(await wakeSpaceOf(record));
+      // Opening it is how this device learns its key changed, and so passes on the key it has now.
+      await ctx.runtime(record.space.id);
       // Held without its key: nothing to pass on until it arrives.
       const pass = await makePass(record).catch(() => null);
       if (pass) passes.set(await passKey(record.space.id), pass);
     }
-    return { passes, spaces };
-  }
-
-  /** What a wake needs of a space. Opening it is also how this device learns its key changed. */
-  async function wakeSpaceOf(record: SpaceRecord): Promise<WakeSpace> {
-    const rt = await ctx.runtime(record.space.id);
-    const declared = new Map((await rt.collections()).map((c) => [c.name, c]));
-    return {
-      id: record.space.id,
-      key: record.key,
-      visibility: record.space.visibility,
-      topics: (collection) => declared.get(collection)?.topics ?? [],
-    };
-  }
-
-  /** A wake for each automation, every value replaced by the space's tag: the carrier matches, never learns */
-  async function wakesOf(
-    owned: ReadonlyArray<OwnAutomationView>,
-    spaces: ReadonlyArray<WakeSpace>,
-  ): Promise<Map<string, unknown>> {
-    const wakes = new Map<string, unknown>();
-    for (const own of owned) wakes.set(`wake:${own.id}`, await wakeFor(own, spaces, config.signer.did));
-    return wakes;
+    return passes;
   }
 
   /** Makes what this account wrote in a collection, among the keys `mine` takes, say exactly `wanted` */
@@ -476,7 +445,7 @@ export function createNodeCarriers(ctx: NodeContext) {
   /** Writing in carry spaces, one thing at a time: a removal never lands in the middle of a refill */
   const inCarryTurn = queue();
 
-  /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
+  /** Every carrier the account uses gets its passes as they are now, one run at a time */
   const passAll = serial(() =>
     inCarryTurn(async () => {
       // First: a key change that ends a link is seen here, before its record would be copied on.
@@ -489,15 +458,13 @@ export function createNodeCarriers(ctx: NodeContext) {
     }),
   );
 
-  /** Writes one of the account's own automations, checked, and hands every carrier the wakes as they are now */
+  /** Writes one of the account's own automations, checked */
   async function writeOwn(id: string, body: OwnAutomation): Promise<OwnAutomationView> {
     const registryRt = await ctx.requireAccount('Making an automation');
     const problem = checkOwnAutomation(body);
     if (problem) throw new Error(problem);
     // A system collection: nothing defines it, so no other key of the account can make it final.
     await registryRt.upsertSystem<OwnAutomation>(OWN_AUTOMATIONS, id, body);
-    // Every carrier gets the wakes as they are now, in the background (`carriers.settled`).
-    inBackground(passAll());
     return { ...body, id };
   }
 
@@ -527,7 +494,6 @@ export function createNodeCarriers(ctx: NodeContext) {
       const registryRt = await ctx.requireAccount('Making an automation');
       if (!(await ownAutomations()).some((view) => view.id === id)) return;
       await registryRt.removeSystem(id);
-      inBackground(passAll());
     },
 
     async versions(ids) {
@@ -549,9 +515,7 @@ export function createNodeCarriers(ctx: NodeContext) {
           version.space === accountSpaceId,
       );
       if (mine.length === 0) return 0;
-      const taken = await (await ctx.runtime(accountSpaceId)).take(mine);
-      if (taken > 0) inBackground(passAll());
-      return taken;
+      return (await ctx.runtime(accountSpaceId)).take(mine);
     },
   });
 
@@ -601,7 +565,7 @@ export function createNodeCarriers(ctx: NodeContext) {
       const did = (await liveCarriers()).find(({ carry }) => carry.space.id === spaceId)?.body.did;
       if (!did || !accountSpaceId) return false;
       const deadline = Date.now() + waitMs;
-      // Level with the passes and wakes as they are now: a refill under way first, within the same time.
+      // Level with the passes as they are now: a refill under way first, within the same time.
       await within(passAll.done(), waitMs);
       // Its passes first: only through them does it come to the registry, and hold its own record there.
       if (!(await (await ctx.runtime(spaceId)).syncedWith(did, Math.max(0, deadline - Date.now()))))

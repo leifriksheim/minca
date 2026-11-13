@@ -61,7 +61,7 @@ the account does on any device (§1.3). Without it, the node holds only the
 spaces it was given or joined itself.
 
 A node MAY hold the **contact key** (`deriveContactKeyBytes(seed)`). With it the
-node opens knocks left for the account in shared spaces ([03](03-spaces.md) §16),
+node opens knocks left for the account in shared spaces ([03](03-spaces.md) §15),
 derives its inbox ([07](07-inbox.md)), and publishes the contact key's
 public half on the account's profile in every space it writes in.
 
@@ -520,7 +520,7 @@ revoked:
 
 Disconnecting an app (not a program connected by code, which is kept by its
 key) also removes every automation of the account's own whose
-`app.origin` is its origin (§2.11, §4.4), and every one with a version its
+`app.origin` is its origin (§2.11), and every one with a version its
 key signed, whatever app that one names.
 
 Revoking writes a `sys.revoke` record naming the key ([03](03-spaces.md) §6.4).
@@ -537,7 +537,10 @@ _Source: `packages/auth/src/auth.ts` (`disconnect`, `revokeConnection`, `revokeW
 wants to hear about, kept in its registry. Only an app offers one, and only
 when the person asks it to: never while connecting (§2.4), never a carrier or
 a program connected by code, and never the home on its own. The home lets the
-person pause and remove what they kept, not add to it. The app uses the
+person pause and remove what they kept, not add to it. Nothing but an app
+that is running shows a match: the app itself, or one given the whole account
+that runs for the others. An app with `scope: spaces` cannot read the
+registry, so it shows none of its own. The app uses the
 exchange of §2.3 with a `ProposeRequest` in place of the `ConnectRequest`:
 
 | Field         | Type                   | Meaning                                                      |
@@ -829,7 +832,7 @@ read them. It holds:
 
 - its own P-256 key (its DID is what peers and keepers lists name);
 - the key of its **carry space**, which holds nothing but passes and
-  wakes;
+  kept links;
 - for each carried space, a **pass**: the space's constitution and, for a private
   space, its read key seed;
 - the records of each carried space exactly as they travel.
@@ -902,8 +905,7 @@ space. That device could not tell the carrier was already removed, so nothing
 it does at the reconnect could prevent this.
 
 Every device holding the account key keeps each live carrier's carry space in
-step with the account (§1.3): one `sys.pass` record per space, and one
-`sys.wake` per automation of the account's own ([03](03-spaces.md) §15).
+step with the account (§1.3): one `sys.pass` record per space.
 It writes each pass from the key its registry holds for the space, and opens
 the space, which is how it learns of a change of key; the refill that change
 starts writes the pass for the new key. It writes no pass in the
@@ -965,7 +967,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back"._
 
 ### 4.3 Connecting a carrier through the account home
 
@@ -1005,67 +1007,7 @@ or a while has passed (the reference home waits at most 30 s in all). Once level
 holds its passes and its own record, and hands both to the account's other
 devices as they come online.
 
-_Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/auth/src/auth.ts` (`grantCarry`), `packages/core/src/node/node-carriers.ts` (`carriers.reached`, `carriers.settled`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`, `ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
-
-### 4.4 Wakes, and carriers
-
-What the account wants to hear about is kept as automations of its own, in
-the account registry (§2.11). An app proposes them when the person asks it
-to, and the home adds the ones the person keeps, naming the app. Disconnecting
-an app removes them (§2.10). The app shows what they match itself, while it
-runs (§2.11).
-
-Each device holding the account key copies each into every carry space as a
-wake ([03](03-spaces.md) §15), and a carrier matches arriving versions
-against the wakes there, from their outside alone. A carrier on one of the
-account's own devices may show a match there itself, saying no more than it
-sees: which space, which kind of record, and the wake's `open`. None sends a
-match to another device yet: that is what the wakes are for (below).
-
-_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier")._
-
-> **Planned: devices deliver wakes, by Web Push.** Issue:
-> [#60](https://github.com/leifriksheim/minca/issues/60). The account's own
-> automations are the account's and apps propose them (above); which device shows a match is
-> not modeled yet. Today only an app that is running shows a match (§2.11),
-> or one given the whole account that runs for the others, as the Chrome
-> extension does, so nothing reaches a device where neither runs, and an app with
-> `scope: spaces`, which cannot read the registry, shows nothing. The plan:
->
-> - Each device registers as a **receiver** in its own record, apart from
->   wakes: `push: { endpoint, p256dh, auth }` (the browser's
->   `PushSubscription`, for the app that proposed the automation) and
->   `device` (a name for people). Wakes hold no device or endpoint data.
-> - By default every receiver gets every wake; a device can opt out
->   on its own. A removed device's receiver record goes with it.
-> - A carrier that stores a new version that wakes a wake
->   ([03](03-spaces.md) §15) sends a Web Push to each receiver's endpoint: one HTTPS POST,
->   VAPID-signed (RFC 8292), payload encrypted to the device (RFC 8291). The
->   payload is the version as the carrier holds it (private body still
->   encrypted) when it fits in about 3 KB, otherwise its id and space.
-> - The push carries RFC 8030's `Topic` header, derived from the version id,
->   so when several carriers send the same record the push service replaces
->   undelivered copies. The notification's `tag` is the record key, so
->   duplicates that get through replace each other.
-> - The app's service worker (installed as a PWA on a phone: Android, and
->   iOS 16.4 or later from the home screen) opens the space key from its own storage,
->   decrypts, checks the rest of the filter (`where` included), and shows the
->   notification. Browsers require every push to show one (`userVisibleOnly`),
->   so a device cannot quietly drop most of a stream: an automation whose
->   wake is only a busy collection with no topic tag SHOULD be refused when
->   made, naming the fields to mark as topics.
->
-> The push service (chosen by the browser) sees timing and size, never
-> content. A carrier learns a device's endpoint and how often a tag matches.
-> Depends on nothing else in this part.
->
-> _Open:_ a push subscription is bound to one sender's VAPID key
-> (`applicationServerKey`). Several carriers pushing to one device need either
-> one push subscription per carrier (the device subscribes with each carrier's
-> key; a host's description would list it as `vapid`) or carriers sharing a
-> key. Also open: which device copies wakes into carry spaces; where
-> receiver records live and which carrier sends to which endpoint; whether
-> "not on this device" syncs.
+_Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/auth/src/auth.ts` (`grantCarry`), `packages/core/src/node/node-carriers.ts` (`carriers.reached`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
 
 ## 5. Calls
 

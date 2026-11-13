@@ -853,11 +853,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       }
     }
     writeConnections(auth.connections().filter((known) => !goes(known)));
-    // A home that closes once delivered must also have taken the removed automations' wakes off its carriers.
-    const refilled = node && waitMs > 0 ? node.carriers.settled(waitMs) : Promise.resolve(true);
-    return {
-      delivered: Promise.all([Promise.all(revoked), refilled]).then(([taken]) => taken.every(Boolean)),
-    };
+    return { delivered: Promise.all(revoked).then((taken) => taken.every(Boolean)) };
   }
 
   /**

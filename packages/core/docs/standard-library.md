@@ -338,7 +338,7 @@ message they replied to. Never fill them by matching text.
 
 They are topics, as is a message's `in` link. So an automation of the
 account's own can ask for only what mentions it, replies to it, or is in one
-channel, and a carrier's wake can match these unread:
+channel:
 
 ```json
 { "where": { "mentions": { "$contains": "$me" } } }
@@ -368,9 +368,7 @@ A record written in answer to someone's record names them in
 | `std.order`, `std.order-update`             | the listing's or the order's author |
 
 It's a topic, so "someone answered what I wrote" is
-`where: { "respondingTo": { "$contains": "$me" } }`, and a carrier's wake can
-match it unread. The link says the same to a node that can read, but a
-carrier can't read a private space's links, so the account is written out.
+`where: { "respondingTo": { "$contains": "$me" } }`.
 Fill it from the author of the linked record, and leave it out when that's
 the writer.
 

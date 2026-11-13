@@ -482,7 +482,7 @@ one run at a time:
    runs in the background, one run at a time apart from reconciling, reading
    afresh each run what the registry still lacks. A space left meanwhile
    stays left.
-4. It brings every carrier's passes and wakes up to date.
+4. It brings every carrier's passes up to date.
 5. It names the account's carriers as keepers of the open spaces it manages,
    the account registry and contacts space among them: a carrier keeps the
    account's personal space. Carry spaces name none.
@@ -1035,8 +1035,7 @@ returns that one.
 Carry spaces aren't kept in the node's list. Each is derived again from its
 record. When the node starts, or the registry changes, it refills every carry
 space in the background. That opens every space the account holds, which is
-slow from a data folder, so signing in doesn't wait for it, and nor does
-adding an automation. Adding a carrier writes its passes before it returns.
+slow from a data folder, so signing in doesn't wait for it. Adding a carrier writes its passes before it returns.
 
 - `carriers.settled(waitMs)` waits for the refill under way, and says whether
   it finished. Use it before a window closes.
@@ -1069,17 +1068,9 @@ wrote.
 
 `node.automations` needs the account key. It lists, adds, updates (`name`,
 `paused`) and removes the account's own
-[automations](automations.md#the-accounts-own), kept in its registry, and
-copies a wake for each into every carry space. The reference home adds them
+[automations](automations.md#the-accounts-own), kept in its registry. The reference home adds them
 when a person keeps an app's proposal, and lists them by app to pause or
 remove ([the account home's side](sign-in.md#the-account-homes-side)).
-
-### A carrier's matches
-
-When a version wakes one of the account's wakes, a `CarrierNode` sends a
-`wake` event with only the wake, the space, and the record's key, collection
-and `createdAt`. `wakes()` lists the wakes it holds. The browser extension
-shows these as notifications.
 
 ### Hosting
 

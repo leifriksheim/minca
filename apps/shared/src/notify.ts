@@ -8,7 +8,7 @@
  */
 
 /** A record one of the account's automations matched */
-export interface Woke {
+export interface Matched {
   /** The space's name */
   readonly space: string;
   readonly collection: string;
@@ -32,11 +32,11 @@ export function kindOf(collection: string): string {
     .toLowerCase();
 }
 
-function described(wakes: ReadonlyArray<Woke>): string {
-  const kinds = [...new Set(wakes.map((wake) => kindOf(wake.collection)))];
-  if (wakes.length === 1) return `New ${kinds[0]}`;
-  if (kinds.length === 1) return `${wakes.length} new ${kinds[0]}s`;
-  return `${wakes.length} new things`;
+function described(matches: ReadonlyArray<Matched>): string {
+  const kinds = [...new Set(matches.map((match) => kindOf(match.collection)))];
+  if (matches.length === 1) return `New ${kinds[0]}`;
+  if (kinds.length === 1) return `${matches.length} new ${kinds[0]}s`;
+  return `${matches.length} new things`;
 }
 
 export function createNotifier(params: {
@@ -45,19 +45,23 @@ export function createNotifier(params: {
   readonly gatherMs?: number;
 }) {
   const gatherMs = params.gatherMs ?? 1500;
-  const waiting = new Map<string, Woke[]>();
+  const waiting = new Map<string, Matched[]>();
   return {
-    woke(wake: Woke): void {
+    matched(match: Matched): void {
       // One burst per space and app, so each notification leads to the app that asked for it.
-      const key = `${wake.space} ${wake.open ?? ''}`;
+      const key = `${match.space} ${match.open ?? ''}`;
       const gathered = waiting.get(key);
-      if (gathered) return void gathered.push(wake);
-      waiting.set(key, [wake]);
+      if (gathered) return void gathered.push(match);
+      waiting.set(key, [match]);
       setTimeout(() => {
         const all = waiting.get(key) ?? [];
         waiting.delete(key);
         if (all.length > 0)
-          params.show({ title: wake.space, body: described(all), ...(wake.open ? { open: wake.open } : {}) });
+          params.show({
+            title: match.space,
+            body: described(all),
+            ...(match.open ? { open: match.open } : {}),
+          });
       }, gatherMs);
     },
   };
