@@ -61,8 +61,8 @@ git pull --ff-only
 npm run release -- patch
 ```
 
-The script refuses a dirty tree or a `main` that differs from `origin/main`.
-If the tree has someone's work in it, don't stash or commit it for them: say
+The script refuses changed tracked files or a `main` that differs from
+`origin/main`. If the tree has someone's work in it, don't stash or commit it for them: say
 so and stop.
 
 ## 4. Watch it
