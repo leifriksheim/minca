@@ -704,7 +704,7 @@ In a private space the space names a current **read key** (`did:key`, from
 proof:
 
 - `read` — the signature, over the same label (`H` or `T`), of the newest
-  read key it holds.
+  read key its history names.
 - `readKey` — the DID of that read key. A reader MUST send it whenever it
   knows the DID: a reader that missed a key change believes its key is
   current, and cannot tell.
@@ -725,8 +725,11 @@ proof:
   may be the one that missed a change. A reader SHOULD send it when it
   holds older keys. When the verifier named a read key (`readKey` in its
   `challenge` or `__auth-hello`) and the reader holds it, the reader SHOULD
-  put that key's entry first, however old it is. Which others it sends is
-  its own.
+  put that key's entry first, however old it is. A reader that missed the
+  change instead, and whose history doesn't name that key, SHOULD put first
+  the entry of the key its account's list carries for the space
+  ([06](06-nodes-and-sessions.md) §1.3) if it is the one named. Which others
+  it sends is its own.
 
 In a private space a verifier SHOULD name, as `readKey` in its `challenge`
 or `__auth-hello`, the read key it calls current.
@@ -828,7 +831,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
-_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `wantedKey`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-peers.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`), `packages/core/src/node/space-history.ts` (`formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…"), `packages/core/tests/network-manager.test.ts` ("a peer that missed more changes than a proof carries unasked…"), `packages/cli/tests/host.test.ts` ("a host that joins after more key changes than a proof carries…")._
+_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `wantedKey`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-peers.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`), `packages/core/src/node/space-history.ts` (`formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…"), `packages/core/tests/network-manager.test.ts` ("a peer that missed more changes than a proof carries unasked…"), `packages/cli/tests/host.test.ts` ("a host that joins after more key changes than a proof carries…", "a device away through key changes proves the key the account’s list carries…")._
 
 ### 6.4 The account behind a session
 

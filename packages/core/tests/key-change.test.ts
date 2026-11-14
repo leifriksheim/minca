@@ -8,6 +8,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createNode } from '../src/node/node.js';
+import { createIdentityManager } from '../src/identity/identity-manager.js';
+import { generateSeed } from '../src/identity/recovery-code.js';
 import type { Delegation } from '../src/identity/ucan.js';
 import type { P2PNode } from '../src/node/types.js';
 import { newRecordKey } from '../src/records/key.js';
@@ -624,5 +626,54 @@ describe('a key record that did not count', () => {
     await until(() => reads(alice, space, 'after'), 6000, 'the note after');
     await new Promise((resolve) => setTimeout(resolve, 500));
     assert.equal(await reads(alice, space, 'planted'), false);
+  });
+});
+
+describe('the account’s other devices, through a key change', () => {
+  test('a space an app holds open on one device stays open through a key change made on another', async () => {
+    const seed = generateSeed();
+    const hub = createFakeHub({ latencyMs: 5 });
+    const device = async () => {
+      const manager = createIdentityManager();
+      const node = await createNode({
+        signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
+        stores: memoryStores(),
+        accountKey: await deriveAccountKey(seed),
+        watchIntervalMs: 0,
+        network: {
+          transports: (spaceId: string, sessionDid: string) => [hub.transport(sessionDid, spaceId)],
+        },
+      });
+      return node;
+    };
+    const laptop = await device();
+    const phone = await device();
+    try {
+      const club = await laptop.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+      await hold(laptop, club.id);
+      await until(
+        async () => (await phone.spaces.list()).some((s) => s.id === club.id),
+        5000,
+        'the phone to join',
+      );
+      await hold(phone, club.id);
+      await until(
+        async () => (await laptop.spaces.status(club.id)).peers.length === 1,
+        5000,
+        'the two to meet',
+      );
+      let messages = 0;
+      phone.subscribe((event) => {
+        if (event.type === 'message' && event.space === club.id) messages++;
+      });
+      // The account's list names the new key before the space's own record of it reaches the phone.
+      await laptop.spaces.changeKey(club.id);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      for (let i = 0; i < 3; i++) await laptop.spaces.send(club.id, { hi: i }).catch(() => {});
+      await until(() => messages === 3, 5000, 'the phone to hear the laptop');
+      assert.equal((await laptop.spaces.status(club.id)).peers.length, 1, 'the phone is still in the space');
+    } finally {
+      await Promise.all([laptop.close(), phone.close()]);
+    }
   });
 });

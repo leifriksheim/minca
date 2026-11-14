@@ -653,7 +653,7 @@ describe('an account using a host, end to end over sockets', () => {
     );
   });
 
-  test('a device away through key changes takes the new key from the account’s list, and reads on through the host', async () => {
+  test('a device away through key changes proves the key the account’s list carries, and reads on through the host', async () => {
     const served = await startHost({
       key: await provider.generateKeyPair(),
       stores: memoryStores(),
