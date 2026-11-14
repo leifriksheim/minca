@@ -831,7 +831,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > current, and a former member it can tell by its note is refused at step 1
 > however it proves it. A device away through key changes may prove there
 > the key its account's list carries, which reaches a removed account only
-> if it was listed before the removal. Without steps 4 and 5 applying to readers that don't know they
+> if it was given that key. Without steps 4 and 5 applying to readers that don't know they
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 

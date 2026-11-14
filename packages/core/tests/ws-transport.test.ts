@@ -527,7 +527,7 @@ describe('WebSocket transport', () => {
       );
     });
 
-    test('a former member is refused, though it proves the current key among its older ones', async () => {
+    test('a former member is refused by its note, though it proves the current key among its older ones', async () => {
       const [k0, k1] = [
         await deriveReadKey(await generateSpaceKey(), provider),
         await deriveReadKey(await generateSpaceKey(), provider),
