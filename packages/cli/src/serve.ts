@@ -222,9 +222,10 @@ export async function serve(options: ServeOptions): Promise<Served> {
       socket.close(4000, 'missing ?space=');
       return;
     }
-    // Challenge first, whatever the space: a node that answered "not here"
-    // before any proof would tell every web page that asks which spaces this
-    // machine holds. One that does not hold the space refuses the hello the
+    // Challenge first, whatever the space. For a private space it holds it names
+    // the read key it checks against, so a reader proves that one however old;
+    // that tells whoever knows the space's id that this node holds it (spec 04
+    // §5.3, accepted). One that does not hold the space refuses the hello the
     // same way it refuses a stranger.
     const authenticator = await node.spaces.authenticator(spaceId);
     const nonce = peerNonce();
@@ -260,7 +261,11 @@ export async function serve(options: ServeOptions): Promise<Served> {
       })().catch(() => socket.close(1011, 'could not open space'));
     });
 
-    socket.send(JSON.stringify({ type: 'challenge', nonce, did: node.sessionDid }));
+    // The read key this node checks against: a reader holding it proves it, however long superseded.
+    const readKey = authenticator?.readKey() ?? null;
+    socket.send(
+      JSON.stringify({ type: 'challenge', nonce, did: node.sessionDid, ...(readKey ? { readKey } : {}) }),
+    );
   };
 
   http.on('upgrade', (req: IncomingMessage, socket, head) => {

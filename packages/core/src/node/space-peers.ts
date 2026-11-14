@@ -306,11 +306,15 @@ export async function openPeers(deps: PeersDeps) {
             return held ? deriveReadKey(held, provider) : (record.read ?? null);
           },
           current: meeting.readKey,
-          async earlier() {
+          async earlier(wanted?: string) {
             const { current } = (await access()).history;
             const newest = newestKey(current);
-            const older = [...current.keys]
-              .reverse()
+            // The one the other side checks against first, however old: a verifier behind by any number
+            // of changes is proved its key, and learns the rest. The others in the history's order.
+            const epochs = [...current.keys].reverse();
+            const asked = epochs.findIndex((epoch) => epoch.readKey === wanted);
+            if (asked > 0) epochs.unshift(...epochs.splice(asked, 1));
+            const older = epochs
               .map((epoch) => keyring.get(epoch.keyId))
               .filter((held): held is SpaceKey => held !== undefined && held !== newest);
             return Promise.all(

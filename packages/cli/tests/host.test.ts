@@ -620,6 +620,39 @@ describe('an account using a host, end to end over sockets', () => {
     assert.equal(offline.name, 'Test Hosting');
   });
 
+  test('a host that joins after more key changes than a proof carries still lets the account in, and takes the space in', async () => {
+    const served = await startHost({
+      key: await provider.generateKeyPair(),
+      stores: memoryStores(),
+      port: 0,
+      free: true,
+    });
+    open.push(served);
+    const url = `http://127.0.0.1:${served.port}`;
+    const me = await account();
+    const laptop = await onSockets(me, served.port);
+    const club = await laptop.spaces.create({ name: 'Club', visibility: 'private' });
+    await laptop.records.put(club.id, 'app.note', { text: 'Soup on Friday' });
+    // More changes than the older read keys a reader proves unasked (spec 04, at most 4): a host
+    // joining now knows only the key the space began with, and must say which it checks against.
+    for (let n = 0; n < 6; n++) await laptop.spaces.changeKey(club.id);
+    await laptop.hosting.use(url);
+    await until(
+      async () => (await served.node.spaces()).some((one) => one.name === 'Club' && one.peers > 0),
+      15_000,
+      'the host to let the laptop in to the space',
+    );
+    // Level: the host has taken in the space, key changes and all, so it calls the newest key current.
+    await until(
+      async () => {
+        const [hostPeer] = (await laptop.spaces.status(club.id)).peers;
+        return !!hostPeer && (await laptop.spaces.reached(club.id, hostPeer, 2000));
+      },
+      15_000,
+      'the host to hold the space as the laptop does',
+    );
+  });
+
   test('a host that dropped the subscription is no longer a carrier, nor a keeper of any space', async () => {
     const billing = createStripeBilling({
       secretKey: 'sk_test_x',
