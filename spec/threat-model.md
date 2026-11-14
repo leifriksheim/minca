@@ -772,9 +772,15 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
   - A key change is only a SHOULD, and only a member granted `/key/change`
     can make one. In a space where nobody holds it, it reads everything new
     ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
-  - Hosts and carriers can't read the member list, so they keep syncing with
-    it until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_. A peer that never says who it is
-    is never let go ([#170](https://github.com/leifriksheim/minca/issues/170)).
+  - A host or carrier whose copy of the history hasn't heard of the removal
+    keeps syncing with it, let in by its key, or on `/peer` by its account
+    (04 §6.3 step 5), until it hears ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_. A host that keeps the space
+    for that account itself, as its own subscriber, hears of the removal
+    only from another member that connects to it: while none does, it keeps
+    letting the former member in. That host is sent nothing new by anyone
+    else meanwhile, and the space's key has changed, so it gets only what it
+    already had. A peer that never says who it is is never let go
+    ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - A key change made at the same moment as its removal is boxed to it. The
     change stays due, so the next key leaves it out, but until then it reads
     ([#170](https://github.com/leifriksheim/minca/issues/170)).
@@ -1521,6 +1527,12 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#166](https://github.com/leifriksheim/minca/issues/166)) _(traced)_.
+  - It learns which account each session that connects to it acts for, from
+    the note in the hello (04 §6.1), before the client has checked the
+    node's welcome: a client that doesn't pin the node tells whoever
+    answered its socket. Accepted: a host sees every author and the member
+    list anyway, and a DID tells no more than the profile an account
+    publishes.
 
 _Source: 03 §8; 02 §3, §7.3; 06 §4. Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)"), `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
 

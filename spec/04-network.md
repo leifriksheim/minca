@@ -558,7 +558,7 @@ The handshake is three text frames, then binary frames either way:
 
 ```
 1. node   → client   {"type":"challenge","nonce":<Nₛ>,"did":<node DID>}
-2. client → node     {"type":"hello","did":<client session DID>,"nonce":<N꜀>,"sig":…,"read"?:…,"readKey"?:…,"member"?:…,"earlier"?:[…]}
+2. client → node     {"type":"hello","did":<client session DID>,"nonce":<N꜀>,"sig":…,"read"?:…,"readKey"?:…,"member"?:…,"earlier"?:[…],"note"?:…}
 3. node   → client   {"type":"welcome","did":<node DID>,"sig":<…>,"note"?:<the node's proof>}
 4. binary frames of UTF-8 JSON, either way
 ```
@@ -639,8 +639,13 @@ W  = "minca-peer/v3|server|" + spaceId + "|" + nodeDid + "|" + N꜀
 ```
 
 - The client's hello carries `sig` = client session key signs `H`.
+- In a private space it SHOULD also carry `note`: the client's note, its
+  proof ([01](01-identity.md) §7.5), as `who` carries it (§6.4). It is not
+  covered by `sig` and need not be: it is checked on its own, and binds to
+  the client DID that `sig` verified.
 - The node MUST verify `sig` against `clientDid`. In a private space it MUST
-  also check the read proof (§6.3) over the same `H`.
+  also check the read proof (§6.3) over the same `H`, or admit the client by
+  its account (§6.3, step 5).
 - The welcome carries `sig` = node session key signs `W`. The client MUST
   verify it against the node DID from the challenge.
 - A node whose key acts for an account SHOULD also send its note as
@@ -737,16 +742,42 @@ The verifier:
    `claimed`, can open `member` with it, the proof inside is valid, is made
    out to the prover's session DID, and its root account is a reader of the
    space now. A verifier without that key (a host) cannot;
-5. otherwise accepts only if an entry among the first 4 of `earlier` names
+5. accepts, on a node's `/peer` (§6.1) only, if the hello carries `note`
+   that is valid (01 §7.5, at the node's own time), is made out to the
+   prover's session DID, and whose root account either is a reader of the
+   space now, or is an account the node keeps the space for (a host's, one
+   whose carry space names it, [08](08-hosting.md) §1; a person's own node,
+   its own account); in both cases unless that account is a **former
+   member** (03 §9.2). No read proof is needed;
+6. otherwise accepts only if an entry among the first 4 of `earlier` names
    the current read key and its `read` verifies against it;
-6. rejects.
+7. rejects.
+
+> Rationale: a node like a host holds no key of the space. It checks a read
+> proof against the read key its own copy of the history calls current, and
+> learns newer keys only from the clients it lets in. One that joined late
+> starts from the space as founded; one that was away starts where it left.
+> A client proves its newest key and a few older ones, which may not include
+> the one the node calls current, so such a node refused every client for
+> good: it never learned the newer keys from the clients it refused. Keys
+> decide who can read; who may connect to a node is better decided by who
+> the client is, which the history says however far behind the node is, and
+> which a host knows anyway, since it sees every author and the member list
+> ([threat model](threat-model.md) §3.8). Its own subscribers are let in even
+> when its copy is too old to name them, as one that joined late starts from
+> the founders alone; they bring it up to date. Holding the space key still
+> decides what anyone can read: a client let in by its account is sent sealed
+> versions, and opens them only with keys sealed to it.
+
+A client SHOULD send `note` to a node in a private space, so it is let in
+whatever key the node calls current.
 
 Example — the key changed K0 → K1 while Bob was away. Bob holds K0 and calls
 it current; Alice holds both. Bob proves
 `{"sig":…,"read":<K0 signs T>,"readKey":<K0 DID>,"member":<note sealed with K0>}`:
 Alice accepts it by step 4. Alice proves
 `{"sig":…,"read":<K1 signs T>,"readKey":<K1 DID>,"member":…,"earlier":[{"readKey":<K0 DID>,"read":<K0 signs T>}]}`:
-Bob accepts it by step 5. The two sync, and Bob learns K1 from the history.
+Bob accepts it by step 6. The two sync, and Bob learns K1 from the history.
 
 A node that must prove read access but holds no read key MUST NOT complete
 the mesh handshake.
@@ -754,17 +785,19 @@ the mesh handshake.
 **Letting a reader go.** The check above runs once, at the handshake; a
 verifier MUST keep it true for as long as the peer stays connected. The
 verifier remembers the read key it let each peer in on: `claimed` when it
-accepted by step 3 or 4, the current read key when by step 5. Whenever its
-access history changes, and when a peer connects, it looks again at every
-peer it let in on a key that is no longer current. It keeps such a peer only
-if the account that peer showed in its `who` (§6.4) is a reader of the space
-now; it lets go of every other one at once: it leaves the room for that peer
+accepted by step 3 or 4, the current read key when by step 6, none when by
+step 5. Whenever its access history changes, and when a peer connects, it
+looks again at every peer it let in on a key that is no longer current, or
+on none. It keeps such a peer only if the account that peer showed in its
+`who` (§6.4), or by step 5 in its hello, is a reader of the space
+now, or, let in by step 5, is still an account the node keeps the space for
+and not a former member; it lets go of every other one at once: it leaves the room for that peer
 alone (`__leave`, §7.2) on the mesh, and closes the peer's socket on a node.
 Nothing else of the space is sent to it. A peer whose `who` has not arrived
 is given **10 s** from its handshake to send one, and is looked at again when
 it does; after that it counts as having no account, and is let go of.
 A peer let go of that reconnects is checked like any other, and a removed
-member is then refused (steps 4 and 5 fail).
+member is then refused (steps 4, 5 and 6 fail).
 
 **While a new key is due.** Until someone who manages the space changes the
 key, a former member (03 §9.2) may still hold the current one. Whenever its
