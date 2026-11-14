@@ -551,10 +551,9 @@ export async function openPeers(deps: PeersDeps) {
     }
   }
 
-  /** Sync messages from each peer taken in and not yet handled */
-  const behind = new Map<string, number>();
-
   function listen(network: NetworkManager): void {
+    /** Sync messages from each peer on this network taken in and not yet handled: it is this network that pauses */
+    const behind = new Map<string, number>();
     network.on('message', (message: NetworkMessage) => {
       if (message.type !== 'sync') return onMessage(message);
       // A peer's messages are handled one at a time. Past a few waiting, stop

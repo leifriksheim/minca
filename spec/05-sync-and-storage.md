@@ -335,21 +335,23 @@ Versions, as they are on the wire ([02 — Records](02-records.md)).
 | ---------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `type`     | `"versions"` |                                                                                                                         |
 | `id`       | number       | Present: the answer to the `want` with that id. Absent: versions the sender found the receiver lacks while reconciling. |
-| `versions` | `Version[]`  | At most 200, and at most 1 MiB of them as JSON unless it holds one alone.                                               |
+| `versions` | `Version[]`  | At most 200. SHOULD be no more than 1 MiB of them as JSON text, unless it holds one alone.                              |
 
 A `want` MUST always be answered with a `versions` carrying its `id`, even
 when none of the ids are held (`versions: []`): the asker counts answers to
 know it is done.
 
 A sender SHOULD stop adding versions to a `versions` message once it holds
-1 MiB of them (measured as their JSON), and MUST still send one version
+1 MiB of them (measured as their JSON text), and MUST still send one version
 alone, however large. A receiver MUST accept a message that holds fewer than
 were asked for.
 
 > Rationale: 200 small notes and 200 photos are very different messages. A
-> message is parsed and held whole at both ends, and a socket refuses one
-> past its limit (16 MiB at a host), so a space of large records would
-> otherwise never sync, or take a host's memory with it.
+> message is parsed and held whole at both ends, and a host's socket refuses
+> one past 16 MiB, so a space of large records would otherwise never sync, or
+> take a host's memory with it. 1 MiB is still past what a browser's data
+> channel carries in one message (256 KiB); that, and a limit on the size of
+> one version, are [#33](https://github.com/leifriksheim/minca/issues/33).
 
 ### `push-update`
 
@@ -554,7 +556,9 @@ For each differing collection the initiator:
    When the session ends, however it ends, the initiator asks for every id
    noted in `need` (below) and sends the versions noted in `have` in
    `versions` messages **without** `id`, at most 200 and 1 MiB per message
-   (§5). Both go
+   (§5). They SHOULD all be sent before the collection counts as level
+   with the peer (step 3): a keeper is credited with what it has been sent
+   (§9). Both go
    **newest first**: the reverse of the order the rounds found them in, which
    is oldest first. The versions it sends of one record SHOULD go in the same
    message, in the place of that record's newest; a record with more than 200
@@ -579,15 +583,12 @@ For each differing collection the initiator:
    ([Sync and storage in the library](../packages/core/docs/storage.md#pacing-sync)).
    An answer may stop short at 1 MiB (§6.4): the asker SHOULD ask again,
    in a new `want`, for the ids that came after the last version the answer
-   held. One that held none is not asked again.
+   held. One that held none is not asked again. How fast a node sends is
+   its own ([pacing](../packages/core/docs/storage.md#pacing-sync)).
 
-   **Pace.** How fast a node sends what a peer lacks is its own. It SHOULD
-   read versions from its store as it sends them rather than all at once,
-   and wait while its connection to the peer is backed up, so a large space
-   costs it one message of memory, not the space.
-
-3. When a session has ended and every `want` for its collection has been
-   answered and none is queued, the collection is **level** with that peer
+3. When a session has ended, what it found the peer lacks has been sent,
+   and every `want` for its collection has been answered and none is
+   queued, the collection is **level** with that peer
    (as far as could be taken in). The
    initiator then sends the peer a `hello` with `reply: true`, so the peer
    learns where things stand too without starting another round.
@@ -602,10 +603,7 @@ while. What a dropped `want` asked for is found again on the next round.
   with the 32,000-byte frame limit, and send `reconciled` with the same `id`.
 - On `want`: answer with `versions` carrying the same `id` and the asked
   versions it holds (first 200 ids only), in the order asked, stopping once
-  the message holds 1 MiB of them (§5). A node whose connection to the
-  asker already holds much it hasn't sent (8 MiB in this library) MAY
-  answer with none: a peer that asks and doesn't read is not buffered for,
-  and an honest one finds them again on the next round.
+  the message holds 1 MiB of them (§5).
 
 Not yet specified: how a responder reports a `reconcile` whose `message` it
 cannot parse (§18).
@@ -1431,24 +1429,24 @@ Tests: `packages/core/tests/files.test.ts`._
 The values a peer relies on. Timers, caps and sizes a node keeps for itself
 are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing-sync).
 
-| Name                           | Value                        | Where                     |
-| ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 8                            | `v` on every sync message |
-| Negentropy version byte        | `0x61`                       | §3                        |
-| Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
-| IdList threshold / buckets     | < 32 items / 16              | §3.4                      |
-| `FRAME_SIZE_LIMIT`             | 32,000 bytes (before base64) | §6                        |
-| Minimum frame limit / headroom | 4,096 / 200 bytes            | §3.4                      |
-| `MAX_IDS_PER_REQUEST`          | 200                          | `want`, `versions`        |
-| `MAX_MESSAGE_BYTES`            | 1 MiB of versions, as JSON   | `versions`, §6.3, §6.4    |
-| `stored` ids considered        | 2,000                        | §4                        |
-| Collections per hello          | 1,000                        | §4                        |
-| Keepers per space              | 16                           | §9                        |
-| `CHUNK` (and RFC 8188 `rs`)    | 262,144 bytes                | §16.6                     |
-| Files taken per version        | 16                           | §16.6                     |
-| Largest file                   | 2³¹ bytes                    | §16.6                     |
-| Chunks per `want-file`         | 64                           | §16.6                     |
-| Bytes per `file` message       | 24,000 (before base64)       | §16.6                     |
+| Name                           | Value                           | Where                     |
+| ------------------------------ | ------------------------------- | ------------------------- |
+| `SYNC_PROTOCOL_VERSION`        | 8                               | `v` on every sync message |
+| Negentropy version byte        | `0x61`                          | §3                        |
+| Id size / fingerprint size     | 32 / 16 bytes                   | §3                        |
+| IdList threshold / buckets     | < 32 items / 16                 | §3.4                      |
+| `FRAME_SIZE_LIMIT`             | 32,000 bytes (before base64)    | §6                        |
+| Minimum frame limit / headroom | 4,096 / 200 bytes               | §3.4                      |
+| `MAX_IDS_PER_REQUEST`          | 200                             | `want`, `versions`        |
+| `MAX_MESSAGE_BYTES`            | 1 MiB of versions, as JSON text | `versions`, §6.3, §6.4    |
+| `stored` ids considered        | 2,000                           | §4                        |
+| Collections per hello          | 1,000                           | §4                        |
+| Keepers per space              | 16                              | §9                        |
+| `CHUNK` (and RFC 8188 `rs`)    | 262,144 bytes                   | §16.6                     |
+| Files taken per version        | 16                              | §16.6                     |
+| Largest file                   | 2³¹ bytes                       | §16.6                     |
+| Chunks per `want-file`         | 64                              | §16.6                     |
+| Bytes per `file` message       | 24,000 (before base64)          | §16.6                     |
 
 ---
 

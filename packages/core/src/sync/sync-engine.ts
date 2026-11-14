@@ -136,8 +136,6 @@ const MAX_IDS_PER_REQUEST = 200;
  * its limit. One version larger than this still goes, alone.
  */
 const MAX_MESSAGE_BYTES = 1024 * 1024;
-/** Bytes waiting to go to a peer past which its `want`s are answered empty */
-const MAX_BACKLOG_BYTES = 8 * MAX_MESSAGE_BYTES;
 /** How often a sender waiting for its connection to drain looks again */
 const DRAIN_POLL_MS = 25;
 /** `want`s in flight to one peer at a time; the rest queue */
@@ -207,6 +205,14 @@ interface PeerState {
   holds: Holds;
   /** Whether its last hello asked to sync with this node by shallow sets */
   shallow: boolean;
+  /**
+   * Sends of what it lacks still going, by collection. Until they are done
+   * the collection isn't level and no new session starts for it: a session
+   * would find the same versions missing and send them again.
+   */
+  readonly sending: Map<string, number>;
+  /** Collections to reconcile again once their sends are done */
+  readonly beginAfter: Set<string>;
 }
 
 /** What one message brought in: the versions stored, and the versions they wait for */
@@ -244,6 +250,8 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const inOrder = new Map<string, Promise<void>>();
   /** What is still being sent to each peer, so one session's versions go after another's */
   const sending = new Map<string, Promise<void>>();
+  /** Answers to each peer's `want`s still waiting for room, in the order asked */
+  const answering = new Map<string, Promise<void>>();
   let lastConnection = 0;
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let nextId = 1;
@@ -475,7 +483,11 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   const busy = (peerId: string) => {
     const state = states.get(peerId);
-    if (state && (state.sessions.size > 0 || state.wants.size > 0 || state.queuedIds.size > 0)) return true;
+    if (
+      state &&
+      (state.sessions.size > 0 || state.wants.size > 0 || state.queuedIds.size > 0 || state.sending.size > 0)
+    )
+      return true;
     // What it sent that waits for its chain isn't taken in yet.
     for (const held of waiting.values()) if (held.peerId === peerId) return true;
     return false;
@@ -502,6 +514,10 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const current = state.sessions.get(collection);
     if (current && Date.now() - current.touchedAt < STALE_MS) {
       current.again = true;
+      return;
+    }
+    if (state.sending.has(collection)) {
+      state.beginAfter.add(collection);
       return;
     }
     const shallow = shallowWith(peerId);
@@ -531,7 +547,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
    */
   const levelIfDone = (peerId: string, collection: string) => {
     const state = states.get(peerId);
-    if (!state || state.sessions.has(collection)) return;
+    if (!state || state.sessions.has(collection) || state.sending.has(collection)) return;
     const wanting = [...state.wants.values()].some((w) => w.collection === collection);
     const queued = state.queued.some((q) => q.collection === collection && state.queuedIds.has(q.id));
     if (wanting || queued) return;
@@ -548,7 +564,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     // Asked for before the session goes, so the peer never looks idle in between.
     want(peerId, session.collection, session.need.reverse());
     state.sessions.delete(session.collection);
-    sendAll(peerId, session.have.reverse());
+    sendAll(peerId, state, session.collection, session.have.reverse());
     if (session.again) void begin(peerId, session.collection).catch(report);
   };
 
@@ -557,15 +573,24 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
    * to it. Off the peer's message queue, so taking in what the peer sends
    * never waits on it taking in what this node sends.
    */
-  const sendAll = (peerId: string, ids: ReadonlyArray<string>) => {
+  const sendAll = (peerId: string, state: PeerState, collection: string, ids: ReadonlyArray<string>) => {
     if (ids.length === 0) return;
     const connection = connections.get(peerId);
+    state.sending.set(collection, (state.sending.get(collection) ?? 0) + 1);
     const run = (sending.get(peerId) ?? Promise.resolve())
       .then(() => sendPaced(peerId, connection, ids))
       .catch(report);
     sending.set(peerId, run);
     void run.finally(() => {
       if (sending.get(peerId) === run) sending.delete(peerId);
+      // A peer that went, or came back on a new connection, starts afresh.
+      if (states.get(peerId) !== state) return;
+      const left = (state.sending.get(collection) ?? 1) - 1;
+      if (left > 0) return void state.sending.set(collection, left);
+      state.sending.delete(collection);
+      if (state.beginAfter.delete(collection)) return void begin(peerId, collection).catch(report);
+      levelIfDone(peerId, collection);
+      settleIfDone(peerId);
     });
   };
 
@@ -590,9 +615,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     let bytes = 0;
     const flush = async () => {
       if (message.length === 0) return;
-      while (open() && (config.backlog?.(peerId) ?? 0) > MAX_MESSAGE_BYTES)
-        await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
-      if (open()) send(peerId, { type: 'versions', versions: message });
+      if (await drained(peerId, connection)) send(peerId, { type: 'versions', versions: message });
       message = [];
       bytes = 0;
     };
@@ -679,20 +702,44 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     send(peerId, { type: 'reconciled', id, message: base64UrlEncode(round.message!) });
   };
 
-  const serveWant = async (peerId: string, id: number, ids: ReadonlyArray<string>) => {
-    const versions: Version[] = [];
-    // A peer that asks and doesn't read is answered empty, not buffered for: it finds them next round.
-    let bytes = (config.backlog?.(peerId) ?? 0) > MAX_BACKLOG_BYTES ? Infinity : 0;
-    // In the order asked, until a message's worth: the asker asks again for what comes after.
-    for (const v of ids.slice(0, MAX_IDS_PER_REQUEST)) {
-      if (bytes >= MAX_MESSAGE_BYTES) break;
-      const version = typeof v === 'string' && cidDigest(v) ? await storage.getVersion(v) : null;
-      if (!version) continue;
-      versions.push(version);
-      bytes += wireBytes(version);
-    }
-    // Always answered, even empty: the asker counts replies to know it is done.
-    send(peerId, { type: 'versions', id, versions });
+  /**
+   * Answers a `want` once the connection has room, after the answers before
+   * it. Off the peer's message queue, like `sendAll`, and apart from it, so an
+   * answer never waits behind a large push. A peer that asks and doesn't read
+   * holds up only its own answers, and what waits is the ids it asked for.
+   */
+  const serveWant = (peerId: string, id: number, ids: ReadonlyArray<string>) => {
+    const connection = connections.get(peerId);
+    const asked = ids.slice(0, MAX_IDS_PER_REQUEST);
+    const run = (answering.get(peerId) ?? Promise.resolve())
+      .then(async () => {
+        if (!(await drained(peerId, connection))) return;
+        const versions: Version[] = [];
+        let bytes = 0;
+        // In the order asked, until a message's worth: the asker asks again for what comes after.
+        for (const v of asked) {
+          if (bytes >= MAX_MESSAGE_BYTES) break;
+          const version = typeof v === 'string' && cidDigest(v) ? await storage.getVersion(v) : null;
+          if (!version) continue;
+          versions.push(version);
+          bytes += wireBytes(version);
+        }
+        // Always answered, even empty: the asker counts replies to know it is done.
+        if (connections.get(peerId) === connection) send(peerId, { type: 'versions', id, versions });
+      })
+      .catch(report);
+    answering.set(peerId, run);
+    void run.finally(() => {
+      if (answering.get(peerId) === run) answering.delete(peerId);
+    });
+  };
+
+  /** Waits until the connection has under a message's worth left to send; false once it is gone */
+  const drained = async (peerId: string, connection: number | undefined): Promise<boolean> => {
+    const open = () => connections.get(peerId) === connection && peers.has(peerId);
+    while (open() && (config.backlog?.(peerId) ?? 0) > MAX_MESSAGE_BYTES)
+      await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
+    return open();
   };
 
   const onVersions = async (peerId: string, id: number | undefined, versions: ReadonlyArray<Version>) => {
@@ -704,13 +751,14 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const answered = versions.filter((v) => asked.ids.has(v?.id));
     await admitAll(peerId, answered);
     state.wants.delete(id);
-    // An answer that stopped at a message's worth: what came after the last sent is asked for again.
+    // An answer that stopped at a message's worth: what came after the last sent is asked for again,
+    // ahead of the rest, where it was.
     // One that brought none is not, so a peer lacking them is asked once.
     const order = [...asked.ids];
     const sent = new Set(answered.map((v) => v.id));
     let last = order.length - 1;
     while (last >= 0 && !sent.has(order[last]!)) last--;
-    if (last >= 0 && last < order.length - 1) want(peerId, asked.collection, order.slice(last + 1));
+    if (last >= 0 && last < order.length - 1) want(peerId, asked.collection, order.slice(last + 1), true);
     pump(peerId);
     levelIfDone(peerId, asked.collection);
     settleIfDone(peerId);
@@ -754,7 +802,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
         case 'reconciled':
           return await onReconciled(peerId, msg.id, msg.message, msg.held !== false);
         case 'want':
-          return await serveWant(peerId, msg.id, Array.isArray(msg.ids) ? msg.ids : []);
+          return serveWant(peerId, msg.id, Array.isArray(msg.ids) ? msg.ids : []);
         case 'versions':
           return await onVersions(peerId, msg.id, Array.isArray(msg.versions) ? msg.versions : []);
         case 'push-update':
@@ -877,6 +925,8 @@ const newPeerState = (): PeerState => ({
   queuedIds: new Set(),
   holds: 'all',
   shallow: false,
+  sending: new Map(),
+  beginAfter: new Set(),
 });
 
 const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;

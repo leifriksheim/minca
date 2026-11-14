@@ -133,6 +133,9 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     const gone = ids.size > 0 && (await store.list(`${space}/`).catch(() => null))?.length === 0;
     if (!gone) return ids;
     for (const id of ids) await state.delete(keys.known(id));
+    // Nothing of this writer's is there either: the next compaction waits for none.
+    left = 0;
+    await state.delete(keys.left);
     return new Set();
   }
 

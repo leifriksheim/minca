@@ -458,12 +458,16 @@ describe('sync engine', () => {
 
     /** Two engines that record the bytes of every `versions` message, and whose connections are backed up at will */
     function pair(options: { holderBacklog?: () => number } = {}) {
-      const sizes: Array<{ bytes: number; answer: boolean }> = [];
+      const sizes: Array<{ bytes: number; answer: boolean; count: number }> = [];
       const holderStorage = createStorageProvider(createMemoryAdapter());
       const newcomerStorage = createStorageProvider(createMemoryAdapter());
       const record = (message: SyncMessage) => {
         if (message.type === 'versions')
-          sizes.push({ bytes: JSON.stringify(message).length, answer: message.id !== undefined });
+          sizes.push({
+            bytes: JSON.stringify(message).length,
+            answer: message.id !== undefined,
+            count: message.versions.length,
+          });
       };
       const holder: ReturnType<typeof createSyncEngine> = createSyncEngine({
         storageProvider: holderStorage,
@@ -522,24 +526,126 @@ describe('sync engine', () => {
       for (const { bytes } of answers) assert.ok(bytes < MB + 120_000, `an answer of ${bytes} bytes`);
     });
 
-    test('a peer that asks and does not read is answered empty, not buffered for', async () => {
+    test('a want is answered once the connection has room, not buffered for a peer that does not read', async () => {
+      let backlog = 100 * MB;
       const notes = await bigNotes(5, 100_000);
       const { holder, newcomer, holderStorage, newcomerStorage, sizes } = pair({
-        holderBacklog: () => 100 * MB,
+        holderBacklog: () => backlog,
       });
       for (const note of notes) await holderStorage.addVersion(note);
       newcomer.ask(
         COLLECTION,
         notes.map((note) => note.id),
       );
-      await until(() => sizes.some((size) => size.answer), 5000, 'the want to be answered');
-      assert.ok(
-        sizes.filter((size) => size.answer).every((size) => size.bytes < 200),
-        'answered, and empty',
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assert.equal(
+        sizes.filter((size) => size.answer).length,
+        0,
+        'nothing sent while the connection is full',
       );
-      assert.equal((await newcomerStorage.sums()).get(COLLECTION)?.count ?? 0, 0);
-      // Gone, as a peer that never reads is in the end: nothing waits on it any more.
+      backlog = 0;
+      await until(
+        async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === notes.length,
+        5000,
+        'the answer once it drained',
+      );
       holder.removePeer('b');
+    });
+
+    test('a node says it is level with a peer, or synced, only once it has sent what the peer lacks', async () => {
+      // A keeper counts as having a write once level (spec 05 §9), and a node may close on that.
+      const notes = await bigNotes(30, 1000);
+      const { holder, holderStorage, newcomerStorage, sizes } = pair();
+      for (const note of notes) await holderStorage.addVersion(note);
+      const sent = () => sizes.filter((size) => !size.answer).reduce((n, size) => n + size.count, 0);
+      let sentWhenLevel = -1;
+      holder.on('level', (peer, collection) => {
+        if (peer === 'b' && collection === COLLECTION && sentWhenLevel < 0) sentWhenLevel = sent();
+      });
+      const synced = new Promise<number>((resolve) =>
+        holder.on('synced', (peer) => {
+          if (peer !== 'b') return;
+          const now = sent();
+          holder.stop();
+          resolve(now);
+        }),
+      );
+      holder.notifyPeers(['b']);
+      assert.equal(await synced, notes.length, 'synced before every version was sent');
+      assert.equal(sentWhenLevel, notes.length, 'level before every version was sent');
+      await until(
+        async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === notes.length,
+        5000,
+        'the peer to have them, though the node closed once synced',
+      );
+    });
+
+    test('a peer on a slow link is sent each version it lacks once, however many rounds pass meanwhile', async () => {
+      const notes = await bigNotes(60, 100_000);
+      const holderStorage = createStorageProvider(createMemoryAdapter());
+      const newcomerStorage = createStorageProvider(createMemoryAdapter());
+      for (const note of notes) await holderStorage.addVersion(note);
+      // Holder to newcomer over a link of 2 MB a second, first in first out.
+      const link: Array<{ left: number; message: SyncMessage }> = [];
+      const backlog = () => link.reduce((sum, m) => sum + m.left, 0);
+      let sent = 0;
+      const tick = setInterval(() => {
+        let budget = 200_000;
+        while (link.length > 0 && budget > 0) {
+          const head = link[0]!;
+          const take = Math.min(budget, head.left);
+          head.left -= take;
+          budget -= take;
+          if (head.left > 0) break;
+          link.shift();
+          void newcomer.handleMessage('a', head.message);
+        }
+      }, 100);
+      const holder: ReturnType<typeof createSyncEngine> = createSyncEngine({
+        storageProvider: holderStorage,
+        self: 'a',
+        backlog,
+        sendToPeer: (_peer, message) => {
+          if (message.type === 'versions') sent += message.versions.length;
+          const bytes = JSON.stringify(message).length;
+          link.push({ left: bytes, message });
+        },
+      });
+      const newcomer: ReturnType<typeof createSyncEngine> = createSyncEngine({
+        storageProvider: newcomerStorage,
+        self: 'b',
+        sendToPeer: (_peer, message) => void holder.handleMessage('b', message),
+      });
+      // As a node does: having taken anything in, it says hello again soon.
+      let announce: ReturnType<typeof setTimeout> | null = null;
+      newcomer.on('received', () => {
+        if (announce) return;
+        announce = setTimeout(() => {
+          announce = null;
+          newcomer.notifyPeers(['a']);
+        }, 100);
+      });
+      holder.addPeer('b');
+      newcomer.addPeer('a');
+      holder.notifyPeers(['b']);
+      try {
+        await until(
+          async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === notes.length,
+          60_000,
+          'every record over the slow link',
+        );
+        await until(() => backlog() === 0, 30_000, 'the link to empty');
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        assert.ok(
+          backlog() === 0 && sent <= notes.length * 1.1,
+          `${sent} versions sent for ${notes.length} lacked`,
+        );
+      } finally {
+        clearInterval(tick);
+        if (announce) clearTimeout(announce);
+        holder.stop();
+        newcomer.stop();
+      }
     });
 
     test('a sender waits while its connection is backed up, and goes on once it drains', async () => {

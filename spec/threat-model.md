@@ -456,6 +456,16 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     on each pass and every 15 seconds while the space is open: nothing
     bounds bytes served per peer
     (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
+  - Any peer a node syncs with can send it `versions` messages as large as
+    the connection takes (16 MiB at a host). A node handles one peer's
+    messages one at a time and, where the connection can pause (a host's
+    sockets), stops reading past 8 waiting: a member holds up to about
+    128 MiB of a host's memory per connection, and an honest peer about
+    8 MiB. Over WebRTC, and in browsers, nothing pauses. A node sends a peer
+    what it lacks, and answers its `want`s, only as the connection drains,
+    so a member that asks and doesn't read holds up only its own answers,
+    at the cost of the ids it asked for; nothing bounds how many `want`s it
+    sends (05 §5, §6.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or
     sorts on them, and that grow with every record a member links to it.
