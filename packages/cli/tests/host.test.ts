@@ -751,15 +751,7 @@ describe('an account using a host, end to end over sockets', () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     await laptop.close();
 
-    // As a browser restoring from the recovery code: it finds its spaces through the host's address.
-    const phone = await createNode({
-      signer: me.signer,
-      stores: memoryStores(),
-      accountKey: me.accountKey,
-      watchIntervalMs: 0,
-      network: { hosts: [url] },
-    });
-    open.push(phone);
+    const phone = await onSockets(me, served.port);
     await until(
       async () => (await phone.spaces.list()).some((space) => space.id === notes.id),
       8000,

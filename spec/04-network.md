@@ -581,10 +581,11 @@ _Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/
 
 An always-on node serves `/peer` on the same port as its relay.
 
-1. On upgrade the node MUST send the `challenge` at once — before looking at
-   whether it holds the space — with a fresh nonce and its **session DID**.
-   A node that does not hold the space refuses the hello exactly as it
-   refuses a stranger.
+1. On upgrade the node MUST send the `challenge` at once, with a fresh nonce
+   and its **session DID**, and, for a private space it holds, the read key
+   it calls current (`readKey`, §6.3). That is all the challenge says of the
+   space. A node that does not hold the space refuses the hello exactly as
+   it refuses a stranger.
 2. It waits for one text frame. Close codes:
 
 | Code   | Reason                                    | When                                                                                                                     |
@@ -719,27 +720,32 @@ proof:
   where `sealKey` is the seal key of that space key ([03](03-spaces.md) §8.1) and
   the envelope is [01 §9.1](01-identity.md).
 
-- `earlier` — the same signature by each **older** read key it still holds,
-  newest first, at most 4: `[{ "readKey": <DID>, "read": <signature> }, …]`.
-  The verifier may be the one that missed a change. A reader SHOULD send it
-  when it holds older keys. When the verifier named a read key (`readKey` in
-  its `challenge` or `__auth-hello`) and the reader holds it, the reader
-  SHOULD put that key's entry first, however old it is.
+- `earlier` — the same signature by **older** read keys it still holds, at
+  most 4: `[{ "readKey": <DID>, "read": <signature> }, …]`. The verifier
+  may be the one that missed a change. A reader SHOULD send it when it
+  holds older keys. When the verifier named a read key (`readKey` in its
+  `challenge` or `__auth-hello`) and the reader holds it, the reader SHOULD
+  put that key's entry first, however old it is. Which others it sends is
+  its own.
 
 In a private space a verifier SHOULD name, as `readKey` in its `challenge`
-or `__auth-hello`, the read key it calls current. A prover MUST ignore a
-`readKey` that is not a string starting with `did:key:` of at most 256
-characters.
+or `__auth-hello`, the read key it calls current.
 
-> Rationale: a verifier that missed more than four key changes would
-> otherwise be proved only keys it can't check (step 5), and it learns the
-> newer ones only from peers it refuses: a host that joins a space late,
-> starting from the key the space began with, or one away through a busy
-> week of removals, would never carry it again. Named, the one key that
-> helps is proved whatever its age, and a proof stays 4 keys long. The
-> name is a public key that anyone holding the space's records can read
-> in its history; telling it to whoever connects tells them how far behind
-> the verifier is, and nothing they could prove with.
+> Rationale: a node that holds no key of the space, as a host, checks
+> readers against the read key its own copy of the history calls current,
+> and learns newer keys only from the readers it lets in. One that joined
+> late starts from the key the space began with; one that was away starts
+> where it left. Unnamed, a reader can only guess which few older keys to
+> prove, and a guess that misses leaves the verifier refusing every reader
+> for good. Named, the one key that helps is proved, however old: every
+> reader holds every earlier key ([03](03-spaces.md) §9.3).
+>
+> The name is said before anyone has proved anything. To whoever knows a
+> space's id it tells that this node holds the space, and asking again
+> shows when its key changes, which is when someone was removed. Accepted:
+> a space's id is a random string only members and invite holders have,
+> a host sees the member list anyway, and the key is a public one, of no
+> use without its private half ([threat model](threat-model.md) §3.1).
 
 The verifier:
 

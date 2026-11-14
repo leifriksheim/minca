@@ -20,7 +20,7 @@ export interface HelloProof {
   readonly readKey?: string;
   /** Its note, sealed with the space key behind `readKey` — for a reader that may be behind */
   readonly member?: string;
-  /** The same proof by the older read keys it still holds, newest first — for a verifier that may be behind */
+  /** The same proof by older read keys it still holds, the one the verifier named first — for a verifier that may be behind */
   readonly earlier?: ReadonlyArray<{ readonly readKey: string; readonly read: string }>;
 }
 
@@ -37,9 +37,9 @@ export interface ReadAccess {
   /** The read key every reader must prove, as the space names it now */
   current(): string;
   /**
-   * The older read keys this side still holds, newest first, not counting the
-   * one `key` gives. With `wanted`, the read key the other side said it calls
-   * current: that one first, if held, however old.
+   * Older read keys this side still holds, not counting the one `key` gives.
+   * With `wanted`, the read key the other side said it calls current: that
+   * one first, if held, however old.
    */
   earlier?(wanted?: string): Promise<ReadonlyArray<{ readonly did: string; readonly privateKey: CryptoKey }>>;
   /**

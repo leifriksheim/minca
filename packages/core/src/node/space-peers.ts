@@ -309,8 +309,8 @@ export async function openPeers(deps: PeersDeps) {
           async earlier(wanted?: string) {
             const { current } = (await access()).history;
             const newest = newestKey(current);
-            // Newest first, but the one the other side checks against first of all, however old:
-            // a verifier that missed more changes than fit in a proof can still be let in, and learn the rest.
+            // The one the other side checks against first, however old: a verifier behind by any number
+            // of changes is proved its key, and learns the rest. The others in the history's order.
             const epochs = [...current.keys].reverse();
             const asked = epochs.findIndex((epoch) => epoch.readKey === wanted);
             if (asked > 0) epochs.unshift(...epochs.splice(asked, 1));

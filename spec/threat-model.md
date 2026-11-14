@@ -52,6 +52,12 @@ reference implementation, or any implementation, honestly.
 
 ### 3.1 Stranger
 
+- **Accepted.**
+  - Knowing a private space's id, it can ask any node whether it holds the
+    space: the node names its current read key in its challenge, before
+    anything is proved, and asking again shows when the key changes, so
+    when someone was removed (04 §5.3, §6.3). The id is a random string
+    only members and invite holders have.
 - **Holds.**
   - Without an invite secret, nothing it signs in a space counts: a version
     needs its author to be a member, and to hold a grant for what it does, as
