@@ -582,9 +582,9 @@ _Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/
 An always-on node serves `/peer` on the same port as its relay.
 
 1. On upgrade the node MUST send the `challenge` at once, with a fresh nonce
-   and its **session DID**, and, for a private space it holds, the read key
-   it calls current (`readKey`, §6.3). That is all the challenge says of the
-   space. A node that does not hold the space refuses the hello exactly as
+   and its **session DID**. For a private space it holds it SHOULD add the
+   read key it calls current (`readKey`, §6.3). That is all the challenge
+   says of the space. A node that does not hold the space refuses the hello exactly as
    it refuses a stranger.
 2. It waits for one text frame. Close codes:
 
@@ -737,15 +737,22 @@ or `__auth-hello`, the read key it calls current.
 > late starts from the key the space began with; one that was away starts
 > where it left. Unnamed, a reader can only guess which few older keys to
 > prove, and a guess that misses leaves the verifier refusing every reader
-> for good. Named, the one key that helps is proved, however old: every
-> reader holds every earlier key ([03](03-spaces.md) §9.3).
+> for good. Named, the one key that helps is proved, however old: a reader
+> whose key changes opened holds every earlier key ([03](03-spaces.md)
+> §9.3). A carrier, which holds one read key, and a newcomer after a key
+> change that left the first key out, hold fewer, and may still not reach a
+> verifier far behind.
 >
 > The name is said before anyone has proved anything. To whoever knows a
 > space's id it tells that this node holds the space, and asking again
-> shows when its key changes, which is when someone was removed. Accepted:
-> a space's id is a random string only members and invite holders have,
-> a host sees the member list anyway, and the key is a public one, of no
-> use without its private half ([threat model](threat-model.md) §3.1).
+> shows when its key changes, which is when someone was removed. That
+> includes a web page asking the visitor's own node on `localhost`, which
+> ties the person to the space. Accepted ([threat model](threat-model.md)
+> §3.1): the id is a random string, and a host's open status already says
+> which spaces it carries. Blinding the name, sending a hash of it with the
+> nonce in its place and random bytes of the same shape otherwise, would
+> close this; [#120](https://github.com/leifriksheim/minca/issues/120)
+> folds the two handshakes into one, and is where it would land.
 
 The verifier:
 

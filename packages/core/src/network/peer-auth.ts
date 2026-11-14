@@ -293,8 +293,8 @@ export function createServerAuth(
 // and before anything else crosses it, each side proves:
 //
 // ```
-// A → B   hello  { nonce: Nₐ }
-// B → A   hello  { nonce: N_b }
+// A → B   hello  { nonce: Nₐ, readKey?: the read key A checks against }
+// B → A   hello  { nonce: N_b, readKey?: … }
 // A → B   proof  { sig: A's key signs T(A, B, N_b), read?: read key signs the same }
 // B → A   proof  { sig: B's key signs T(B, A, Nₐ),  read?: … }
 //

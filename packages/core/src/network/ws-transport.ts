@@ -8,7 +8,7 @@
  *
  * The wire is deliberately plain — three text frames, then binary:
  *
- * 1. node → `{"type":"challenge","nonce":…,"did":…}`
+ * 1. node → `{"type":"challenge","nonce":…,"did":…,"readKey"?:…}`
  * 2. client → `{"type":"hello","did":…,"nonce":…,"sig"?:…}`
  * 3. node → `{"type":"welcome","did":…,"sig"?:…,"note"?:…}`
  * 4. binary frames either way, passed through untouched.

@@ -56,8 +56,13 @@ reference implementation, or any implementation, honestly.
   - Knowing a private space's id, it can ask any node whether it holds the
     space: the node names its current read key in its challenge, before
     anything is proved, and asking again shows when the key changes, so
-    when someone was removed (04 §5.3, §6.3). The id is a random string
-    only members and invite holders have.
+    when someone was removed (04 §5.3, §6.3). A web page can ask the
+    visitor's own node on `localhost` (`minca run`), which ties the person
+    to the space. The id is a random string, but not a secret: members,
+    former members, invite holders, the hosts and relays the space uses,
+    and anyone who sees a `?space=` address or an app's address for the
+    space have it. Blinding the name would close this
+    ([#120](https://github.com/leifriksheim/minca/issues/120)).
 - **Holds.**
   - Without an invite secret, nothing it signs in a space counts: a version
     needs its author to be a member, and to hold a grant for what it does, as
@@ -791,6 +796,9 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
     in the collections it holds, up to 1024 places (03 §6.3). Peers don't
     check how a cutoff was built, so a remover may leave the removed account's lines out
     ([#166](https://github.com/leifriksheim/minca/issues/166)).
+  - Knowing the space's id, it can watch for later removals, and see which
+    nodes still hold the space, by asking for their challenge (§3.1,
+    Accepted).
   - It keeps a private space's first key, from which `onePer` keys are
     derived, so it can test guesses of who voted on what in envelopes that
     reach it later (02 §7.3, 03 §8.6).
