@@ -704,7 +704,7 @@ In a private space the space names a current **read key** (`did:key`, from
 proof:
 
 - `read` — the signature, over the same label (`H` or `T`), of the newest
-  read key its history names.
+  read key it holds that its history names.
 - `readKey` — the DID of that read key. A reader MUST send it whenever it
   knows the DID: a reader that missed a key change believes its key is
   current, and cannot tell.
@@ -759,13 +759,14 @@ or `__auth-hello`, the read key it calls current.
 
 The verifier:
 
-1. takes `claimed = readKey` if present, else the current read key;
+1. takes `claimed = readKey` if present, else the current read key, and
+   while a new key is due ([03](03-spaces.md) §9.2) rejects a prover whose
+   `member` it can open, with the space key whose read key is `claimed`, to
+   a valid proof (01 §7.5) made out to the prover's session DID, whose root
+   account is a **former member** (03 §9.2), whatever key it proves;
 2. verifies `read` against `claimed` (a `claimed` not starting with
    `did:key:` fails this step);
-3. accepts if that holds and `claimed` is the current read key, except that
-   while a new key is due ([03](03-spaces.md) §9.2) it rejects a prover whose
-   `member` it can open to a valid proof (01 §7.5), made out to the prover's session DID,
-   whose root account is a **former member** (03 §9.2);
+3. accepts if that holds and `claimed` is the current read key;
 4. accepts if that holds and it holds the space key whose read key is
    `claimed`, can open `member` with it, the proof inside is valid, is made
    out to the prover's session DID, and its root account is a reader of the
@@ -827,7 +828,10 @@ when her node redials with K0 and her note, step 4 refuses her.
 > note sealed under the older key shows which account is asking, and only
 > those who could read the space then can open it. Step 5 lets in nobody a
 > verifier would not already let in: it proves the key that verifier calls
-> current. Without steps 4 and 5 applying to readers that don't know they
+> current, and a former member it can tell by its note is refused at step 1
+> however it proves it. A device away through key changes may prove there
+> the key its account's list carries, which reaches a removed account only
+> if it was listed before the removal. Without steps 4 and 5 applying to readers that don't know they
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
