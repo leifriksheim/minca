@@ -335,14 +335,17 @@ Versions, as they are on the wire ([02 — Records](02-records.md)).
 | ---------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `type`     | `"versions"` |                                                                                                                         |
 | `id`       | number       | Present: the answer to the `want` with that id. Absent: versions the sender found the receiver lacks while reconciling. |
-| `versions` | `Version[]`  | At most 200. SHOULD be no more than 1 MiB of them as JSON text, unless it holds one alone.                              |
+| `versions` | `Version[]`  | At most 200. SHOULD be no more than 1 MiB of them, as UTF-8 JSON, unless it holds one alone.                            |
 
 A `want` MUST always be answered with a `versions` carrying its `id`, even
 when none of the ids are held (`versions: []`): the asker counts answers to
-know it is done.
+know it is done. The one exception: a node MAY leave unanswered a `want` from
+a peer that already has 16 waiting to be answered, four times what an honest
+asker keeps in flight. That asker gives up on it (§6.3) and finds the ids
+again on the next round.
 
 A sender SHOULD stop adding versions to a `versions` message once it holds
-1 MiB of them (measured as their JSON text), and MUST still send one version
+1 MiB of them (measured as UTF-8 JSON), and MUST still send one version
 alone, however large. A receiver MUST accept a message that holds fewer than
 were asked for.
 
@@ -1429,24 +1432,24 @@ Tests: `packages/core/tests/files.test.ts`._
 The values a peer relies on. Timers, caps and sizes a node keeps for itself
 are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing-sync).
 
-| Name                           | Value                           | Where                     |
-| ------------------------------ | ------------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 8                               | `v` on every sync message |
-| Negentropy version byte        | `0x61`                          | §3                        |
-| Id size / fingerprint size     | 32 / 16 bytes                   | §3                        |
-| IdList threshold / buckets     | < 32 items / 16                 | §3.4                      |
-| `FRAME_SIZE_LIMIT`             | 32,000 bytes (before base64)    | §6                        |
-| Minimum frame limit / headroom | 4,096 / 200 bytes               | §3.4                      |
-| `MAX_IDS_PER_REQUEST`          | 200                             | `want`, `versions`        |
-| `MAX_MESSAGE_BYTES`            | 1 MiB of versions, as JSON text | `versions`, §6.3, §6.4    |
-| `stored` ids considered        | 2,000                           | §4                        |
-| Collections per hello          | 1,000                           | §4                        |
-| Keepers per space              | 16                              | §9                        |
-| `CHUNK` (and RFC 8188 `rs`)    | 262,144 bytes                   | §16.6                     |
-| Files taken per version        | 16                              | §16.6                     |
-| Largest file                   | 2³¹ bytes                       | §16.6                     |
-| Chunks per `want-file`         | 64                              | §16.6                     |
-| Bytes per `file` message       | 24,000 (before base64)          | §16.6                     |
+| Name                           | Value                            | Where                     |
+| ------------------------------ | -------------------------------- | ------------------------- |
+| `SYNC_PROTOCOL_VERSION`        | 8                                | `v` on every sync message |
+| Negentropy version byte        | `0x61`                           | §3                        |
+| Id size / fingerprint size     | 32 / 16 bytes                    | §3                        |
+| IdList threshold / buckets     | < 32 items / 16                  | §3.4                      |
+| `FRAME_SIZE_LIMIT`             | 32,000 bytes (before base64)     | §6                        |
+| Minimum frame limit / headroom | 4,096 / 200 bytes                | §3.4                      |
+| `MAX_IDS_PER_REQUEST`          | 200                              | `want`, `versions`        |
+| `MAX_MESSAGE_BYTES`            | 1 MiB of versions, as UTF-8 JSON | `versions`, §6.3, §6.4    |
+| `stored` ids considered        | 2,000                            | §4                        |
+| Collections per hello          | 1,000                            | §4                        |
+| Keepers per space              | 16                               | §9                        |
+| `CHUNK` (and RFC 8188 `rs`)    | 262,144 bytes                    | §16.6                     |
+| Files taken per version        | 16                               | §16.6                     |
+| Largest file                   | 2³¹ bytes                        | §16.6                     |
+| Chunks per `want-file`         | 64                               | §16.6                     |
+| Bytes per `file` message       | 24,000 (before base64)           | §16.6                     |
 
 ---
 

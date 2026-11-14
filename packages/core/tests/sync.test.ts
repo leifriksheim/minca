@@ -15,7 +15,7 @@ import { createVersion } from '../src/schema/version.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createVersionCheck } from '../src/validation/check-version.js';
 import { createSyncEngine } from '../src/sync/sync-engine.js';
-import type { SyncMessage } from '../src/sync/sync-messages.js';
+import { SYNC_PROTOCOL_VERSION, type SyncMessage } from '../src/sync/sync-messages.js';
 import type { Version } from '../src/types.js';
 import { makeKey } from './helpers/person.js';
 
@@ -549,6 +549,46 @@ describe('sync engine', () => {
         5000,
         'the answer once it drained',
       );
+      holder.removePeer('b');
+    });
+
+    test('an answer holding one version takes no other that would carry it past 1 MB', async () => {
+      const [justUnder] = await bigNotes(1, MB - 3000);
+      const [large] = await bigNotes(1, 3 * MB);
+      const { newcomer, holderStorage, newcomerStorage, sizes } = pair();
+      await holderStorage.addVersion(justUnder!);
+      await holderStorage.addVersion(large!);
+      newcomer.ask(COLLECTION, [justUnder!.id, large!.id]);
+      await until(
+        async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === 2,
+        10_000,
+        'both, in two answers',
+      );
+      const answers = sizes.filter((size) => size.answer && size.count > 0);
+      assert.deepEqual(
+        answers.map((size) => size.count),
+        [1, 1],
+        'each alone',
+      );
+    });
+
+    test('a peer that asks and does not read has only so many answers kept waiting', async () => {
+      let backlog = 100 * MB;
+      const notes = await bigNotes(30, 100);
+      const { holder, holderStorage, sizes } = pair({ holderBacklog: () => backlog });
+      for (const note of notes) await holderStorage.addVersion(note);
+      // Wants straight off the wire, more than an honest peer keeps in flight.
+      for (let n = 0; n < notes.length; n++)
+        await holder.handleMessage('b', {
+          v: SYNC_PROTOCOL_VERSION,
+          type: 'want',
+          id: 1000 + n,
+          ids: [notes[n]!.id, 'not a version id'],
+        });
+      backlog = 0;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const answered = sizes.filter((size) => size.answer).length;
+      assert.equal(answered, 16, `${answered} answers kept for ${notes.length} wants`);
       holder.removePeer('b');
     });
 
