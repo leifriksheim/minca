@@ -662,15 +662,15 @@ describe('the mesh, through real relays', () => {
         const access = (who: { did: string }, held: number[], current: number): ReadAccess => ({
           key: async () => reads[held.at(-1)!]!,
           current: () => reads[current]!.did,
-          // Newest first, the one the other side named first of all, as a node's own access does.
-          earlier: async (wanted?: string) => {
+          // The four before the newest, then the first, as a node's own access proves them.
+          earlier: async () => {
             const older = held
               .slice(0, -1)
               .reverse()
               .map((i) => reads[i]!);
-            const asked = older.findIndex((read) => read.did === wanted);
-            if (asked > 0) older.unshift(...older.splice(asked, 1));
-            return older;
+            const proving = older.slice(0, 4);
+            if (held[0] === 0 && held.length > 1 && !proving.includes(reads[0]!)) proving.push(reads[0]!);
+            return proving;
           },
           membership: async () => sealValue(keys[held.at(-1)!]!.seal, MEMBERSHIP_LABEL, bound, note(who.did)),
           // A peer proving an older key gets in when its note opens with that key and names someone still a member.
@@ -705,8 +705,9 @@ describe('the mesh, through real relays', () => {
         b.disconnect();
       });
 
-      test('a peer that missed more changes than a proof carries unasked still meets one that did not', async () => {
-        // K0 → … → K6: Alice proves K6 and, unasked, only the four before it. Bob names K0 in his hello.
+      test('a peer that missed more changes than four, holding only the first key, still meets one that did not', async () => {
+        // K0 → … → K6: Alice proves K6, the four before it, and K0, the space's first, which Bob, like a
+        // host that joined late, calls current.
         const { access, members } = await changed(7);
         const [alice, bob] = [await identity(), await identity()];
         members.add(alice.did).add(bob.did);

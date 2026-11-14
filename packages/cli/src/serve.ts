@@ -260,11 +260,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
       })().catch(() => socket.close(1011, 'could not open space'));
     });
 
-    // The read key this node checks against: a reader holding it proves it, however long superseded.
-    const readKey = authenticator?.readKey() ?? null;
-    socket.send(
-      JSON.stringify({ type: 'challenge', nonce, did: node.sessionDid, ...(readKey ? { readKey } : {}) }),
-    );
+    socket.send(JSON.stringify({ type: 'challenge', nonce, did: node.sessionDid }));
   };
 
   http.on('upgrade', (req: IncomingMessage, socket, head) => {

@@ -24,8 +24,12 @@ export interface HelloProof {
   readonly earlier?: ReadonlyArray<{ readonly readKey: string; readonly read: string }>;
 }
 
-/** How many older keys a reader proves with: enough for a verifier away through a few changes */
-export const MAX_EARLIER_READ_KEYS = 4;
+/**
+ * How many older keys a reader proves with: the four before its newest, for a
+ * verifier away through a few changes, and the space's first, for one that
+ * joined late and starts from it
+ */
+export const MAX_EARLIER_READ_KEYS = 5;
 
 /**
  * Who may read a private space, as one side of a connection knows it — asked
@@ -36,12 +40,8 @@ export interface ReadAccess {
   key(): Promise<{ readonly did: string; readonly privateKey: CryptoKey } | null>;
   /** The read key every reader must prove, as the space names it now */
   current(): string;
-  /**
-   * The older read keys this side still holds, newest first, not counting the
-   * one `key` gives. With `wanted`, the read key the other side said it calls
-   * current: that one first, if held, however old.
-   */
-  earlier?(wanted?: string): Promise<ReadonlyArray<{ readonly did: string; readonly privateKey: CryptoKey }>>;
+  /** The older read keys this side still holds, newest first, not counting the one `key` gives */
+  earlier?(): Promise<ReadonlyArray<{ readonly did: string; readonly privateKey: CryptoKey }>>;
   /**
    * This side's note, sealed with the space key behind the read key it
    * proves with — sent along when that may not be the current one.
@@ -91,7 +91,6 @@ async function proveRead(
   access: ReadAccess,
   label: Uint8Array,
   provider: CryptoProvider,
-  wanted?: string,
 ): Promise<Omit<HelloProof, 'sig'> | null> {
   const key = await access.key();
   if (!key) return null;
@@ -99,7 +98,7 @@ async function proveRead(
   // A bare key pair has no name to give; the other side takes it as its current one.
   if (!key.did) return { read };
   const member = (await access.membership?.()) ?? null;
-  const older = ((await access.earlier?.(wanted)) ?? [])
+  const older = ((await access.earlier?.()) ?? [])
     .filter((held) => held.did !== key.did)
     .slice(0, MAX_EARLIER_READ_KEYS);
   const earlier = await Promise.all(
@@ -157,8 +156,7 @@ async function checkProof(
 
 /** The connecting side: proves who it is and that it may read, and checks the node's welcome. */
 export interface ClientAuth {
-  /** `wanted`: the read key the node's challenge says it calls current, proved first among the older ones if held */
-  hello(clientDid: string, nodeDid: string, nodeNonce: string, wanted?: string): Promise<HelloProof>;
+  hello(clientDid: string, nodeDid: string, nodeNonce: string): Promise<HelloProof>;
   checkWelcome(nodeDid: string, clientNonce: string, sig: unknown): Promise<boolean>;
   /** Whether the node is the one pinned: its own key, or a session the pinned key gave a note for everything (`pinned`) */
   checkPin(pin: string, nodeDid: string, note: unknown): Promise<boolean>;
@@ -166,8 +164,6 @@ export interface ClientAuth {
 
 /** The serving side: checks a peer's hello, and signs its welcome. */
 export interface ServerAuth {
-  /** The read key this node calls current in a private space, named in its challenge; null in a public one */
-  readKey(): string | null;
   checkHello(clientDid: string, nodeDid: string, nodeNonce: string, proof: unknown): Promise<boolean>;
   welcome(nodeDid: string, clientNonce: string): Promise<string>;
   /** The node's note, sent with its welcome so a client can pin the account rather than a session key that changes */
@@ -195,14 +191,6 @@ async function pinned(
   if (!checked?.valid || checked.audience !== nodeDid || checked.root !== pin) return false;
   const { cmd, sub, pol } = checked.note.payload;
   return cmd === '/' && sub === pin && pol.length === 0;
-}
-
-/** The read key a hello or challenge says its sender calls current, if it names one that could be a key */
-export function wantedKey(frame: unknown): string | undefined {
-  const readKey = isObject(frame) ? frame.readKey : undefined;
-  return typeof readKey === 'string' && readKey.startsWith('did:key:') && readKey.length <= 256
-    ? readKey
-    : undefined;
 }
 
 /** A fresh random nonce */
@@ -253,9 +241,9 @@ export function createClientAuth(
 ): ClientAuth {
   const access = readAccessOf(read);
   return Object.freeze({
-    async hello(clientDid: string, nodeDid: string, nodeNonce: string, wanted?: string) {
+    async hello(clientDid: string, nodeDid: string, nodeNonce: string) {
       const label = helloLabel(spaceId, clientDid, nodeDid, nodeNonce);
-      const proof = access && (await proveRead(access, label, provider, wanted));
+      const proof = access && (await proveRead(access, label, provider));
       return { sig: await signLabel(provider, session.key, label), ...proof };
     },
     checkWelcome(nodeDid: string, clientNonce: string, sig: unknown) {
@@ -276,7 +264,6 @@ export function createServerAuth(
   const access = readAccessOf(read);
   return Object.freeze({
     note,
-    readKey: () => (access ? access.current() || null : null),
     checkHello: (clientDid: string, nodeDid: string, nodeNonce: string, proof: unknown) =>
       checkProof(provider, access, clientDid, helloLabel(spaceId, clientDid, nodeDid, nodeNonce), proof),
     welcome: (nodeDid: string, clientNonce: string) =>
@@ -319,15 +306,7 @@ export type MeshProof = HelloProof;
 
 /** Proving who you are to a peer — and, in a private space, that you may read it. */
 export interface MeshAuth {
-  /** The read key this side calls current in a private space, named in its hello; null in a public one */
-  readKey(): string | null;
-  /** `wanted`: the read key the peer's hello says it calls current, proved first among the older ones if held */
-  prove(
-    peerDid: string,
-    peerNonce: string,
-    binding: ChannelBinding | null,
-    wanted?: string,
-  ): Promise<MeshProof>;
+  prove(peerDid: string, peerNonce: string, binding: ChannelBinding | null): Promise<MeshProof>;
   check(peerDid: string, ourNonce: string, binding: ChannelBinding | null, proof: unknown): Promise<boolean>;
 }
 
@@ -349,8 +328,7 @@ export function createMeshAuth(
 ): MeshAuth {
   const access = readAccessOf(read);
   return Object.freeze({
-    readKey: () => (access ? access.current() || null : null),
-    async prove(peerDid: string, peerNonce: string, binding: ChannelBinding | null, wanted?: string) {
+    async prove(peerDid: string, peerNonce: string, binding: ChannelBinding | null) {
       const label = meshLabel(
         spaceId,
         session.did,
@@ -359,7 +337,7 @@ export function createMeshAuth(
         binding?.local ?? '',
         binding?.remote ?? '',
       );
-      const proof = access && (await proveRead(access, label, provider, wanted));
+      const proof = access && (await proveRead(access, label, provider));
       // A node without the space's key cannot prove it may read — and should not be served.
       if (access && !proof) throw new Error('This node cannot read the space, so it cannot join its peers');
       return { sig: await signLabel(provider, session.key, label), ...proof };

@@ -29,7 +29,7 @@ import { isObject } from '../utils/guards.js';
 import { createRendezvous, isSignalKind, type SignalKind } from './rendezvous.js';
 import { createRTCTransport, DEFAULT_ICE_SERVERS } from './rtc-transport.js';
 import type { SignalledTransport } from './transport.js';
-import { peerNonce, signLabel, verifyBy, wantedKey, type MeshAuth } from './peer-auth.js';
+import { peerNonce, signLabel, verifyBy, type MeshAuth } from './peer-auth.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
 import type { NetworkEvents, NetworkManager } from './network-manager.js';
 import {
@@ -294,13 +294,7 @@ export function createMesh(config: MeshConfig): Mesh {
       timer: setTimeout(() => refuse(room, peer), authTimeoutMs),
     };
     room.handshakes.set(peer, handshake);
-    // The read key this side checks against, so a peer holding it proves it even if it is long superseded.
-    const readKey = room.auth?.readKey() ?? null;
-    sendFrame(peer, {
-      room: name,
-      type: AUTH_HELLO_MESSAGE,
-      payload: { nonce: handshake.nonce, ...(readKey ? { readKey } : {}) },
-    });
+    sendFrame(peer, { room: name, type: AUTH_HELLO_MESSAGE, payload: { nonce: handshake.nonce } });
     return handshake;
   };
 
@@ -311,7 +305,7 @@ export function createMesh(config: MeshConfig): Mesh {
     if (!handshake || handshake.proved || typeof nonce !== 'string') return;
     handshake.proved = true;
     if (!room.auth) return;
-    const proof = await room.auth.prove(peer, nonce, transport.binding?.(peer) ?? null, wantedKey(payload));
+    const proof = await room.auth.prove(peer, nonce, transport.binding?.(peer) ?? null);
     sendFrame(peer, { room: name, type: AUTH_PROOF_MESSAGE, payload: proof });
   };
 

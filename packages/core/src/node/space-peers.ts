@@ -306,20 +306,19 @@ export async function openPeers(deps: PeersDeps) {
             return held ? deriveReadKey(held, provider) : (record.read ?? null);
           },
           current: meeting.readKey,
-          async earlier(wanted?: string) {
+          async earlier() {
             const { current } = (await access()).history;
             const newest = newestKey(current);
-            // Newest first, but the one the other side checks against first of all, however old:
-            // a verifier that missed more changes than fit in a proof can still be let in, and learn the rest.
-            const epochs = [...current.keys].reverse();
-            const asked = epochs.findIndex((epoch) => epoch.readKey === wanted);
-            if (asked > 0) epochs.unshift(...epochs.splice(asked, 1));
-            const older = epochs
+            const older = [...current.keys]
+              .reverse()
               .map((epoch) => keyring.get(epoch.keyId))
               .filter((held): held is SpaceKey => held !== undefined && held !== newest);
-            return Promise.all(
-              older.slice(0, MAX_EARLIER_READ_KEYS).map((held) => deriveReadKey(held, provider)),
-            );
+            // The four before the newest, then the space's first, which every reader holds (03 §9.3):
+            // a node that joined late, as a host does, starts from it, and learns the rest once let in.
+            const proving = older.slice(0, MAX_EARLIER_READ_KEYS - 1);
+            const first = space.encryptionKeyId ? keyring.get(space.encryptionKeyId) : undefined;
+            if (first && first !== newest && !proving.includes(first)) proving.push(first);
+            return Promise.all(proving.map((held) => deriveReadKey(held, provider)));
           },
           async membership() {
             const held = newestKey((await access()).history.current);
