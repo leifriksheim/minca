@@ -33,6 +33,8 @@ import { openSpaceRuntime, type SpaceRuntime } from './space-runtime.js';
 import { meshFor } from './space-peers.js';
 import type { ActiveSession } from './space-versions.js';
 import { createServerAuth } from '../network/peer-auth.js';
+import { base64UrlDecode } from '../utils/encoding.js';
+import { spaceKeyFromRaw, type SpaceKey } from '../privacy/space-encryption.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
 import { DEVICE_LIMITS, type FileLimits } from '../files/space-files.js';
 import { generateLinkSecret, linkInviteSecret } from '../space/invite-link.js';
@@ -312,6 +314,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // Every device needs all of the account's own spaces: never only the collections it uses.
       ...(config.cache && !kind ? { cache: config.cache } : {}),
       ...(config.shallow ? { shallow: config.shallow } : {}),
+      ...(kind ? {} : { listedKey: () => listedKey(spaceId) }),
       watchIntervalMs: config.watchIntervalMs ?? 2000,
       fileLimits: () => fileLimits,
       emit: fromRuntime,
@@ -421,6 +424,24 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return undefined;
     }
   };
+
+  /**
+   * The key the account's list carries for a space (06 §1.3). A device away
+   * through key changes proves it to a node that asks for it, as its only
+   * way back in; it never holds or writes with it.
+   */
+  async function listedKey(spaceId: string): Promise<SpaceKey | null> {
+    const [entry] = await accountRecords<Membership>(
+      { collection: MEMBERSHIP_COLLECTION },
+      (record) => record.key === membershipKey(spaceId),
+    );
+    try {
+      const { space, key } = parseSpaceInvite(entry?.body?.invite ?? '');
+      return key && space.id === spaceId ? await spaceKeyFromRaw(base64UrlDecode(key)) : null;
+    } catch {
+      return null;
+    }
+  }
 
   async function memberships(): Promise<ReadonlyArray<NodeRecord<Membership>>> {
     return accountRecords<Membership>(

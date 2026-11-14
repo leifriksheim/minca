@@ -106,6 +106,8 @@ export interface SpaceRuntimeDeps {
   readonly memberKey?: Uint8Array | null;
   /** Told every key of the space this node holds whenever it learns one, and which it now writes with */
   readonly onKeys?: (keys: ReadonlyArray<SpaceKey>, current: string) => Promise<void>;
+  /** The key the account's list carries for the space, proved when a peer asks for one the history doesn't name */
+  readonly listedKey?: () => Promise<SpaceKey | null>;
   /** Told the relays the space names, when they differ from the ones the record came with */
   readonly onRelays?: (relays: ReadonlyArray<string>) => Promise<void>;
   /** File stores the space is also kept in (`storage/mirror.ts`): read when it opens, written soon after every change */
@@ -408,6 +410,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     recordsChanged,
     filesChanged,
     onArrived: deps.onArrived,
+    listedKey: deps.listedKey,
   });
   // Whether to hold part of the space is settled before the first hello says what this node holds.
   await holding.refreshHolds().catch(() => {});

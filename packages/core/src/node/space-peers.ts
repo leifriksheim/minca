@@ -180,6 +180,7 @@ export interface PeersDeps extends SpaceBase {
   readonly recordsChanged: (placed?: ReadonlyArray<Version>) => void;
   readonly filesChanged: () => void;
   readonly onArrived: ((version: Version) => void) | undefined;
+  readonly listedKey: (() => Promise<SpaceKey | null>) | undefined;
 }
 
 export async function openPeers(deps: PeersDeps) {
@@ -317,9 +318,14 @@ export async function openPeers(deps: PeersDeps) {
             const older = epochs
               .map((epoch) => keyring.get(epoch.keyId))
               .filter((held): held is SpaceKey => held !== undefined && held !== newest);
-            return Promise.all(
+            const proving = await Promise.all(
               older.slice(0, MAX_EARLIER_READ_KEYS).map((held) => deriveReadKey(held, provider)),
             );
+            if (!wanted || asked >= 0) return proving;
+            // Away through key changes: the one the account's list carries may be it (06 §1.3).
+            const listed = await deps.listedKey?.();
+            const read = listed ? await deriveReadKey(listed, provider) : null;
+            return read?.did === wanted ? [read, ...proving].slice(0, MAX_EARLIER_READ_KEYS) : proving;
           },
           async membership() {
             const held = newestKey((await access()).history.current);

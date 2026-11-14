@@ -125,11 +125,10 @@ async function checkRead(
     return true;
   };
   const claimed = typeof proof.readKey === 'string' ? proof.readKey : current;
+  // One whose note shows a former member is refused, whichever key it proves.
+  if (proof.member !== undefined && (await access.removed?.(peerDid, claimed, proof.member))) return false;
   if (await verifyBy(provider, claimed, proof.read, label)) {
-    if (claimed === current)
-      return proof.member !== undefined && (await access.removed?.(peerDid, current, proof.member))
-        ? false
-        : admit(current);
+    if (claimed === current) return admit(current);
     if (access.admits && (await access.admits(peerDid, claimed, proof.member))) return admit(claimed);
   }
   // The reader may be ahead of us: then it proves the key we call current among its older ones.

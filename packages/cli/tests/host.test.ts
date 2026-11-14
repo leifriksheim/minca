@@ -653,6 +653,71 @@ describe('an account using a host, end to end over sockets', () => {
     );
   });
 
+  test('a device away through key changes proves the key the account’s list carries, and reads on through the host', async () => {
+    const served = await startHost({
+      key: await provider.generateKeyPair(),
+      stores: memoryStores(),
+      port: 0,
+      free: true,
+    });
+    open.push(served);
+    const url = `http://127.0.0.1:${served.port}`;
+    const me = await account();
+    const laptop = await onSockets(me, served.port);
+    const club = await laptop.spaces.create({ name: 'Club', visibility: 'private' });
+    await laptop.records.put(club.id, 'app.note', { text: 'Soup on Friday' });
+    await laptop.hosting.use(url);
+    const level = (node: P2PNode, id: string) =>
+      until(
+        async () => {
+          const [hostPeer] = (await node.spaces.status(id)).peers;
+          return !!hostPeer && (await node.spaces.reached(id, hostPeer, 2000));
+        },
+        15_000,
+        'the host to hold what this device holds',
+      );
+    const registry = (await laptop.account.space())!;
+    await level(laptop, club.id);
+    await level(laptop, registry);
+
+    // The phone joins, holding the key of the time, then goes away.
+    const phoneStores = memoryStores();
+    const device = async () => {
+      const node = await createNode({
+        signer: me.signer,
+        stores: phoneStores,
+        accountKey: me.accountKey,
+        watchIntervalMs: 0,
+        network: { hosts: [url] },
+      });
+      open.push(node);
+      return node;
+    };
+    let phone = await device();
+    const notes = async () =>
+      (await phone.records.list(club.id, { collection: 'app.note' }).catch(() => [])).length;
+    await until(async () => (await notes()) === 1, 20_000, 'the phone to hold the space');
+    await phone.close();
+    open.splice(open.indexOf(phone), 1);
+
+    // Meanwhile the key changes more times than a host behind could be proved unasked, and a note is
+    // written under the newest: the host and the account's list both catch up, and the laptop goes.
+    for (let n = 0; n < 6; n++) await laptop.spaces.changeKey(club.id);
+    await laptop.records.put(club.id, 'app.note', { text: 'And bread' });
+    await level(laptop, club.id);
+    await level(laptop, registry);
+    await laptop.close();
+    open.splice(open.indexOf(laptop), 1);
+
+    // Back, the phone holds only the old key. The host checks the newest, which the account's list names.
+    phone = await device();
+    await until(
+      async () => (await notes()) === 2,
+      20_000,
+      'the phone, back, to read what was written while away',
+    );
+  });
+
   test('a host that dropped the subscription is no longer a carrier, nor a keeper of any space', async () => {
     const billing = createStripeBilling({
       secretKey: 'sk_test_x',

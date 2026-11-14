@@ -526,6 +526,41 @@ describe('WebSocket transport', () => {
         false,
       );
     });
+
+    test('a former member is refused by its note, though it proves the current key among its older ones', async () => {
+      const [k0, k1] = [
+        await deriveReadKey(await generateSpaceKey(), provider),
+        await deriveReadKey(await generateSpaceKey(), provider),
+      ];
+      const [node, phone] = [await nodeIdentity(), await nodeIdentity()];
+      // Behind on the key, proving K1 from its account's list beside its note sealed under K0.
+      const client = createClientAuth(
+        'space-1',
+        { did: phone.did, key: phone.privateKey },
+        {
+          key: async () => k0,
+          current: () => k0.did,
+          earlier: async () => [k1],
+          membership: async () => 'note',
+        },
+        provider,
+      );
+      const proof = await client.hello(phone.did, node.did, 'nonce', k1.did);
+      const verifier = (removed: boolean) =>
+        createServerAuth(
+          'space-1',
+          {
+            key: async () => null,
+            current: () => k1.did,
+            admits: async () => false,
+            removed: async () => removed,
+          },
+          node.privateKey,
+          provider,
+        ).checkHello(phone.did, node.did, 'nonce', proof);
+      assert.equal(await verifier(false), true);
+      assert.equal(await verifier(true), false);
+    });
   });
 });
 
