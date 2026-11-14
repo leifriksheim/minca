@@ -258,12 +258,13 @@ last compaction left, it compacts them, keeping only what its store holds.
 It keeps its state in the store `mirrors/<space id>/<n>`, where `n` is the
 mirror's index:
 
-| Key                         | Value                                   |
-| --------------------------- | --------------------------------------- |
-| `mirror:writer`             | The writer id                           |
-| `mirror:counter`            | The segment counter, in decimal         |
-| `mirror:read:<segment key>` | `1`, for each segment read or written   |
-| `mirror:known:<version id>` | `1`, for each version known to be there |
+| Key                         | Value                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| `mirror:writer`             | The writer id                                                                         |
+| `mirror:counter`            | The segment counter, in decimal                                                       |
+| `mirror:read:<segment key>` | `1`, for each segment read or written                                                 |
+| `mirror:known:<version id>` | `1`, for each version known to be there                                               |
+| `mirror:left`               | How many segments the last compaction left, in decimal: the next waits for twice that |
 
 "Known" is everything it uploaded or read, so nobody uploads everyone
 else's versions again. It reads the `mirror:known:` entries once, when it
@@ -359,10 +360,12 @@ version bodies, letting the one used longest ago go first. A body never
 changes, so this is always safe. An entry read while a change was landing is
 not kept.
 
-Each store keeps up to 50,000 bodies of its own, unless its store factory
+Each store keeps up to 32 MB of bodies of its own, unless its store factory
 has a `cache`. Then all the stores share that one. The SQLite stores share
-4,000, since reading a body again is cheap: the bodies a node keeps then
-take the same memory however many spaces it holds. Each open space still
+16 MB, since reading a body again is cheap: the bodies a node keeps then
+take the same memory however many spaces it holds, and however large their
+records are. The cache counts bytes, not bodies, and a body larger than a
+quarter of it isn't kept at all. Each open space still
 keeps its sets and entries.
 
 When another writer changes the same store, the node reads all of it again
@@ -415,6 +418,27 @@ a node speaks, and how much it asks for at once, is its own choice:
 | Stale after           | 30 s                               | A silent session, or an unanswered `want`, is dropped and found again later            |
 | Versions waiting      | 1,000                              | Versions held back for later wait in memory. Past 1,000 the oldest go                  |
 | Refusals remembered   | 10,000                             | A refused version isn't asked of that peer again. Past 10,000 the oldest are forgotten |
+| A message's versions  | 1 MB, besides the 200              | Large records go a few to a message, so a space of photos syncs like one of notes      |
+| Sending what's lacked | a message at a time                | Read from the store as it goes, after the connection drains below 1 MB                 |
+| Taking in             | one message from a peer at a time  | Past 8 waiting, the node stops reading from that peer until 2 are left                 |
+
+A node sends what a peer lacks a message at a time, reading it from its
+store as it goes, and only once the connection has under 1 MB left to
+send; it answers a `want` the same way. A record's versions still go
+together: the store is read once to learn which record each version is of,
+then again to send. Until what a session found the peer lacks has been
+sent, the collection isn't level with the peer, and no new session starts
+for it, so a slow link is never sent the same versions twice.
+
+So with honest peers, a node's memory follows how many it talks to, not
+how large their spaces are: a host taking in a 150 MB space, or handing it
+to a new device, holds a few megabytes of it at a time. The connection is
+what waits. A sender whose socket is backed up stops reading from its
+store, and a receiver that has stopped reading lets the network hold the
+rest. Pausing needs a connection that can pause: a host's sockets can,
+WebRTC and a browser's WebSocket can't. A dishonest peer can still send
+messages as large as the connection takes, eight of them before a host
+stops reading.
 
 The side that starts reconciling begins with the space's own records
 (`sys.*`, profiles among them), then the rest from the collection it holds

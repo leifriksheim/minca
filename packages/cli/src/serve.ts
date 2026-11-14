@@ -58,6 +58,9 @@ function createSpacePeers(): SpacePeers {
     closeAll() {
       for (const socket of sockets.values()) socket.close(1001, 'node shutting down');
     },
+    buffered: (peerId) => sockets.get(peerId)?.bufferedAmount ?? 0,
+    pause: (peerId) => sockets.get(peerId)?.pause(),
+    resume: (peerId) => sockets.get(peerId)?.resume(),
     on: (event, callback) => events.on(event, callback),
     off: (event, callback) => events.off(event, callback),
   };

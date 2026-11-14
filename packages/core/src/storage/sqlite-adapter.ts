@@ -42,11 +42,12 @@ export interface SqliteDatabase {
 }
 
 /**
- * Version bodies all the spaces' stores keep in memory together. Reading one
- * from SQLite is cheap, so this is for the few read again and again, and the
- * bodies a node keeps in memory stay the same however many spaces it holds.
+ * Bytes of version bodies all the spaces' stores keep in memory together.
+ * Reading one from SQLite is cheap, so this is for the few read again and
+ * again, and the memory bodies take stays the same however many spaces a
+ * node holds, and however large their records are.
  */
-const CACHED_BODIES = 4_000;
+const CACHED_BYTES = 16 * 1024 * 1024;
 
 /** Bytes per page: SQLite reads large values fastest at 8 or 16 KiB, and file chunks are 256 KiB */
 const PAGE_SIZE = 8192;
@@ -223,7 +224,7 @@ export function sqliteStores(
   };
 
   return Object.assign(factory, {
-    cache: createBodyCache(CACHED_BODIES),
+    cache: createBodyCache(CACHED_BYTES),
     size(path: string): number {
       const id = storeId(path);
       return id === null ? 0 : count(sql.entryBytes.get(id)) + count(sql.versionBytes.get(id));

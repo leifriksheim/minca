@@ -49,11 +49,18 @@ export const isWholeSegment = async (key: string, bytes: Uint8Array) =>
 /** Roughly how many bytes a version takes in a segment */
 const versionSize = (version: Version) => utf8Encode(JSON.stringify(version)).length;
 
-/** Splits versions into segments' worth: each closed once it reaches `bytes` */
-export function* segmentBatches(versions: Iterable<Version>, bytes: number): Generator<Version[]> {
+/**
+ * Splits versions into segments' worth: each closed once it reaches `bytes`.
+ * Takes them as they come, so a caller reading them from a store holds one
+ * segment's worth at a time.
+ */
+export async function* segmentBatches(
+  versions: Iterable<Version> | AsyncIterable<Version>,
+  bytes: number,
+): AsyncGenerator<Version[]> {
   let batch: Version[] = [];
   let size = 0;
-  for (const version of versions) {
+  for await (const version of versions) {
     batch.push(version);
     size += versionSize(version);
     if (size < bytes) continue;

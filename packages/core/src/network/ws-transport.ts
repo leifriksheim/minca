@@ -260,6 +260,7 @@ export function createWebSocketTransport(config: WebSocketTransportConfig): Peer
       if (target === peerId) closeAll();
     },
     closeAll,
+    buffered: (target: string) => (target === peerId ? (ws?.bufferedAmount ?? 0) : 0),
     on,
     off,
   });
