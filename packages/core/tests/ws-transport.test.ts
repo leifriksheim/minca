@@ -13,11 +13,19 @@ import { portOf, textOf } from './helpers/net.js';
 import { createWebSocketTransport, nodeAddress } from '../src/network/ws-transport.js';
 import { issueDelegation } from '../src/identity/ucan.js';
 import { createClientAuth, createServerAuth, peerNonce, type ServerAuth } from '../src/network/peer-auth.js';
-import { generateSpaceKey } from '../src/privacy/space-encryption.js';
+import { generateSpaceKey, spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
 import { deriveReadKey } from '../src/space/space-access.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { until } from './helpers/until.js';
+import { createNode } from '../src/node/node.js';
+import { createIdentityManager } from '../src/identity/identity-manager.js';
+import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { generateSeed } from '../src/identity/recovery-code.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
+import { parseSpaceInvite } from '../src/space/space-manager.js';
+import { base64UrlDecode } from '../src/utils/encoding.js';
+import { memoryStores } from './helpers/memory-stores.js';
 
 const provider = createP256Provider();
 
@@ -518,5 +526,61 @@ describe('WebSocket transport', () => {
         false,
       );
     });
+  });
+});
+
+describe('what a reader proves, after many key changes', () => {
+  test('every older key it holds, the first among them: a verifier any number of changes behind is proved its own', async () => {
+    const provider = createP256Provider();
+    const wss = new WebSocketServer({ port: 0 });
+    const pair = await provider.generateKeyPair();
+    const nodeDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
+    // A node that records each hello and turns it away.
+    const hellos: Array<{ readKey?: string; earlier?: Array<{ readKey: string }> }> = [];
+    wss.on('connection', (socket: ServerSocket) => {
+      socket.on('message', (data: RawData) => {
+        hellos.push(JSON.parse(textOf(data)));
+        socket.close(4003, 'not a reader of this space');
+      });
+      socket.send(JSON.stringify({ type: 'challenge', nonce: peerNonce(), did: nodeDid }));
+    });
+    const manager = createIdentityManager();
+    const seed = generateSeed();
+    const laptop = await createNode({
+      signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
+      stores: memoryStores(),
+      accountKey: await deriveAccountKey(seed),
+      watchIntervalMs: 0,
+      network: { nodes: [`ws://127.0.0.1:${portOf(wss)}/peer`] },
+    });
+    try {
+      const club = await laptop.spaces.create({ name: 'Club', visibility: 'private' });
+      const readDid = async () => {
+        const { key } = parseSpaceInvite(await laptop.spaces.invite(club.id, { write: false }));
+        return (await deriveReadKey(await spaceKeyFromRaw(base64UrlDecode(key!)), provider)).did;
+      };
+      const keys = [await readDid()];
+      for (let n = 0; n < 10; n++) {
+        await laptop.spaces.changeKey(club.id);
+        keys.push(await readDid());
+      }
+      const newest = keys.at(-1)!;
+      await until(
+        () => hellos.some((hello) => hello.readKey === newest),
+        30_000,
+        'a hello proving the newest key',
+      );
+      const hello = [...hellos].reverse().find((one) => one.readKey === newest)!;
+      const proved = (hello.earlier ?? []).map((entry) => keys.indexOf(entry.readKey));
+      assert.deepEqual(
+        [...proved].sort((a, b) => a - b),
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        `proved K${proved.join(', K')}`,
+      );
+      assert.equal(proved[0], 0, 'the first goes first, so a cap never leaves it out');
+    } finally {
+      await laptop.close();
+      wss.close();
+    }
   });
 });

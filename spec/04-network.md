@@ -719,24 +719,26 @@ proof:
   where `sealKey` is the seal key of that space key ([03](03-spaces.md) §8.1) and
   the envelope is [01 §9.1](01-identity.md).
 
-- `earlier` — the same signature by **older** read keys it still holds:
-  the four before its newest, newest first, then the space's first read key
-  when it is not among them, at most 5 entries:
+- `earlier` — the same signature by each **older** read key it still holds,
+  the space's first read key first, at most 64 entries:
   `[{ "readKey": <DID>, "read": <signature> }, …]`. The verifier may be the
-  one that missed a change. A reader SHOULD send it when it holds older
-  keys, and SHOULD include the first key, which every reader holds
-  ([03](03-spaces.md) §9.3).
+  one that missed a change. A reader SHOULD send it when it holds older keys.
 
   > Rationale: a node that holds no key of the space, as a host, checks
-  > readers against the read key its copy of the history calls current. One
-  > that joins late starts from the space as founded, so from its first key,
-  > and learns the newer ones only from the readers it lets in. With only the
-  > four newest older keys proved, five key changes (five removals) before a
-  > host joined left it refusing everyone, for good. The first key closes
-  > that without the verifier saying anything before a proof: what a node
-  > answers before then must not show whether it holds the space (§5.3). A
-  > verifier away through more than four changes after it joined is still
-  > refused until a peer that holds the space key lets it catch up ([#283](https://github.com/leifriksheim/minca/issues/283)).
+  > readers against the read key its copy of the history calls current, and
+  > learns newer ones only from the readers it lets in. One that joined late
+  > starts from the space's first key; one that was away starts where it
+  > left. Proving only a few older keys left such a node refusing everyone
+  > for good once it was further behind than they reached, and the history
+  > keeps keys by id, not by time, so "a few" could miss even the key one
+  > change back. Every key is the one rule that reaches a verifier however
+  > far behind. Each costs the prover a signature; the verifier checks only
+  > the entry that names its current key. The first key goes first, so a
+  > space with more than 64 changes still reaches a node that joined late;
+  > one away through more changes than that, after it joined, may not be
+  > proved its key. Every reader holds the first key ([03](03-spaces.md)
+  > §9.3) but a carrier, which holds only its pass's read key, and a reader
+  > that joined after a key change that left it out.
 
 The verifier:
 
@@ -751,7 +753,7 @@ The verifier:
    `claimed`, can open `member` with it, the proof inside is valid, is made
    out to the prover's session DID, and its root account is a reader of the
    space now. A verifier without that key (a host) cannot;
-5. otherwise accepts only if an entry among the first 5 of `earlier` names
+5. otherwise accepts only if an entry among the first 64 of `earlier` names
    the current read key and its `read` verifies against it;
 6. rejects.
 
@@ -812,7 +814,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
-_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-peers.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`), `packages/core/src/node/space-history.ts` (`formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…"), `packages/core/tests/network-manager.test.ts` ("a peer that missed more changes than four, holding only the first key…"), `packages/cli/tests/host.test.ts` ("a host that joins after more key changes than a proof carries…")._
+_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-peers.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`), `packages/core/src/node/space-history.ts` (`formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…"), `packages/core/tests/network-manager.test.ts` ("a peer that missed more changes than four…"), `packages/core/tests/ws-transport.test.ts` ("what a reader proves, after many key changes"), `packages/cli/tests/host.test.ts` ("a host that joins after more key changes than a proof carries…")._
 
 ### 6.4 The account behind a session
 

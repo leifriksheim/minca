@@ -25,11 +25,12 @@ export interface HelloProof {
 }
 
 /**
- * How many older keys a reader proves with: the four before its newest, for a
- * verifier away through a few changes, and the space's first, for one that
- * joined late and starts from it
+ * How many older keys a reader proves with: every one it holds, up to this
+ * many, so a verifier however far behind (one that joined late starts from
+ * the space's first) is proved the key it calls current. Each costs a
+ * signature; a verifier checks only the one that names its current key.
  */
-export const MAX_EARLIER_READ_KEYS = 5;
+export const MAX_EARLIER_READ_KEYS = 64;
 
 /**
  * Who may read a private space, as one side of a connection knows it — asked

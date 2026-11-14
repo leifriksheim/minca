@@ -309,16 +309,20 @@ export async function openPeers(deps: PeersDeps) {
           async earlier() {
             const { current } = (await access()).history;
             const newest = newestKey(current);
-            const older = [...current.keys]
-              .reverse()
-              .map((epoch) => keyring.get(epoch.keyId))
-              .filter((held): held is SpaceKey => held !== undefined && held !== newest);
-            // The four before the newest, then the space's first, which every reader holds (03 §9.3):
-            // a node that joined late, as a host does, starts from it, and learns the rest once let in.
-            const proving = older.slice(0, MAX_EARLIER_READ_KEYS - 1);
+            // Every older key held, not some: the history keeps them by id, not by time, so any few
+            // could leave out the one a verifier behind calls current. The space's first goes first,
+            // so a space with more changes than a proof carries still reaches a node that joined late.
             const first = space.encryptionKeyId ? keyring.get(space.encryptionKeyId) : undefined;
-            if (first && first !== newest && !proving.includes(first)) proving.push(first);
-            return Promise.all(proving.map((held) => deriveReadKey(held, provider)));
+            const older = [
+              first,
+              ...[...current.keys].reverse().map((epoch) => keyring.get(epoch.keyId)),
+            ].filter(
+              (held, at, all): held is SpaceKey =>
+                held !== undefined && held !== newest && all.indexOf(held) === at,
+            );
+            return Promise.all(
+              older.slice(0, MAX_EARLIER_READ_KEYS).map((held) => deriveReadKey(held, provider)),
+            );
           },
           async membership() {
             const held = newestKey((await access()).history.current);
