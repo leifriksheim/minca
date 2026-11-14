@@ -317,9 +317,17 @@ export async function openPeers(deps: PeersDeps) {
             const older = epochs
               .map((epoch) => keyring.get(epoch.keyId))
               .filter((held): held is SpaceKey => held !== undefined && held !== newest);
-            return Promise.all(
+            const proving = await Promise.all(
               older.slice(0, MAX_EARLIER_READ_KEYS).map((held) => deriveReadKey(held, provider)),
             );
+            if (!wanted || asked >= 0) return proving;
+            // A key this node holds but its history doesn't name yet, taken from the account's list.
+            for (const held of keyring.values()) {
+              if (held === newest || older.includes(held)) continue;
+              const read = await deriveReadKey(held, provider);
+              if (read.did === wanted) return [read, ...proving].slice(0, MAX_EARLIER_READ_KEYS);
+            }
+            return proving;
           },
           async membership() {
             const held = newestKey((await access()).history.current);

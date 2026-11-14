@@ -106,7 +106,10 @@ The account's list of spaces is the `sys.joined` records in its account
 registry, one per space, keyed `space:<id>` ([03](03-spaces.md)). Only
 `sys.joined` records that verify and whose root is the account itself count.
 A record whose space key changed is rewritten with an invite carrying the key
-in use now, so a new device joins with it.
+in use now, so a new device joins with it, and a device that holds the space
+but not that key, away through the change, takes it from there: it may be
+the only way back in, as a node holding no key of the space checks it
+against the newest ([04](04-network.md) §6.3).
 
 The list is not for the account's own spaces: its registry, its contacts
 space and its carry spaces (§4.2), which a node opens directly. A node MUST NOT
@@ -132,7 +135,7 @@ When a node joins, leaves and reconciles, which spaces it hides from its own
 list, and when it publishes the account's profile are the node's own; the
 reference node is in [the node](../packages/core/docs/node.md#following-the-account).
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("the account's list never names its carry space…"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
+_Source: `packages/core/src/node/node.ts` (`reconcileOnce`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/cli/tests/host.test.ts` ("a device away through key changes takes the new key from the account’s list…"), `packages/core/tests/carrier.test.ts` ("the account's list never names its carry space…"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
 
 ## 2. The account home protocol
 
