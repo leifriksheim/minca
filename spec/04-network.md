@@ -557,7 +557,7 @@ a host it only knows by address, by the `did` its description gives
 The handshake is three text frames, then binary frames either way:
 
 ```
-1. node   → client   {"type":"challenge","nonce":<Nₛ>,"did":<node DID>}
+1. node   → client   {"type":"challenge","nonce":<Nₛ>,"did":<node DID>,"readKey"?:<read DID>}
 2. client → node     {"type":"hello","did":<client session DID>,"nonce":<N꜀>,"sig":…,"read"?:…,"readKey"?:…,"member"?:…,"earlier"?:[…]}
 3. node   → client   {"type":"welcome","did":<node DID>,"sig":<…>,"note"?:<the node's proof>}
 4. binary frames of UTF-8 JSON, either way
@@ -660,8 +660,8 @@ _Source: `packages/core/src/network/peer-auth.ts` (`createClientAuth`, `createSe
 Run once per room on a WebRTC connection (§7.2 gives the frames):
 
 ```
-A → B   __auth-hello  { nonce: Nₐ }
-B → A   __auth-hello  { nonce: N_b }
+A → B   __auth-hello  { nonce: Nₐ, readKey?: A's current read DID }
+B → A   __auth-hello  { nonce: N_b, readKey?: B's current read DID }
 A → B   __auth-proof  proof over T(A, B, N_b)
 B → A   __auth-proof  proof over T(B, A, Nₐ)
 
@@ -722,7 +722,24 @@ proof:
 - `earlier` — the same signature by each **older** read key it still holds,
   newest first, at most 4: `[{ "readKey": <DID>, "read": <signature> }, …]`.
   The verifier may be the one that missed a change. A reader SHOULD send it
-  when it holds older keys.
+  when it holds older keys. When the verifier named a read key (`readKey` in
+  its `challenge` or `__auth-hello`) and the reader holds it, the reader
+  SHOULD put that key's entry first, however old it is.
+
+In a private space a verifier SHOULD name, as `readKey` in its `challenge`
+or `__auth-hello`, the read key it calls current. A prover MUST ignore a
+`readKey` that is not a string starting with `did:key:` of at most 256
+characters.
+
+> Rationale: a verifier that missed more than four key changes would
+> otherwise be proved only keys it can't check (step 5), and it learns the
+> newer ones only from peers it refuses: a host that joins a space late,
+> starting from the key the space began with, or one away through a busy
+> week of removals, would never carry it again. Named, the one key that
+> helps is proved whatever its age, and a proof stays 4 keys long. The
+> name is a public key that anyone holding the space's records can read
+> in its history; telling it to whoever connects tells them how far behind
+> the verifier is, and nothing they could prove with.
 
 The verifier:
 
@@ -798,7 +815,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
-_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-peers.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`), `packages/core/src/node/space-history.ts` (`formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
+_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `wantedKey`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-peers.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`), `packages/core/src/node/space-history.ts` (`formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…"), `packages/core/tests/network-manager.test.ts` ("a peer that missed more changes than a proof carries unasked…"), `packages/cli/tests/host.test.ts` ("a host that joins after more key changes than a proof carries…")._
 
 ### 6.4 The account behind a session
 
@@ -845,14 +862,14 @@ Every message on a mesh connection is a JSON object:
 - Reserved types (never delivered to the application): `__auth-hello`,
   `__auth-proof`, `__peers`, `__signal`, `__leave`.
 
-| `type`         | `room` | `payload`             | Accepted from                |
-| -------------- | ------ | --------------------- | ---------------------------- |
-| `__auth-hello` | yes    | `{ "nonce": string }` | anyone connected             |
-| `__auth-proof` | yes    | proof (§6.2)          | anyone connected             |
-| `__peers`      | yes    | array of DIDs         | a peer admitted in that room |
-| `__leave`      | yes    | —                     | a peer admitted in that room |
-| `__signal`     | yes    | relayed signal (§8)   | a peer admitted in that room |
-| anything else  | yes    | application           | a peer admitted in that room |
+| `type`         | `room` | `payload`                                 | Accepted from                |
+| -------------- | ------ | ----------------------------------------- | ---------------------------- |
+| `__auth-hello` | yes    | `{ "nonce": string, "readKey"?: string }` | anyone connected             |
+| `__auth-proof` | yes    | proof (§6.2)                              | anyone connected             |
+| `__peers`      | yes    | array of DIDs                             | a peer admitted in that room |
+| `__leave`      | yes    | —                                         | a peer admitted in that room |
+| `__signal`     | yes    | relayed signal (§8)                       | a peer admitted in that room |
+| anything else  | yes    | application                               | a peer admitted in that room |
 
 Any other frame from a peer is dropped.
 

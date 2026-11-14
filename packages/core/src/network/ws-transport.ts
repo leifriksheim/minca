@@ -24,7 +24,7 @@
  */
 
 import type { PeerTransport, PeerTransportEvents } from './transport.js';
-import { peerNonce, type ClientAuth } from './peer-auth.js';
+import { peerNonce, wantedKey, type ClientAuth } from './peer-auth.js';
 import { createEmitter } from '../utils/events.js';
 import { bufferSource, isObject } from '../utils/guards.js';
 import { backoff, createRetry } from '../utils/backoff.js';
@@ -48,6 +48,8 @@ interface Frame {
   readonly nonce?: unknown;
   readonly sig?: unknown;
   readonly note?: unknown;
+  /** In a challenge: the read key the node checks readers against */
+  readonly readKey?: unknown;
 }
 
 function parseFrame(data: unknown, type: string): Frame | null {
@@ -55,7 +57,14 @@ function parseFrame(data: unknown, type: string): Frame | null {
   try {
     const parsed: unknown = JSON.parse(data);
     return isObject(parsed) && parsed.type === type && typeof parsed.did === 'string' && parsed.did.length > 0
-      ? { type, did: parsed.did, nonce: parsed.nonce, sig: parsed.sig, note: parsed.note }
+      ? {
+          type,
+          did: parsed.did,
+          nonce: parsed.nonce,
+          sig: parsed.sig,
+          note: parsed.note,
+          readKey: parsed.readKey,
+        }
       : null;
   } catch {
     return null;
@@ -161,7 +170,9 @@ export function createWebSocketTransport(config: WebSocketTransportConfig): Peer
           if (!challenge || typeof challenge.nonce !== 'string')
             return refuse('Expected a challenge from the node');
           nodeDid = challenge.did;
-          const proof = authenticator ? await authenticator.hello(config.did, nodeDid, challenge.nonce) : {};
+          const proof = authenticator
+            ? await authenticator.hello(config.did, nodeDid, challenge.nonce, wantedKey(challenge))
+            : {};
           socket.send(JSON.stringify({ type: 'hello', did: config.did, nonce: ourNonce, ...proof }));
           stage = 'welcome';
           return;
