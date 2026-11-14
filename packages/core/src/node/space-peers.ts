@@ -35,6 +35,10 @@ import type { Standing, SpaceBase } from './space-versions.js';
 import type { History } from './space-history.js';
 import type { Keys } from './space-keys.js';
 
+/** Sync messages from one peer waiting to be handled, past which this node stops reading from it */
+const PAUSE_AT = 8;
+/** And how few are left when it reads again */
+const RESUME_AT = 2;
 /** How long a peer checked here has to become a peer before the check is forgotten: past any handshake's timeout */
 const STALE_ADMISSION_MS = 60_000;
 /** How long a removed member's socket stays open after nothing more is sent on it, for frames already on their way */
@@ -235,6 +239,7 @@ export async function openPeers(deps: PeersDeps) {
     sendToPeer: (peerId, message) => {
       routes.get(peerId)?.send(peerId, { type: 'sync', from: session.did, payload: message });
     },
+    backlog: (peerId) => routes.get(peerId)?.buffered(peerId) ?? 0,
     validate: async (version, from) => {
       const verdict = await admit(version, from);
       return verdict.ok || verdict.withdrawn
@@ -546,10 +551,25 @@ export async function openPeers(deps: PeersDeps) {
     }
   }
 
+  /** Sync messages from each peer taken in and not yet handled */
+  const behind = new Map<string, number>();
+
   function listen(network: NetworkManager): void {
     network.on('message', (message: NetworkMessage) => {
-      if (message.type === 'sync') void sync.handleMessage(message.from, message.payload);
-      else onMessage(message);
+      if (message.type !== 'sync') return onMessage(message);
+      // A peer's messages are handled one at a time. Past a few waiting, stop
+      // reading from it until they are done: what it sends faster than this
+      // node takes in waits in the network, not in memory.
+      const peer = message.from;
+      const queued = (behind.get(peer) ?? 0) + 1;
+      behind.set(peer, queued);
+      if (queued === PAUSE_AT) network.pause(peer);
+      void sync.handleMessage(peer, message.payload).finally(() => {
+        const left = (behind.get(peer) ?? 1) - 1;
+        if (left > 0) behind.set(peer, left);
+        else behind.delete(peer);
+        if (left === RESUME_AT) network.resume(peer);
+      });
     });
     network.on('peer-connected', (info: PeerInfo) => {
       if (cutOff.has(info.did)) {

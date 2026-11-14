@@ -432,4 +432,130 @@ describe('sync engine', () => {
     const askedTwice = asked.length - new Set(asked).size;
     assert.equal(askedTwice, 0, `${askedTwice} versions asked for again, of ${asked.length} asks`);
   });
+
+  describe('large records', () => {
+    const MB = 1024 * 1024;
+    /** Text of about `length` characters that doesn't repeat */
+    const filler = (length: number, salt: number) =>
+      Array.from({ length: Math.ceil(length / 8) }, (_, i) =>
+        ((salt * 7919 + i) * 2654435761).toString(36).slice(0, 8),
+      )
+        .join('')
+        .slice(0, length);
+
+    async function bigNotes(count: number, bytes: number): Promise<Version[]> {
+      const author = await makeKey();
+      const notes: Version[] = [];
+      for (let n = 0; n < count; n++)
+        notes.push(
+          await signer.sign(
+            createVersion({ author: author.did, collection: COLLECTION, body: { text: filler(bytes, n) } }),
+            author.privateKey,
+          ),
+        );
+      return notes;
+    }
+
+    /** Two engines that record the bytes of every `versions` message, and whose connections are backed up at will */
+    function pair(options: { holderBacklog?: () => number } = {}) {
+      const sizes: Array<{ bytes: number; answer: boolean }> = [];
+      const holderStorage = createStorageProvider(createMemoryAdapter());
+      const newcomerStorage = createStorageProvider(createMemoryAdapter());
+      const record = (message: SyncMessage) => {
+        if (message.type === 'versions')
+          sizes.push({ bytes: JSON.stringify(message).length, answer: message.id !== undefined });
+      };
+      const holder: ReturnType<typeof createSyncEngine> = createSyncEngine({
+        storageProvider: holderStorage,
+        sendToPeer: (_peer, message) => {
+          record(message);
+          void newcomer.handleMessage('a', message);
+        },
+        self: 'a',
+        ...(options.holderBacklog ? { backlog: options.holderBacklog } : {}),
+      });
+      const newcomer: ReturnType<typeof createSyncEngine> = createSyncEngine({
+        storageProvider: newcomerStorage,
+        sendToPeer: (_peer, message) => {
+          record(message);
+          void holder.handleMessage('b', message);
+        },
+        self: 'b',
+      });
+      holder.addPeer('b');
+      newcomer.addPeer('a');
+      return { holder, newcomer, holderStorage, newcomerStorage, sizes };
+    }
+
+    test('a peer that lacks large records is sent them a message of about 1 MB at a time, and takes in all of them', async () => {
+      const notes = await bigNotes(60, 100_000);
+      const { holder, holderStorage, newcomerStorage, sizes } = pair();
+      for (const note of notes) await holderStorage.addVersion(note);
+      // The holder's id sorts first, so it starts, and sends what the newcomer lacks unasked.
+      holder.notifyPeers(['b']);
+      await until(
+        async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === notes.length,
+        30_000,
+        'every record to reach the newcomer',
+      );
+      assert.equal(await newcomerStorage.fingerprint(), await holderStorage.fingerprint());
+      assert.ok(sizes.length >= 5, `${sizes.length} messages for 6 MB`);
+      for (const { bytes } of sizes) assert.ok(bytes < MB + 120_000, `a message of ${bytes} bytes`);
+    });
+
+    test('a want for large records is answered a message at a time, and the asker asks again for the rest', async () => {
+      const notes = await bigNotes(40, 100_000);
+      const { newcomer, holderStorage, newcomerStorage, sizes } = pair();
+      for (const note of notes) await holderStorage.addVersion(note);
+      // Asked for all 40 by id: four messages' worth.
+      newcomer.ask(
+        COLLECTION,
+        notes.map((note) => note.id),
+      );
+      await until(
+        async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === notes.length,
+        30_000,
+        'every record asked for to arrive',
+      );
+      const answers = sizes.filter((size) => size.answer);
+      assert.ok(answers.length >= 4, `${answers.length} answers for 4 MB asked at once`);
+      for (const { bytes } of answers) assert.ok(bytes < MB + 120_000, `an answer of ${bytes} bytes`);
+    });
+
+    test('a peer that asks and does not read is answered empty, not buffered for', async () => {
+      const notes = await bigNotes(5, 100_000);
+      const { holder, newcomer, holderStorage, newcomerStorage, sizes } = pair({
+        holderBacklog: () => 100 * MB,
+      });
+      for (const note of notes) await holderStorage.addVersion(note);
+      newcomer.ask(
+        COLLECTION,
+        notes.map((note) => note.id),
+      );
+      await until(() => sizes.some((size) => size.answer), 5000, 'the want to be answered');
+      assert.ok(
+        sizes.filter((size) => size.answer).every((size) => size.bytes < 200),
+        'answered, and empty',
+      );
+      assert.equal((await newcomerStorage.sums()).get(COLLECTION)?.count ?? 0, 0);
+      // Gone, as a peer that never reads is in the end: nothing waits on it any more.
+      holder.removePeer('b');
+    });
+
+    test('a sender waits while its connection is backed up, and goes on once it drains', async () => {
+      let backlog = 10 * MB;
+      const notes = await bigNotes(20, 100_000);
+      const { holder, holderStorage, newcomerStorage, sizes } = pair({ holderBacklog: () => backlog });
+      for (const note of notes) await holderStorage.addVersion(note);
+      holder.notifyPeers(['b']);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      assert.equal(sizes.filter((size) => !size.answer).length, 0, 'nothing sent while backed up');
+      backlog = 0;
+      await until(
+        async () => (await newcomerStorage.sums()).get(COLLECTION)?.count === notes.length,
+        30_000,
+        'every record to reach the newcomer once the connection drained',
+      );
+    });
+  });
 });

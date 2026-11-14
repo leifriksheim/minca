@@ -69,6 +69,13 @@ export interface SyncEngineConfig {
   readonly shallowWith?: (peerId: string) => boolean;
   /** Where a files message from a peer goes (spec 05 §16.6); without it, they are dropped */
   readonly files?: (peerId: string, message: unknown) => Promise<void>;
+  /**
+   * Bytes sent to a peer that haven't left yet. Sending a peer what it lacks
+   * waits while this is over `MAX_MESSAGE_BYTES`, so a large space goes out
+   * as fast as the connection takes it, read from the store as it goes.
+   * Without it, everything goes at once.
+   */
+  readonly backlog?: (peerId: string) => number;
 }
 
 /**
@@ -123,6 +130,16 @@ const MAX_HELD = 2 * MAX_WAITING;
 const MAX_REFUSED = 10_000;
 /** Records asked for, or sent, in one message */
 const MAX_IDS_PER_REQUEST = 200;
+/**
+ * Bytes of versions in one message, besides the count: a message of large
+ * records is held whole in memory at both ends, and a socket refuses one past
+ * its limit. One version larger than this still goes, alone.
+ */
+const MAX_MESSAGE_BYTES = 1024 * 1024;
+/** Bytes waiting to go to a peer past which its `want`s are answered empty */
+const MAX_BACKLOG_BYTES = 8 * MAX_MESSAGE_BYTES;
+/** How often a sender waiting for its connection to drain looks again */
+const DRAIN_POLL_MS = 25;
 /** `want`s in flight to one peer at a time; the rest queue */
 const MAX_WANTS_IN_FLIGHT = 4;
 /** Largest Negentropy message, in bytes before base64: well inside a data channel's limit */
@@ -148,34 +165,8 @@ function readHolds(value: unknown): Holds {
 /** Collection definitions first, then records by version: what others depend on comes first */
 const rank = (e: Version): number => (e?.collection === 'sys.collection' ? -1 : (e?.seq ?? 0));
 
-/**
- * Versions in messages of at most `size`, with every version of one record in
- * the same message where they fit. A message is taken in whole, so a record
- * arrives with the versions that changed or deleted it, never as it once was.
- */
-function byRecord(versions: ReadonlyArray<Version>, size: number): Version[][] {
-  const records = new Map<string, Version[]>();
-  for (const version of versions) getOrAdd(records, version.key, () => []).push(version);
-  const messages: Version[][] = [];
-  let message: Version[] = [];
-  for (const record of records.values()) {
-    if (message.length + record.length > size && message.length > 0) {
-      messages.push(message);
-      message = [];
-    }
-    // A record with more versions than fit in one message goes over several.
-    for (let i = 0; i < record.length; i += size) {
-      const part = record.slice(i, i + size);
-      if (message.length + part.length > size) {
-        messages.push(message);
-        message = [];
-      }
-      message.push(...part);
-    }
-  }
-  if (message.length > 0) messages.push(message);
-  return messages;
-}
+/** About the bytes a version takes in a message */
+const wireBytes = (version: Version): number => JSON.stringify(version).length;
 
 /** Reconciling one collection with one peer, as initiator */
 interface Session {
@@ -251,6 +242,8 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const connections = new Map<string, number>();
   /** Where each peer's messages are up to */
   const inOrder = new Map<string, Promise<void>>();
+  /** What is still being sent to each peer, so one session's versions go after another's */
+  const sending = new Map<string, Promise<void>>();
   let lastConnection = 0;
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let nextId = 1;
@@ -555,10 +548,77 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     // Asked for before the session goes, so the peer never looks idle in between.
     want(peerId, session.collection, session.need.reverse());
     state.sessions.delete(session.collection);
-    const found = await Promise.all(session.have.reverse().map((id) => storage.getVersion(id)));
-    const have = found.filter((v): v is Version => v !== null);
-    for (const versions of byRecord(have, MAX_IDS_PER_REQUEST)) send(peerId, { type: 'versions', versions });
+    sendAll(peerId, session.have.reverse());
     if (session.again) void begin(peerId, session.collection).catch(report);
+  };
+
+  /**
+   * Sends a peer versions it lacks, in order, after whatever is still going
+   * to it. Off the peer's message queue, so taking in what the peer sends
+   * never waits on it taking in what this node sends.
+   */
+  const sendAll = (peerId: string, ids: ReadonlyArray<string>) => {
+    if (ids.length === 0) return;
+    const connection = connections.get(peerId);
+    const run = (sending.get(peerId) ?? Promise.resolve())
+      .then(() => sendPaced(peerId, connection, ids))
+      .catch(report);
+    sending.set(peerId, run);
+    void run.finally(() => {
+      if (sending.get(peerId) === run) sending.delete(peerId);
+    });
+  };
+
+  /**
+   * Reads versions from the store a message at a time, and waits for the
+   * connection to drain before each: what is held in memory at once is one
+   * message, however much the peer lacks. A record's versions go in the same
+   * message, in the place of its newest (spec 05 §6.3), so the store is read
+   * twice: once to learn which record each version is of, keeping only that,
+   * then a message's worth at a time to send.
+   */
+  const sendPaced = async (peerId: string, connection: number | undefined, ids: ReadonlyArray<string>) => {
+    const open = () => connections.get(peerId) === connection && peers.has(peerId);
+    const records = new Map<string, string[]>();
+    for (const id of ids) {
+      if (!open()) return;
+      const version = await storage.getVersion(id);
+      if (version) getOrAdd(records, version.key, () => []).push(id);
+    }
+
+    let message: Version[] = [];
+    let bytes = 0;
+    const flush = async () => {
+      if (message.length === 0) return;
+      while (open() && (config.backlog?.(peerId) ?? 0) > MAX_MESSAGE_BYTES)
+        await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
+      if (open()) send(peerId, { type: 'versions', versions: message });
+      message = [];
+      bytes = 0;
+    };
+    for (const record of records.values()) {
+      if (!open()) return;
+      const versions: Array<{ version: Version; size: number }> = [];
+      for (const id of record) {
+        const version = await storage.getVersion(id);
+        if (version) versions.push({ version, size: wireBytes(version) });
+      }
+      const size = versions.reduce((sum, one) => sum + one.size, 0);
+      // A record that doesn't fit in what is left starts a message of its own.
+      if (message.length + versions.length > MAX_IDS_PER_REQUEST || bytes + size > MAX_MESSAGE_BYTES)
+        await flush();
+      // One with more than a message holds goes over several.
+      for (const one of versions) {
+        if (
+          message.length >= MAX_IDS_PER_REQUEST ||
+          (message.length > 0 && bytes + one.size > MAX_MESSAGE_BYTES)
+        )
+          await flush();
+        message.push(one.version);
+        bytes += one.size;
+      }
+    }
+    await flush();
   };
 
   const onReconciled = async (peerId: string, id: number, message: string, held: boolean) => {
@@ -621,9 +681,15 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   const serveWant = async (peerId: string, id: number, ids: ReadonlyArray<string>) => {
     const versions: Version[] = [];
+    // A peer that asks and doesn't read is answered empty, not buffered for: it finds them next round.
+    let bytes = (config.backlog?.(peerId) ?? 0) > MAX_BACKLOG_BYTES ? Infinity : 0;
+    // In the order asked, until a message's worth: the asker asks again for what comes after.
     for (const v of ids.slice(0, MAX_IDS_PER_REQUEST)) {
+      if (bytes >= MAX_MESSAGE_BYTES) break;
       const version = typeof v === 'string' && cidDigest(v) ? await storage.getVersion(v) : null;
-      if (version) versions.push(version);
+      if (!version) continue;
+      versions.push(version);
+      bytes += wireBytes(version);
     }
     // Always answered, even empty: the asker counts replies to know it is done.
     send(peerId, { type: 'versions', id, versions });
@@ -635,11 +701,16 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const state = states.get(peerId);
     const asked = state?.wants.get(id);
     if (!state || !asked) return;
-    await admitAll(
-      peerId,
-      versions.filter((v) => asked.ids.has(v?.id)),
-    );
+    const answered = versions.filter((v) => asked.ids.has(v?.id));
+    await admitAll(peerId, answered);
     state.wants.delete(id);
+    // An answer that stopped at a message's worth: what came after the last sent is asked for again.
+    // One that brought none is not, so a peer lacking them is asked once.
+    const order = [...asked.ids];
+    const sent = new Set(answered.map((v) => v.id));
+    let last = order.length - 1;
+    while (last >= 0 && !sent.has(order[last]!)) last--;
+    if (last >= 0 && last < order.length - 1) want(peerId, asked.collection, order.slice(last + 1));
     pump(peerId);
     levelIfDone(peerId, asked.collection);
     settleIfDone(peerId);
@@ -719,6 +790,8 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       if (intervalId !== null) clearInterval(intervalId);
       intervalId = null;
       states.clear();
+      // Every send still going ends: none of the connections it was for is current any more.
+      connections.clear();
     },
 
     handleMessage(peerId: string, message: unknown): Promise<void> {

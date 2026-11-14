@@ -204,7 +204,7 @@ describe('a body cache several stores share', () => {
   });
 
   test('a store cleared forgets only its own', async () => {
-    const cache = createBodyCache(100);
+    const cache = createBodyCache(100_000);
     const a = cache.part();
     const b = cache.part();
     const [one] = await versions(1);
@@ -213,6 +213,19 @@ describe('a body cache several stores share', () => {
     a.clear();
     assert.equal(a.get(one!.id), undefined);
     assert.deepEqual(b.get(one!.id), one);
+  });
+
+  test('it holds bytes, not bodies: large bodies take no more memory than small ones', async () => {
+    const cache = createBodyCache(1_000_000);
+    const part = cache.part();
+    const [template] = await versions(1);
+    const large = (n: number) => ({ ...template!, id: `large-${n}`, body: 'x'.repeat(100_000) });
+    for (let n = 0; n < 50; n++) part.set(large(n));
+    const kept = Array.from({ length: 50 }, (_, n) => part.has(`large-${n}`)).filter(Boolean).length;
+    assert.ok(kept > 0 && kept <= 5, `kept ${kept} bodies of 200 KB in 1 MB`);
+    assert.ok(part.has('large-49'), 'the one used last is kept');
+    part.set({ ...template!, id: 'huge', body: 'x'.repeat(200_000) });
+    assert.equal(part.has('huge'), false, 'a body over a quarter of the cache is not kept');
   });
 });
 

@@ -35,6 +35,18 @@ export interface PeerTransport {
    * handshake to it (`peer-auth.ts`). Absent where the connection has none.
    */
   readonly binding?: (peerId: string) => { readonly local: string; readonly remote: string } | null;
+  /**
+   * Bytes sent to a peer that haven't left this machine yet. A sender with
+   * much to say waits while this is high, so what it hasn't sent stays on
+   * disk rather than in memory. Absent: it never waits.
+   */
+  readonly buffered?: (peerId: string) => number;
+  /**
+   * Stops reading from a peer, and starts again: what the network then holds
+   * back pushes back on the sender. Absent where a connection can't be paused.
+   */
+  readonly pause?: (peerId: string) => void;
+  readonly resume?: (peerId: string) => void;
 }
 
 /**

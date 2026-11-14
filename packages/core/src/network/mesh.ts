@@ -646,6 +646,10 @@ export function createMesh(config: MeshConfig): Mesh {
         off: room.events.off,
         // Reachable: after the first introduction that no longer depends on a relay.
         isConnected: () => signaling.isConnected() || room.peers.size > 0,
+        buffered: (peer: string) => transport.buffered?.(peer) ?? 0,
+        // One connection carries every room the two share: pausing it for one would stall the rest.
+        pause: () => {},
+        resume: () => {},
       });
     },
   };

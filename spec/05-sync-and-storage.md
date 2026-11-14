@@ -335,11 +335,21 @@ Versions, as they are on the wire ([02 — Records](02-records.md)).
 | ---------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `type`     | `"versions"` |                                                                                                                         |
 | `id`       | number       | Present: the answer to the `want` with that id. Absent: versions the sender found the receiver lacks while reconciling. |
-| `versions` | `Version[]`  | At most 200.                                                                                                            |
+| `versions` | `Version[]`  | At most 200, and at most 1 MiB of them as JSON unless it holds one alone.                                               |
 
 A `want` MUST always be answered with a `versions` carrying its `id`, even
 when none of the ids are held (`versions: []`): the asker counts answers to
 know it is done.
+
+A sender SHOULD stop adding versions to a `versions` message once it holds
+1 MiB of them (measured as their JSON), and MUST still send one version
+alone, however large. A receiver MUST accept a message that holds fewer than
+were asked for.
+
+> Rationale: 200 small notes and 200 photos are very different messages. A
+> message is parsed and held whole at both ends, and a socket refuses one
+> past its limit (16 MiB at a host), so a space of large records would
+> otherwise never sync, or take a host's memory with it.
 
 ### `push-update`
 
@@ -543,7 +553,8 @@ For each differing collection the initiator:
 
    When the session ends, however it ends, the initiator asks for every id
    noted in `need` (below) and sends the versions noted in `have` in
-   `versions` messages **without** `id`, at most 200 per message. Both go
+   `versions` messages **without** `id`, at most 200 and 1 MiB per message
+   (§5). Both go
    **newest first**: the reverse of the order the rounds found them in, which
    is oldest first. The versions it sends of one record SHOULD go in the same
    message, in the place of that record's newest; a record with more than 200
@@ -566,6 +577,14 @@ For each differing collection the initiator:
    ids of one collection, each with a fresh request id. How many it keeps
    unanswered at once, and in what order it asks, is its own
    ([Sync and storage in the library](../packages/core/docs/storage.md#pacing-sync)).
+   An answer may stop short at 1 MiB (§6.4): the asker SHOULD ask again,
+   in a new `want`, for the ids that came after the last version the answer
+   held. One that held none is not asked again.
+
+   **Pace.** How fast a node sends what a peer lacks is its own. It SHOULD
+   read versions from its store as it sends them rather than all at once,
+   and wait while its connection to the peer is backed up, so a large space
+   costs it one message of memory, not the space.
 
 3. When a session has ended and every `want` for its collection has been
    answered and none is queued, the collection is **level** with that peer
@@ -581,8 +600,12 @@ while. What a dropped `want` asked for is found again on the next round.
 - On `reconcile`: if the collection is not held, answer `held: false`.
   Otherwise build the item set, run one _answer_ step as responder (§3.4)
   with the 32,000-byte frame limit, and send `reconciled` with the same `id`.
-- On `want`: answer with `versions` carrying the same `id` and every asked
-  version it holds (first 200 ids only).
+- On `want`: answer with `versions` carrying the same `id` and the asked
+  versions it holds (first 200 ids only), in the order asked, stopping once
+  the message holds 1 MiB of them (§5). A node whose connection to the
+  asker already holds much it hasn't sent (8 MiB in this library) MAY
+  answer with none: a peer that asks and doesn't read is not buffered for,
+  and an honest one finds them again on the next round.
 
 Not yet specified: how a responder reports a `reconcile` whose `message` it
 cannot parse (§18).
@@ -628,12 +651,12 @@ A (initiator: its DID sorts first)                       B
    ── hello {sums, reply:true} ──────────────────────────▶    A is level on app.note
 ```
 
-_Source: `packages/core/src/sync/sync-engine.ts` (`onReconciled`, `byRecord`, `want`),
+_Source: `packages/core/src/sync/sync-engine.ts` (`onReconciled`, `sendPaced`, `serveWant`, `onVersions`, `want`),
 `packages/core/src/node/space-peers.ts` (`listen`). Tests: `packages/core/tests/reconcile.test.ts`
 ("sync by reconciliation", "joining, a deleted record never shows as it once
 was", "joining, a canvas cleared and half painted again never shows a pixel
 that ends cleared", "a want whose answer is lost is given up, and the peer is
-synced again"), `packages/core/tests/sync.test.ts`._
+synced again"), `packages/core/tests/sync.test.ts` ("large records")._
 
 ---
 
@@ -1417,6 +1440,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 | `FRAME_SIZE_LIMIT`             | 32,000 bytes (before base64) | §6                        |
 | Minimum frame limit / headroom | 4,096 / 200 bytes            | §3.4                      |
 | `MAX_IDS_PER_REQUEST`          | 200                          | `want`, `versions`        |
+| `MAX_MESSAGE_BYTES`            | 1 MiB of versions, as JSON   | `versions`, §6.3, §6.4    |
 | `stored` ids considered        | 2,000                        | §4                        |
 | Collections per hello          | 1,000                        | §4                        |
 | Keepers per space              | 16                           | §9                        |
