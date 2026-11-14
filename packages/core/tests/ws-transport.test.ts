@@ -18,6 +18,7 @@ import { deriveReadKey } from '../src/space/space-access.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { until } from './helpers/until.js';
+import { isRecord } from '../src/utils/guards.js';
 import { createNode } from '../src/node/node.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -536,10 +537,17 @@ describe('what a reader proves, after many key changes', () => {
     const pair = await provider.generateKeyPair();
     const nodeDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     // A node that records each hello and turns it away.
-    const hellos: Array<{ readKey?: string; earlier?: Array<{ readKey: string }> }> = [];
+    const hellos: Array<{ readKey: string; earlier: string[] }> = [];
     wss.on('connection', (socket: ServerSocket) => {
       socket.on('message', (data: RawData) => {
-        hellos.push(JSON.parse(textOf(data)));
+        const hello: unknown = JSON.parse(textOf(data));
+        if (isRecord(hello) && typeof hello.readKey === 'string')
+          hellos.push({
+            readKey: hello.readKey,
+            earlier: (Array.isArray(hello.earlier) ? hello.earlier : []).flatMap((entry: unknown) =>
+              isRecord(entry) && typeof entry.readKey === 'string' ? [entry.readKey] : [],
+            ),
+          });
         socket.close(4003, 'not a reader of this space');
       });
       socket.send(JSON.stringify({ type: 'challenge', nonce: peerNonce(), did: nodeDid }));
@@ -571,7 +579,7 @@ describe('what a reader proves, after many key changes', () => {
         'a hello proving the newest key',
       );
       const hello = [...hellos].reverse().find((one) => one.readKey === newest)!;
-      const proved = (hello.earlier ?? []).map((entry) => keys.indexOf(entry.readKey));
+      const proved = hello.earlier.map((readKey) => keys.indexOf(readKey));
       assert.deepEqual(
         [...proved].sort((a, b) => a - b),
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
