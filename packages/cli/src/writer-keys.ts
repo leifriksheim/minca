@@ -1,9 +1,9 @@
 /**
  * Lasting writer keys on disk, for nodes the CLI runs (spec 02 §4.10).
  *
- * The same idea as `browserWriterKeys` in core: one key per slot, claimed
- * under a lock so two processes never sign with one key, its places in its
- * logs kept beside it. Here a slot is a directory, the lock numbered files
+ * The same idea as `browserWriterKeys` in `@minca/storage/indexeddb`: one
+ * key per slot, claimed under a lock so two processes never sign with one
+ * key, its places in its logs kept beside it. Here a slot is a directory, the lock numbered files
  * naming the process that holds it, taken over once that process is gone.
  *
  * Kept outside the account's data, which may be copied or synced: a key in

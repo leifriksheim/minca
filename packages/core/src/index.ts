@@ -35,7 +35,7 @@ export type {
   NetworkMessage,
   Result,
 } from './types.js';
-export { ok, isSharedStorageAdapter } from './types.js';
+export { ok } from './types.js';
 
 // Identity & Key Management
 export { createP256Provider } from './identity/crypto-p256.js';
@@ -131,8 +131,6 @@ export type { StorageProvider } from './storage/storage-provider.js';
 export { createEncryptedAdapter } from './storage/encrypted-adapter.js';
 export { createBodyCache } from './storage/body-cache.js';
 export type { BodyCache } from './storage/body-cache.js';
-export { reconcileSharedStore } from './storage/shared-store.js';
-export type { Reconciliation } from './storage/shared-store.js';
 
 // Spaces
 export { parseSpaceInvite } from './space/space-manager.js';

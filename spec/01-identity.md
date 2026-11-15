@@ -241,9 +241,9 @@ _Tests:_ `packages/core/tests/identity.test.ts` ("did:key", "reads the did:key s
 
 ## 5. Derivation labels
 
-Every label under which bytes are derived anywhere in `packages/`. A path
-without a package is in `packages/core/src/`. No two _purposes_ share a
-label, but see the notes below the table. Parts other than this one own the
+Every label under which bytes are derived anywhere in `packages/core/src/`,
+`packages/session/src/` and `packages/storage/src/`. A path without a
+package is in `packages/core/src/`. No two _purposes_ share a label, but see the notes below the table. Parts other than this one own the
 use; this table is the registry.
 
 | Label (UTF-8)                             | Mechanism                                 | Input                                                                                            | Output                     | Used for                                                                | Defined in                                | Part   |
