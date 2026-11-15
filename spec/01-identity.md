@@ -312,16 +312,19 @@ it by its hash, so it can't be taken for anything else.
 Strings that separate _signed messages_ rather than derive keys, listed so
 new labels do not collide with them:
 
-| String                                                 | Kind                                                   | Defined in                                                 | Part |
-| ------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------- | ---- |
-| `minca/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:137`                                | 03   |
-| `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `packages/session/src/connect.ts:293` (`keyStatement`)     | 06   |
-| `minca/inbox-purge/v1\|<topic>\|<nonce>\|<ids>`        | Signed by an inbox signing key, checked by a relay     | `inbox/inbox.ts:197`, `packages/relay/relay.mjs` (`purge`) | 07   |
-| `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                             | 04   |
-| `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:316`                                 | 04   |
-| `minca/introduction/v1\|…`                             | Signed signal passed on by peers                       | `network/introductions.ts:61`                              | 04   |
-| `minca/rendezvous-sig/v1\|…`                           | Signed rendezvous message                              | `network/rendezvous.ts:125`                                | 04   |
-| `minca-host/v1\n…`, `minca-host-status/v1\n…`          | Signed host requests and statuses                      | `hosting/hosting.ts:78,542`                                | 08   |
+| String                                                     | Kind                                                              | Defined in                                                        | Part |
+| ---------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- | ---- |
+| `minca/space-invite/v1\|<spaceId>\|<did>`                  | Message signed by an invite key                                   | `space/space-access.ts:137`                                       | 03   |
+| `{"audience":…,"proof":"minca/connect-key/v1",…}`          | Canonical JSON signed by a key a connect request names            | `packages/session/src/connect.ts:293` (`keyStatement`)            | 06   |
+| `minca/inbox-purge/v1\|<topic>\|<nonce>\|<ids>`            | Signed by an inbox signing key, checked by a relay                | `inbox/inbox.ts:197`, `packages/relay/relay.mjs` (`purge`)        | 07   |
+| `minca/name-bind/v1\|<name>@<domain>`                      | Signed by an inbox signing key: the inbox a name leads to         | `inbox/names.ts:166` (`bindMessage`), `packages/names/names.mjs`  | docs |
+| `minca/name-claim/v1\|<name>@<domain>\|<at>\|<code>`       | Signed by a name key: claiming, re-coding or giving up a username | `inbox/names.ts:169` (`claimMessage`), `packages/names/names.mjs` | docs |
+| `minca/name-work/v1\|<name>@<domain>\|<key>\|<at>\|<work>` | Hashed, not signed: a claim's proof of work                       | `inbox/names.ts:173` (`workHash`), `packages/names/names.mjs`     | docs |
+| `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…`     | Signed peer-auth messages                                         | `network/peer-auth.ts:198,200`                                    | 04   |
+| `minca-mesh/v1\|…`                                         | Signed mesh proof                                                 | `network/peer-auth.ts:316`                                        | 04   |
+| `minca/introduction/v1\|…`                                 | Signed signal passed on by peers                                  | `network/introductions.ts:61`                                     | 04   |
+| `minca/rendezvous-sig/v1\|…`                               | Signed rendezvous message                                         | `network/rendezvous.ts:125`                                       | 04   |
+| `minca-host/v1\n…`, `minca-host-status/v1\n…`              | Signed host requests and statuses                                 | `hosting/hosting.ts:78,542`                                       | 08   |
 
 Notes:
 
