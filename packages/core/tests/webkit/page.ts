@@ -2,10 +2,10 @@
  * A tab of an app, in WebKit: its account's signer stays here, and its node
  * runs in the site's one shared worker (`worker.ts`), signing with the app key.
  */
-import { startNodeInWorker } from '../../src/node/worker.js';
+import { startNodeInWorker } from '@minca/session';
 import { createIdentityManager } from '../../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../src/identity/root-signer.js';
-import { appKey } from '../../src/session/connect.js';
+import { appKey } from '@minca/session';
 import { team } from '../../src/space/presets.js';
 import type { P2PNode } from '../../src/node/types.js';
 

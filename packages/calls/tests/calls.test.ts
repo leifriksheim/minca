@@ -19,7 +19,7 @@ import { call as callSchema } from '@minca/std';
 import { createCalls, type Calls, type CallsOptions } from '../src/calls.js';
 import { joined } from '../../core/tests/helpers/joined.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
-import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { hold, letGo } from '../../core/tests/helpers/hold.js';
 import { until } from '../../core/tests/helpers/until.js';
 import { settle } from '../../core/tests/helpers/person.js';

@@ -11,7 +11,9 @@
   "dependencies": {
     "@minca/app-shared": "*",
     "@minca/core": "*",
+    "@minca/session": "*",
     "@minca/std": "*",
+    "@minca/storage": "*",
     "@minca/ui": "*"
   },
   "devDependencies": {

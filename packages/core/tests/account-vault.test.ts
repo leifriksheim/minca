@@ -10,7 +10,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { hasPassphraseWrap, withoutWrap } from './helpers/vault.js';
 import {
   wrapSeedWithDeviceKey,
@@ -23,7 +23,7 @@ import {
   withWrap,
   createVault,
 } from '../src/identity/account-vault.js';
-import { accountDataPath, createFolderAccountStore, newAccountId } from '../src/identity/account-store.js';
+import { accountDataPath, createFolderAccountStore, newAccountId } from '@minca/session';
 import { createEncryptedAdapter } from '../src/storage/encrypted-adapter.js';
 import { createSpaceManager } from '../src/space/space-manager.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';

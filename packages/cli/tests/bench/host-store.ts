@@ -16,8 +16,9 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { createStorageProvider, type StorageProvider } from '../../../core/src/storage/storage-provider.js';
-import { directoryStores, type StoreFactory } from '../../../core/src/node/stores.js';
-import { sqliteStores } from '../../../core/src/storage/sqlite-adapter.js';
+import type { StoreFactory } from '@minca/core';
+import { directoryStores } from '@minca/storage/folder';
+import { sqliteStores } from '../../../storage/src/sqlite/adapter.js';
 import { createP256Provider } from '../../../core/src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../../../core/src/identity/did.js';
 import { createSigner } from '../../../core/src/schema/signer.js';

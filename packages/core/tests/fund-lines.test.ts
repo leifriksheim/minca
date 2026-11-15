@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeHost, fundLines } from '../src/session/hosting.js';
+import { describeHost, fundLines } from '../src/hosting/hosting.js';
 
 test('a device takes only well-formed fund lines, eight at most, and ignores the rest', () => {
   const model = { for: 'bots', name: 'Claude Sonnet 5.5', price: '$3 / $15 per million tokens' };

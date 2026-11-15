@@ -30,7 +30,7 @@ import {
   type AutomationTrigger,
   type StartAutomationsOptions,
 } from '@minca/std';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { until } from './helpers/until.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { hold } from './helpers/hold.js';

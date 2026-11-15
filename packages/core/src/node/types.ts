@@ -39,7 +39,7 @@ import type {
   HostedBot,
   OverSpace,
   PayAnswer,
-} from '../session/hosting.js';
+} from '../hosting/hosting.js';
 
 export interface NodeNetworkConfig {
   /**

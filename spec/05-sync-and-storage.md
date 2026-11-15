@@ -920,7 +920,7 @@ through the gatekeeper. Where a node keeps its own stores (IndexedDB, a file
 on disk, a host's store) is its own; the library's are in
 [Sync and storage in the library](../packages/core/docs/storage.md#indexeddb).
 
-_Source: `packages/core/src/node/stores.ts`, `packages/core/src/session/places.ts` (`storesFor`),
+_Source: `packages/core/src/node/stores.ts`, `packages/session/src/places.ts` (`storesFor`),
 `packages/core/src/space/space-manager.ts`, `packages/core/src/node/node.ts`, `packages/core/src/node/space-runtime.ts`.
 Tests: `packages/core/tests/account-vault.test.ts` ("encryption at rest"),
 `packages/core/tests/node.test.ts`, `packages/core/tests/space.test.ts` ("a joined space is listed only once its key is held")._
@@ -1072,12 +1072,12 @@ the gatekeeper. Peers bring such a space back.
 > writes, and a space the folder alone held in the older layout is not
 > brought over. Before v1 every client of a folder is upgraded together.
 
-_Source: `packages/core/src/node/stores.ts` (`folderStores`),
-`packages/core/src/storage/blob/directory.ts`,
-`packages/core/src/storage/folder-adapter.ts` (the registry, and a device's own directory stores),
-`packages/core/src/storage/folder-reconcile.ts` (a command beside a daemon),
+_Source: `packages/storage/src/folder/stores.ts` (`folderStores`),
+`packages/storage/src/folder/blob-store.ts`,
+`packages/storage/src/folder/adapter.ts` (the registry, and a device's own directory stores),
+`packages/core/src/storage/shared-store.ts` (a command beside a daemon),
 `packages/core/src/node/space-mirrors.ts` (`openMirrors`, `watch`),
-`packages/core/src/identity/account-store.ts`,
+`packages/session/src/account-store.ts`,
 `packages/cli/src/fs-directory.ts` (path safety). Tests:
 `packages/core/tests/folder-adapter.test.ts` ("a data folder", "two nodes of one account on one folder"),
 `packages/cli/tests/path-safety.test.ts`._
@@ -1114,7 +1114,7 @@ value = envelope(localKey, "minca/at-rest/v1", { entry: <the entry key> }, plain
 
 Every registry entry of §12 that belongs to one space is sealed.
 
-_Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/space/space-manager.ts` (`list`), `packages/core/src/node/stores.ts`. Tests:
+_Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/space/space-manager.ts` (`list`), `packages/storage/src/folder/stores.ts` (`directoryStores`), `packages/storage/src/sqlite/adapter.ts` (`sqliteStores`). Tests:
 `packages/core/tests/account-vault.test.ts` ("encryption at rest": "a sealed value moved to another entry does not open", "one registry entry that does not open is left out of the list, not the end of it", "the account key does not open the registry store's sealed entries")._
 
 ---

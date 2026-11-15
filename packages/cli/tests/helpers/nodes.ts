@@ -9,7 +9,7 @@ import type { NodeConfig, P2PNode } from '../../../core/src/node/types.js';
 import { createIdentityManager } from '../../../core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../../core/src/identity/root-signer.js';
 import { deriveAccountKey } from '../../../core/src/identity/account-vault.js';
-import { memoryStores } from '../../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import type { FakeHub } from '../../../core/tests/helpers/fake-transport.js';
 
 const nodes: P2PNode[] = [];

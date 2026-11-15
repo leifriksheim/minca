@@ -100,7 +100,7 @@ Electrobun opens no popups: `window.open` returns `null`, in WebKit and in CEF.
 The app connects by opening the account home in a popup, and the two talk
 over `postMessage`, each checking `event.source` and `event.origin`
 (`connectToHome()` and `receiveConnectRequest()` in
-`packages/core/src/session/connect.ts`). So the shell does what a browser
+`packages/session/src/connect.ts`). So the shell does what a browser
 would. Nothing in the app, the home or the protocol changes.
 
 - `src/bun/page.ts`, the preload every window gets, replaces `window.open`,

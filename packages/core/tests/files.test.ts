@@ -32,14 +32,14 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { joined } from './helpers/joined.js';
 import { until } from './helpers/until.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import type { StorageAdapter } from '../src/types.js';
 import type { SyncMessageBody } from '../src/sync/sync-messages.js';
 import { createStorageProvider, type StorageProvider } from '../src/storage/storage-provider.js';
-import { createMemoryBlobStore } from '../src/storage/blob/memory.js';
+import { createMemoryBlobStore } from '@minca/storage/memory';
 import { deleteMirrored } from '../src/storage/mirror.js';
 import {
   createSpaceFiles,

@@ -7,7 +7,7 @@
  * them from now on, and goes where the host says: back to the chat app.
  */
 import { didOf } from '@minca/core';
-import { connectToHome, homeAddress } from '@minca/core/session';
+import { connectToHome, homeAddress } from '@minca/session';
 
 interface PageData {
   /** What the home shows the connection as: "Claude, through mcp.minca.social" */

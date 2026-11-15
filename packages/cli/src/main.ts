@@ -17,7 +17,7 @@ import { parseArgs } from 'node:util';
 import { isValidRecoveryCode, type P2PNode } from '@minca/core';
 import { NODE_ACTIONS, PEER_CONTENT_NOTE, runAction, type NodeAction } from '@minca/actions';
 import { suggestedAutomations } from '@minca/std';
-import { homeAddress } from '@minca/core/session';
+import { homeAddress } from '@minca/session';
 import { runAppNode, stdinLines } from './app-node.js';
 import { chooseAccount, createAccount, homePath, nodeFor, openHome, unlock, type Unlocked } from './home.js';
 import { findBot, listBots, newBotFolder, type KeptBot } from './bots.js';

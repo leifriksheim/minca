@@ -1,4 +1,4 @@
-import type { PairingStage } from '@minca/core/session';
+import type { PairingStage } from '@minca/session';
 import type { AuthState, MincaSession } from '@minca/auth';
 import { useAuth } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';

@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@minca/session": "*",
     "@types/react": "^19.3.0",
     "typescript": "^7.0.2"
   },

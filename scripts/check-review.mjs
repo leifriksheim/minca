@@ -12,6 +12,7 @@ const PROTOCOL = [
   /^packages\/core\/tests\//,
   /^packages\/relay\//,
   /^packages\/auth\/src\//,
+  /^packages\/(session|storage)\/src\//,
 ];
 const NEAR = [
   /^packages\/cli\/(src|tests)\//,

@@ -21,7 +21,7 @@ import {
   newAccountId,
   isAccountId,
   type AccountSummary,
-} from '../../core/src/identity/account-store.js';
+} from '../../session/src/account-store.js';
 import { createVault } from '../../core/src/identity/account-vault.js';
 
 const temporary: string[] = [];

@@ -285,6 +285,32 @@ export interface StorageAdapter {
   }): Promise<void>;
 }
 
+/** What changed in a shared store since it was last read */
+export interface StorageReload {
+  /** Version ids another writer added */
+  readonly added: ReadonlyArray<string>;
+  /** Version ids another writer removed */
+  readonly removed: ReadonlyArray<string>;
+}
+
+/**
+ * A store other writers change underneath, such as a directory two processes
+ * share. Its versions are the truth and its entries an index over them; a
+ * node watches it and puts the entries right with `reconcileSharedStore`.
+ */
+export interface SharedStorageAdapter extends StorageAdapter {
+  /** Re-reads what other writers changed; there is no change notification */
+  reload(): Promise<StorageReload>;
+  /** Every version id held now, whatever the entries say */
+  listVersionIds(): Promise<ReadonlyArray<string>>;
+}
+
+export const isSharedStorageAdapter = (adapter: StorageAdapter): adapter is SharedStorageAdapter =>
+  'reload' in adapter &&
+  typeof adapter.reload === 'function' &&
+  'listVersionIds' in adapter &&
+  typeof adapter.listVersionIds === 'function';
+
 export type BatchOp =
   | { readonly type: 'put'; readonly key: string; readonly value: Uint8Array }
   | { readonly type: 'delete'; readonly key: string };

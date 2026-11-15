@@ -141,7 +141,7 @@ only, so a closed laptop is no longer on that list.
 | A carrier reopening a space when its read key changes             | `packages/core/src/node/carrier.ts`                                         |
 | A carrier on the mesh: relays, proving read without the space key | `carrier.ts`; `packages/core/src/network/peer-auth.ts`; 04 §6.3             |
 | Wakes                                                             | 03 §15; 06 §4.4; `packages/core/src/space/own-automations.ts`; `carrier.ts` |
-| `access: "carry"`, the carry grant, connecting a carrier          | 06 §2.4, §4.3; `packages/core/src/session/connect.ts`; `packages/auth`      |
+| `access: "carry"`, the carry grant, connecting a carrier          | 06 §2.4, §4.3; `packages/session/src/connect.ts`; `packages/auth`           |
 | `minca carry`, and the extension's carrier                        | `packages/cli/src/carry.ts`; `apps/extension`                               |
 | Known defect #283; #170's removed carrier                         | 06 §4.2; threat model §3.8                                                  |
 

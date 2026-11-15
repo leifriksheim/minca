@@ -188,7 +188,7 @@ compaction left.
   `~/.local/state/minca`, then `<first 16 hex of SHA-256 of the home's
 path>/<account id>/stores`. A
   command and the daemon share it, and the daemon finds the command's writes
-  (`reconcileFolder`). Writer keys are beside it in `writer-keys/`. Older
+  (`reconcileSharedStore`). Writer keys are beside it in `writer-keys/`. Older
   slots left in the home, and `writers/`, are not read, so two versions of
   minca never sign with one key. `minca agent` and the commands an agent runs
   keep each session's key and stores in a slot of `<home>/agent`
@@ -310,10 +310,12 @@ With `commit`, placing a version is one atomic write. Without it, versions go
 first, then the entries in one batch, then the deletes. So no entry ever
 names a version that isn't there.
 
-The library's adapters are IndexedDB ([above](#indexeddb)), a directory
-(`directoryStores`, for a data folder's registry and a node's stores on
-disk), SQLite (`sqliteStores`, [below](#sqlite)), a sealing wrapper, and one
-in memory for tests.
+The library's adapters are in `@minca/storage`, one entry point each:
+IndexedDB (`/indexeddb`, [above](#indexeddb)), a directory (`/folder`, for a
+data folder's registry and a node's stores on disk), SQLite (`/sqlite`,
+[below](#sqlite)), S3 (`/s3`, for [mirrors](#mirrors)) and memory
+(`/memory`, for tests). `@minca/core` keeps the interfaces and the sealing
+wrapper, `createEncryptedAdapter`.
 
 A directory store keeps its versions and its entries' keys in memory, so a
 query or a listing reads no directory. It reads the keys again when the node
@@ -334,7 +336,7 @@ host keeps its stores this way. Pass it a connection: `DatabaseSync` from
 imports no driver, so it runs wherever one does.
 
 ```ts
-import { sqliteStores, type SqliteDatabase } from '@minca/core';
+import { sqliteStores, type SqliteDatabase } from '@minca/storage/sqlite';
 declare const DatabaseSync: new (file: string) => SqliteDatabase;
 // ---cut---
 // import { DatabaseSync } from 'node:sqlite';

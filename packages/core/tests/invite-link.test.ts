@@ -15,7 +15,7 @@ import { createMailboxClient } from '../src/network/relays.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { open, person, settle } from './helpers/person.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { createNode } from '../src/node/node.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';

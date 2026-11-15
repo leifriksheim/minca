@@ -1,7 +1,8 @@
 name: Release
 
 # A version tag (`npm run release` makes and pushes it) is the whole release:
-# it tests the tagged commit, publishes @minca/core and @minca/cli to npm, and
+# it tests the tagged commit, publishes @minca/core, @minca/storage,
+# @minca/session and @minca/cli to npm, and
 # puts the downloads on a GitHub Release, under names that stay the same from
 # one release to the next, so the site links to
 # releases/latest/download/<file>. A tag with a `-` (v0.2.0-rc.1) makes a
@@ -26,7 +27,7 @@ permissions:
   contents: read
 
 jobs:
-  # The checks, then the two packages as npm would publish them.
+  # The checks, then the packages as npm would publish them.
   packages:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -41,7 +42,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
-      - run: mkdir "$RUNNER_TEMP/npm" && npm pack -w @minca/core -w @minca/cli --pack-destination "$RUNNER_TEMP/npm"
+      - run: mkdir "$RUNNER_TEMP/npm" && npm pack -w @minca/core -w @minca/storage -w @minca/session -w @minca/cli --pack-destination "$RUNNER_TEMP/npm"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-packages
@@ -78,13 +79,15 @@ jobs:
           dist_tag=latest
           [[ "$TAG" == *-* ]] && dist_tag=next
           ls -l
-          for package in core cli; do
+          # In dependency order: each needs the one before it on npm.
+          for package in core storage session cli; do
             if [[ ! -f "minca-$package-$version.tgz" ]]; then
               echo "::error::The tag is $TAG, but @minca/$package is packed at another version."
               exit 1
             fi
           done
-          for package in core cli; do
+          # In dependency order: each needs the one before it on npm.
+          for package in core storage session cli; do
             if [[ "$(npm view "@minca/$package@$version" version 2>/dev/null)" == "$version" ]]; then
               echo "@minca/$package@$version is already on npm."
             else

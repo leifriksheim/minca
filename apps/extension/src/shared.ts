@@ -16,7 +16,7 @@
  * in IndexedDB, which every page of the extension shares.
  */
 import type { P2PNode } from '@minca/core';
-import { GRANT_VERSION, MAX_GRANT_DAYS, type ConnectOptions, type Grant } from '@minca/core/session';
+import { GRANT_VERSION, MAX_GRANT_DAYS, type ConnectOptions, type Grant } from '@minca/session';
 import type { Shown } from '@minca/app-shared/notify';
 
 declare const __MINCA_HOME__: string;

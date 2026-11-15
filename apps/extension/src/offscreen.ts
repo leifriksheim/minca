@@ -6,7 +6,9 @@
  * writes into the pod when Chrome allows it, and reports how things are to
  * the other pages and the badge.
  */
-import { createDirectoryBlobStore, indexedDBStores, type BlobStore, type P2PNode } from '@minca/core';
+import { createDirectoryBlobStore } from '@minca/storage/folder';
+import { indexedDBStores } from '@minca/storage/indexeddb';
+import type { BlobStore, P2PNode } from '@minca/core';
 import {
   appKey,
   deleteBrowserData,
@@ -15,8 +17,8 @@ import {
   startConnectedNode,
   watchGrant,
   type Grant,
-} from '@minca/core/session';
-import { forgetDataFolder, queryFolderPermission, recallDataFolder } from '@minca/core/storage';
+} from '@minca/session';
+import { forgetDataFolder, queryFolderPermission, recallDataFolder } from '@minca/storage/folder';
 import { watchNotifications } from '@minca/std';
 import { createNotifier } from '@minca/app-shared/notify';
 import {

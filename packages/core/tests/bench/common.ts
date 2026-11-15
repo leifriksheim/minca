@@ -8,7 +8,7 @@ import { createIdentityManager } from '../../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../src/identity/root-signer.js';
 import { generateSeed } from '../../src/identity/recovery-code.js';
 import type { FakeHub } from '../helpers/fake-transport.js';
-import { memoryStores } from '../helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import type { StoreFactory } from '../../src/node/stores.js';
 
 const manager = createIdentityManager();

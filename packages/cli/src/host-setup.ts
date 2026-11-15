@@ -6,18 +6,10 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  createFolderAdapter,
-  createP256Provider,
-  createS3BlobStore,
-  decodeKey,
-  sqliteStores,
-  type BatchOp,
-  type BlobStore,
-  type HostLimits,
-  type SqliteStores,
-  type Version,
-} from '@minca/core';
+import { createFolderAdapter, decodeKey } from '@minca/storage/folder';
+import { createP256Provider, type BatchOp, type BlobStore, type HostLimits, type Version } from '@minca/core';
+import { createS3BlobStore } from '@minca/storage/s3';
+import { sqliteStores, type SqliteStores } from '@minca/storage/sqlite';
 import { openFsDirectory } from './fs-directory.js';
 import type { Billing } from './host.js';
 import { createStripeBilling } from './stripe.js';

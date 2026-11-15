@@ -9,7 +9,7 @@ import {
   type ConnectRequest,
   type IncomingRequest,
   type ProposeRequest,
-} from '@minca/core/session';
+} from '@minca/session';
 import { type MincaAuth } from '@minca/auth';
 import { useAccountPicture, useAuth, useSession, useMinca, useWatched } from '@minca/react';
 import { Mark, Wordmark } from '@minca/app-shared/Wordmark';

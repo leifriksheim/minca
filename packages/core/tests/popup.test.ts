@@ -1,6 +1,6 @@
 import { afterEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { popupFeatures } from '../src/session/popup.js';
+import { popupFeatures } from '@minca/session';
 
 /** The window a popup opens from: where it is on the screen, and its size */
 const WINDOW = ['screenX', 'screenY', 'outerWidth', 'outerHeight'] as const;

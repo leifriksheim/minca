@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "@minca/core": "*",
-    "@minca/std": "*"
+    "@minca/std": "*",
+    "@minca/storage": "*"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

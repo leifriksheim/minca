@@ -29,11 +29,13 @@ export type {
   CollectionDef,
   PeerInfo,
   StorageAdapter,
+  SharedStorageAdapter,
+  StorageReload,
   BatchOp,
   NetworkMessage,
   Result,
 } from './types.js';
-export { ok } from './types.js';
+export { ok, isSharedStorageAdapter } from './types.js';
 
 // Identity & Key Management
 export { createP256Provider } from './identity/crypto-p256.js';
@@ -49,16 +51,10 @@ export {
   seedToRecoveryCode,
   isValidRecoveryCode,
   recoveryCodeToSeed,
+  RECOVERY_SEED_BYTES,
 } from './identity/recovery-code.js';
-export { publicKeyToDid, didOf, P256_MULTICODEC } from './identity/did.js';
+export { publicKeyToDid, didOf, didToPublicKey, P256_MULTICODEC } from './identity/did.js';
 export { createIdentityManager, rootFromSeed } from './identity/identity-manager.js';
-export {
-  createFolderAccountStore,
-  createBrowserAccountStore,
-  accountDataPath,
-  newAccountId,
-} from './identity/account-store.js';
-export type { AccountStore, AccountSummary } from './identity/account-store.js';
 export {
   createVault,
   wrapSeedWithDeviceKey,
@@ -70,6 +66,7 @@ export {
   deriveAccountKey,
   deviceWrapsFor,
   withWrap,
+  isAccountVault,
 } from './identity/account-vault.js';
 export {
   deriveContactKeyBytes,
@@ -85,19 +82,38 @@ export { openFrom } from './identity/hpke.js';
 
 export type { AccountVault, SeedWrap, DeviceWrap, PassphraseWrap } from './identity/account-vault.js';
 export type { IdentityManager, Identity } from './identity/identity-manager.js';
-export { createDeviceKey, getDeviceKey, deleteDeviceKey } from './identity/device-key.js';
-export type { DeviceKey } from './identity/device-key.js';
 export { createLocalRootSigner } from './identity/root-signer.js';
 export type { RootSigner, NoteRequest } from './identity/root-signer.js';
 
+export {
+  newPairingSecret,
+  pairingCode,
+  pairingCommitment,
+  encodePairingTicket,
+  decodePairingTicket,
+} from './identity/pairing.js';
 export type { PairingTicket } from './identity/pairing.js';
 
-export type { Channel } from './identity/channel.js';
-export { issueDelegation, commandCovers } from './identity/ucan.js';
+export {
+  channelKeyPair,
+  channelRoom,
+  deriveChannel,
+  CODE_CHANNEL,
+  PAIRING_CHANNEL,
+} from './identity/channel.js';
+export type { Channel, ChannelKind } from './identity/channel.js';
+export { issueDelegation, commandCovers, verifyNote } from './identity/ucan.js';
 export type { Delegation, DelegationPayload, IssueOptions } from './identity/ucan.js';
 
 export type { Policy, Statement } from './identity/policy.js';
-export { noteTerms, noteSpaces } from './identity/abilities.js';
+export {
+  noteTerms,
+  noteSpaces,
+  grantsRecordsOnly,
+  ALL_COMMAND,
+  READ_COMMAND,
+  RECORDS_COMMAND,
+} from './identity/abilities.js';
 export type { NoteTerms } from './identity/abilities.js';
 
 // Schema & Data Structures
@@ -112,30 +128,11 @@ export { createVersion, canonicalize } from './schema/version.js';
 export { createStorageProvider } from './storage/storage-provider.js';
 export type { StorageProvider } from './storage/storage-provider.js';
 
-// Storage in a folder the user owns — the one store that is not origin-scoped
-export { createFolderAdapter, decodeKey } from './storage/folder-adapter.js';
-export type {
-  FolderAdapter,
-  FolderReload,
-  DirectoryHandleLike,
-  FileHandleLike,
-  WritableFileLike,
-} from './storage/folder-adapter.js';
-
-export { reconcileFolder } from './storage/folder-reconcile.js';
-export { sqliteStores } from './storage/sqlite-adapter.js';
-export type { SqliteDatabase, SqliteStatement, SqliteStores, SqliteValue } from './storage/sqlite-adapter.js';
-export type { FolderReconciliation } from './storage/folder-reconcile.js';
-export {
-  isFolderStorageAvailable,
-  pickDataFolder,
-  queryFolderPermission,
-  ensureFolderPermission,
-  rememberDataFolder,
-  recallDataFolder,
-  forgetDataFolder,
-} from './storage/directory-access.js';
-export type { FolderAccessMode } from './storage/directory-access.js';
+export { createEncryptedAdapter } from './storage/encrypted-adapter.js';
+export { createBodyCache } from './storage/body-cache.js';
+export type { BodyCache } from './storage/body-cache.js';
+export { reconcileSharedStore } from './storage/shared-store.js';
+export type { Reconciliation } from './storage/shared-store.js';
 
 // Spaces
 export { parseSpaceInvite } from './space/space-manager.js';
@@ -158,7 +155,7 @@ export { titleField, recordTitle, quickAddBody } from './schema/quick-add.js';
 export type { Membership } from './space/account-registry.js';
 export type { SpaceInvite } from './space/space-manager.js';
 export { deriveReadKey, revokeKey } from './space/space-access.js';
-export { CONSTITUTION, spaceIdOf } from './space/constitution.js';
+export { CONSTITUTION, spaceIdOf, soleFounder } from './space/constitution.js';
 export type { Constitution } from './space/constitution.js';
 export { replayAccess, may, isMember, rolesOf, readers, checkRelays, MAX_RELAYS } from './space/roles.js';
 export type {
@@ -186,6 +183,7 @@ export {
   SPACE_RELAYS,
   SPACE_KEEPERS,
   grantFits,
+  checkFoundingRoles,
 } from './space/grants.js';
 export type { FoundingRole } from './space/grants.js';
 export { displayName } from './space/names.js';
@@ -204,7 +202,9 @@ export type { PeerTransport, PeerTransportEvents, SignalledTransport } from './n
 export { createMesh } from './network/mesh.js';
 export type { Mesh, MeshConfig, MeshStatus, PendingConnection } from './network/mesh.js';
 
+export { createNetworkManager } from './network/network-manager.js';
 export type { NetworkManager, NetworkEvents } from './network/network-manager.js';
+export { createTransportSwitch, remoteTransport, serveTransport } from './network/remote-transport.js';
 
 // Gossip/Sync Protocol
 
@@ -227,6 +227,7 @@ export {
   bytesToHex,
 } from './utils/encoding.js';
 export { sha256 } from './utils/hash.js';
+export { isStoredVersion } from './utils/guards.js';
 export { protocolError, isProtocolError } from './utils/errors.js';
 export type { ProtocolError, ProtocolErrorCode } from './utils/errors.js';
 export { createEmitter, createListeners } from './utils/events.js';
@@ -239,6 +240,7 @@ export type { FileLimits } from './files/space-files.js';
 // Node: identity + spaces + sync, behind one API
 export {
   MAX_PROPOSALS,
+  checkProposal,
   checkAppAutomation,
   checkOwnAutomation,
   holdsFor,
@@ -317,7 +319,7 @@ export {
   readPayAnswer,
   HOST_DESCRIPTION_PATH,
   HostError,
-} from './session/hosting.js';
+} from './hosting/hosting.js';
 export type {
   Hosting,
   SubscriptionKey,
@@ -335,14 +337,10 @@ export type {
   HostLimits,
   OverSpace,
   SpaceUsage,
-} from './session/hosting.js';
+} from './hosting/hosting.js';
 
 // Mirrors: a space kept in a dumb file store — a bucket, an app folder — synced like a peer
 export type { BlobStore } from './storage/blob-store.js';
-export { createMemoryBlobStore } from './storage/blob/memory.js';
-export { createS3BlobStore } from './storage/blob/s3.js';
-export { createDirectoryBlobStore } from './storage/blob/directory.js';
-export type { S3Config } from './storage/blob/s3.js';
 export { deleteMirrored } from './storage/mirror.js';
 export type { Taken } from './storage/mirror.js';
 export * from './node/index.js';

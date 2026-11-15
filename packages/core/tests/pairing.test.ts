@@ -21,7 +21,7 @@ import {
   PAIRING_CHANNEL,
   type ChannelKind,
 } from '../src/identity/channel.js';
-import { offerToPhone, receiveFromDesktop, type PairingStage } from '../src/session/pairing.js';
+import { offerToPhone, receiveFromDesktop, type PairingStage } from '@minca/session';
 import { generateSeed, seedToRecoveryCode } from '../src/identity/recovery-code.js';
 import { base64UrlEncode, utf8Encode, utf8Decode } from '../src/utils/encoding.js';
 import { isProtocolError } from '../src/utils/errors.js';

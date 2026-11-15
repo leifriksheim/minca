@@ -1,5 +1,5 @@
 // Liquid's Minca setup: it never holds a seed, and connects to the person's account home instead.
-import { createMincaConnection } from '@minca/core/session';
+import { createMincaConnection } from '@minca/session';
 import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
 
 /** The account home's connect page — ours by default; anyone can run their own */

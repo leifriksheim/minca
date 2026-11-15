@@ -15,7 +15,7 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import type { StoreFactory } from '../src/node/stores.js';

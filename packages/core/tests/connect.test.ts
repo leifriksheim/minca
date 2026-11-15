@@ -7,7 +7,6 @@ import assert from 'node:assert/strict';
 
 import { createMincaAuth, type MincaAuth } from '@minca/auth';
 import {
-  grantStore,
   homeAddress,
   startConnectedNode,
   watchGrant,
@@ -15,12 +14,12 @@ import {
   type ConnectRequest,
   type Grant,
   type ProposeRequest,
-} from '../src/session/connect.js';
-import { createMincaConnection } from '../src/session/connection.js';
-import { createFolderAccountStore } from '../src/identity/account-store.js';
+} from '@minca/session';
+import { createMincaConnection } from '@minca/session';
+import { createFolderAccountStore } from '@minca/session';
 import type { NodeEvent, P2PNode } from '../src/node/types.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { team } from '../src/space/presets.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
@@ -37,6 +36,7 @@ import { until } from './helpers/until.js';
 import { watchNotifications, type NotifyMatch } from '@minca/std';
 import { notifyOn } from '../src/space/own-automations.js';
 import { asked, newAppKey, testAppKey } from './helpers/person.js';
+import { grantStore } from '../../session/src/connect.js';
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
@@ -1427,7 +1427,7 @@ describe('an app showing its own notifications', () => {
 
 describe('the app asking its home', () => {
   test('a hello that arrives before the request is ready is still answered, and the request repeats until answered', async () => {
-    const { connectToHome } = await import('../src/session/connect.js');
+    const { connectToHome } = await import('../../session/src/connect.js');
     const key = await testAppKey('early-hello');
     const toHome: Array<{ message: unknown; origin: string }> = [];
     const popup = {
@@ -1530,7 +1530,7 @@ describe('the home receiving a request', () => {
   test('it says hello once, and still takes a request that comes much later', async () => {
     const popup = popupWindow();
     try {
-      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const { receiveConnectRequest } = await import('../../session/src/connect.js');
       const received = receiveConnectRequest(5000);
       // A phone that paused the app's tab: its request comes when the tab runs again.
       await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -1555,7 +1555,7 @@ describe('the home receiving a request', () => {
   test('it stops waiting when the app that opened it is gone', async () => {
     const popup = popupWindow();
     try {
-      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const { receiveConnectRequest } = await import('../../session/src/connect.js');
       const received = receiveConnectRequest(60_000);
       const g: { opener?: unknown } = globalThis;
       if (isRecord(g.opener)) g.opener.closed = true;
@@ -1568,7 +1568,7 @@ describe('the home receiving a request', () => {
   test('a request it cannot read is refused out loud, not left waiting', async () => {
     const popup = popupWindow();
     try {
-      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const { receiveConnectRequest } = await import('../../session/src/connect.js');
       const received = receiveConnectRequest(1000);
       popup.send({
         type: 'minca:request',
@@ -1587,7 +1587,7 @@ describe('the home receiving a request', () => {
   });
 
   test('a request with a field it does not know is refused, subscriptions while connecting included', async () => {
-    const { receiveConnectRequest } = await import('../src/session/connect.js');
+    const { receiveConnectRequest } = await import('../../session/src/connect.js');
     for (const request of [
       await asked({
         v: 1,
@@ -1630,7 +1630,7 @@ describe('the home receiving a request', () => {
   });
 
   test('a proposed subscription whose click leads to another site, or that names a protocol collection, is refused', async () => {
-    const { receiveConnectRequest } = await import('../src/session/connect.js');
+    const { receiveConnectRequest } = await import('../../session/src/connect.js');
     const asked = [
       {
         v: 2,
@@ -1672,7 +1672,7 @@ describe('the home receiving a request', () => {
   test('a carry request is read', async () => {
     const popup = popupWindow();
     try {
-      const { receiveConnectRequest, isProposeRequest } = await import('../src/session/connect.js');
+      const { receiveConnectRequest, isProposeRequest } = await import('../../session/src/connect.js');
       const received = receiveConnectRequest(1000);
       popup.send(
         {
@@ -1696,7 +1696,7 @@ describe('the home receiving a request', () => {
   });
 
   test('a proposal is read, and one with nothing in it, or asking for more, is refused', async () => {
-    const { receiveConnectRequest, isProposeRequest } = await import('../src/session/connect.js');
+    const { receiveConnectRequest, isProposeRequest } = await import('../../session/src/connect.js');
     const origin = 'https://app.test';
     for (const request of [
       { v: 2, kind: 'propose', automations: [] },

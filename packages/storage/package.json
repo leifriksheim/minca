@@ -1,0 +1,61 @@
+{
+  "name": "@minca/storage",
+  "version": "0.3.1",
+  "type": "module",
+  "description": "Where a Minca node keeps its data: IndexedDB, SQLite, a folder on disk, S3 or memory, each on its own entry point behind @minca/core's StorageAdapter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leifriksheim/minca.git",
+    "directory": "packages/storage"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    "./indexeddb": {
+      "@minca/source": "./src/indexeddb/index.ts",
+      "types": "./dist/indexeddb/index.d.ts",
+      "import": "./dist/indexeddb/index.js"
+    },
+    "./sqlite": {
+      "@minca/source": "./src/sqlite/index.ts",
+      "types": "./dist/sqlite/index.d.ts",
+      "import": "./dist/sqlite/index.js"
+    },
+    "./folder": {
+      "@minca/source": "./src/folder/index.ts",
+      "types": "./dist/folder/index.d.ts",
+      "import": "./dist/folder/index.js"
+    },
+    "./s3": {
+      "@minca/source": "./src/s3/index.ts",
+      "types": "./dist/s3/index.d.ts",
+      "import": "./dist/s3/index.js"
+    },
+    "./memory": {
+      "@minca/source": "./src/memory/index.ts",
+      "types": "./dist/memory/index.d.ts",
+      "import": "./dist/memory/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@minca/core": "*",
+    "aws4fetch": "^1.0.20"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

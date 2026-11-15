@@ -832,8 +832,8 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     is open there
     ([#444](https://github.com/leifriksheim/minca/issues/444),
     [#165](https://github.com/leifriksheim/minca/issues/165);
-    `packages/core/src/session/connect.ts`, `appKey`;
-    `packages/core/src/node/writer-keys.ts`, `browserWriterKeys`).
+    `packages/session/src/connect.ts`, `appKey`;
+    `packages/storage/src/indexeddb/writer-keys.ts`, `browserWriterKeys`).
   - What it signed before the revoke stands. The revoke stops the key from
     then on, but for one thing: it can still end its account's founder
     status (above), and its cutoff keeps what the revoking node held of the key's
@@ -1500,7 +1500,7 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     of its fund's lines at most eight short ones with no control or format
     characters; the host's own `name`, `price` and `terms`, and bot names,
     are not held to that
-    (`fundShown` and `fundLines` in `packages/core/src/session/hosting.ts`;
+    (`fundShown` and `fundLines` in `packages/core/src/hosting/hosting.ts`;
     `packages/core/tests/fund-lines.test.ts`), and the reference app shows
     them as text beside the `perGb` rate it bills by, never in its place
     (`FundPaysFor` in `apps/shared/src/SpaceHosting.tsx`). Accepted: a host is chosen and

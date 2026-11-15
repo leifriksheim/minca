@@ -32,7 +32,7 @@ import {
   signRequest,
   subscriptionKey,
   verifyRequest,
-} from '../../core/src/session/hosting.js';
+} from '../../core/src/hosting/hosting.js';
 import { addressOf, startHost } from '../src/host.js';
 import { createStripeBilling, verifyStripeSignature } from '../src/stripe.js';
 import {
@@ -44,9 +44,9 @@ import {
   walletFromEnv,
 } from '../src/host-setup.js';
 import { createWalletPayments, NETWORKS, toUnits } from '../src/wallet.js';
-import { createMemoryBlobStore } from '../../core/src/storage/blob/memory.js';
+import { createMemoryBlobStore } from '@minca/storage/memory';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
-import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { at, bodyOf, urlOf } from './helpers/json.js';
 import { tempDir } from './helpers/nodes.js';
 import { until } from '../../core/tests/helpers/until.js';

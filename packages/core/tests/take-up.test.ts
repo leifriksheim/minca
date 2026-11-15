@@ -8,13 +8,13 @@ import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMincaAuth, type MincaAuth, type MincaAuthConfig, type MincaSession } from '@minca/auth';
-import type { KeyValueStore } from '../src/session/stay-signed-in.js';
-import { createFolderAccountStore } from '../src/identity/account-store.js';
+import type { KeyValueStore } from '@minca/session';
+import { createFolderAccountStore } from '@minca/session';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { until } from './helpers/until.js';
 import { createFakeHub } from './helpers/fake-transport.js';
-import type { PairingStage } from '../src/session/pairing.js';
+import type { PairingStage } from '@minca/session';
 import { encodePairingTicket } from '../src/identity/pairing.js';
 import { base64UrlEncode } from '../src/utils/encoding.js';
 

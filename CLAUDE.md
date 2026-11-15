@@ -35,6 +35,8 @@ implement and less to get wrong, not more.
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `spec/`                                       | The protocol specification, `README.md` plus parts 01–07 (normative), and its threat model.    |
 | `packages/core`                               | `@minca/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`)          |
+| `packages/storage`                            | `@minca/storage`: where a node keeps its data, one entry each: IndexedDB, folder, SQLite, S3   |
+| `packages/session`                            | `@minca/session`: an app and its account home (grants, connect codes), a browser node's worker |
 | `packages/auth`                               | `@minca/auth`: signing in to an account, what an account home is built on                      |
 | `packages/std`, `packages/actions`            | `@minca/std`: the standard collections; `@minca/actions`: a node's named operations            |
 | `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
@@ -138,8 +140,8 @@ two implementations must read it the same way.
 Tests show a change does what its author meant. They don't show it can't be
 turned against someone, so they aren't enough. A protocol change is one to
 `spec/`, or to code or tests any spec _Source:_ line cites
-(`packages/core/src`, `packages/core/tests`, `packages/relay`,
-`packages/auth`, the protocol parts of `packages/cli`, `packages/std` and
+(`packages/core/src`, `packages/core/tests`, `packages/storage`,
+`packages/session`, `packages/relay`, `packages/auth`, the protocol parts of `packages/cli`, `packages/std` and
 `packages/actions`, the grant in `apps/home`). Before one is called done
 or merged:
 
@@ -229,8 +231,6 @@ What the protocol uses (`packages/core`):
 - `@cfworker/json-schema`, `packages/core/src/schema/collection-def.ts`:
   validates stored collection definitions. Interprets rather than compiles, so
   it runs under a strict CSP and in extensions.
-- `aws4fetch`, `packages/core/src/storage/blob/s3.ts`: S3 SigV4 signing, whose
-  rules differ in small ways between providers. `fetch` and `crypto.subtle` only.
 
 The protocol reads validators only through the Standard JSON Schema interface,
 so it needs none of Zod, Valibot or ArkType; `zod` is a dev dependency to test
@@ -238,6 +238,9 @@ that.
 
 Elsewhere:
 
+- `aws4fetch` in `packages/storage` (`packages/storage/src/s3/blob-store.ts`):
+  S3 SigV4 signing for a mirror in a bucket, whose rules differ in small ways
+  between providers. `fetch` and `crypto.subtle` only.
 - `ws` in `packages/cli` and `packages/relay`: Node has a WebSocket client but
   no server.
 - `playwright`, a dev dependency at the root, never bundled

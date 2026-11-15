@@ -2,7 +2,7 @@
   "name": "@minca/core",
   "version": "0.3.1",
   "type": "module",
-  "description": "Self-sovereign P2P protocol for the browser \u2014 identity, schemas, storage, networking, and gossip sync",
+  "description": "The Minca protocol: identity, signed records, spaces, the network and sync, and a node that holds them",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/leifriksheim/minca.git",
@@ -21,30 +21,20 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./storage": {
-      "@minca/source": "./src/storage/index.ts",
-      "types": "./dist/storage/index.d.ts",
-      "import": "./dist/storage/index.js"
-    },
-    "./node-worker": {
-      "@minca/source": "./src/node-worker.ts",
-      "types": "./dist/node-worker.d.ts",
-      "import": "./dist/node-worker.js"
-    },
     "./schemas": {
       "@minca/source": "./src/schemas/index.ts",
       "types": "./dist/schemas/index.d.ts",
       "import": "./dist/schemas/index.js"
     },
-    "./session": {
-      "@minca/source": "./src/session/index.ts",
-      "types": "./dist/session/index.d.ts",
-      "import": "./dist/session/index.js"
-    },
     "./inbox": {
       "@minca/source": "./src/inbox/index.ts",
       "types": "./dist/inbox/index.d.ts",
       "import": "./dist/inbox/index.js"
+    },
+    "./utils": {
+      "@minca/source": "./src/utils/index.ts",
+      "types": "./dist/utils/index.d.ts",
+      "import": "./dist/utils/index.js"
     }
   },
   "scripts": {
@@ -58,7 +48,9 @@
   "devDependencies": {
     "@minca/actions": "*",
     "@minca/auth": "*",
+    "@minca/session": "*",
     "@minca/std": "*",
+    "@minca/storage": "*",
     "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2",
     "tsx": "^4.19.0",
@@ -74,8 +66,7 @@
     "@cfworker/json-schema": "^4.1.1",
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
-    "@scure/base": "^2.4.0",
-    "aws4fetch": "^1.0.20"
+    "@scure/base": "^2.4.0"
   },
   "publishConfig": {
     "access": "public"

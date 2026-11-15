@@ -12,17 +12,19 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   accountDataPath,
-  createNode,
   createFolderAccountStore,
+  newAccountId,
+  type AccountStore,
+  type AccountSummary,
+} from '@minca/session';
+import {
+  createNode,
   createIdentityManager,
   createVault,
   deriveLocalKey,
   deriveAccountKey,
   deriveContactKeyBytes,
-  directoryStores,
-  folderStores,
   generateSeed,
-  newAccountId,
   recoveryCodeToSeed,
   rootFromSeed,
   seedToRecoveryCode,
@@ -30,16 +32,14 @@ import {
   withWrap,
   wrapSeedWithPassphrase,
   CLI_PASSPHRASE_LABEL,
-  type AccountStore,
-  type AccountSummary,
   type NodeConfig,
   type P2PNode,
-  type DirectoryHandleLike,
   type PassphraseWrap,
   type RootSigner,
   type StoreFactory,
   type WriterKeySource,
 } from '@minca/core';
+import { directoryStores, folderStores, type DirectoryHandleLike } from '@minca/storage/folder';
 import { openFsDirectory } from './fs-directory.js';
 import { fileWriterKeys } from './writer-keys.js';
 

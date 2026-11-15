@@ -15,12 +15,12 @@ import {
   createLocalRootSigner,
   createNode,
   deriveAccountKey,
-  directoryStores,
   generateSeed,
   remoteNode,
   type P2PNode,
 } from '@minca/core';
-import { GRANT_VERSION, grantTerms, type Grant } from '@minca/core/session';
+import { directoryStores } from '@minca/storage/folder';
+import { GRANT_VERSION, grantTerms, type Grant } from '@minca/session';
 import {
   decodeWire,
   DESKTOP_GRANT_DAYS,

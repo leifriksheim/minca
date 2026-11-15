@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createServer, type IncomingMessage } from 'node:http';
 import * as oauth from 'oauth4webapi';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import type { Grant } from '@minca/core/session';
+import type { Grant } from '@minca/session';
 import type { P2PNode } from '../../../core/src/node/types.js';
 import { didOf } from '../../../core/src/identity/did.js';
 import { until } from '../../../core/tests/helpers/until.js';

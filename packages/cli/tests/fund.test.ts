@@ -6,8 +6,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
-import { createMemoryBlobStore } from '../../core/src/storage/blob/memory.js';
+import { memoryStores } from '@minca/storage/memory';
+import { createMemoryBlobStore } from '@minca/storage/memory';
 import { createFunds } from '../src/fund.js';
 
 const DAY = 86_400;

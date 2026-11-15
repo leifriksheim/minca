@@ -77,9 +77,9 @@ import {
   createLocalRootSigner,
   generateSeed,
   seedToRecoveryCode,
-  indexedDBStores,
   rolePresets,
 } from '@minca/core';
+import { indexedDBStores } from '@minca/storage/indexeddb';
 
 // 1. An account is a seed. Show its recovery code once; the person keeps it.
 const seed = generateSeed();
@@ -112,7 +112,7 @@ Most apps never hold the seed at all. They ask the person's account home,
 which signs a note for the app's own key, for the spaces the person picks:
 
 ```tsx
-import { createMincaConnection } from '@minca/core/session';
+import { createMincaConnection } from '@minca/session';
 import { MincaProvider, useConnection } from '@minca/react';
 
 const connection = createMincaConnection({

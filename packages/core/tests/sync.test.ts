@@ -6,7 +6,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { until } from './helpers/until.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { issueDelegation } from '../src/identity/ucan.js';
 import { writeRequirement } from '../src/identity/abilities.js';

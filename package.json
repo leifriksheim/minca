@@ -5,6 +5,8 @@
   "description": "Minca: the protocol, its CLI and relay, and the apps built on it",
   "workspaces": [
     "packages/core",
+    "packages/storage",
+    "packages/session",
     "packages/relay",
     "packages/names",
     "packages/cli",
@@ -21,7 +23,7 @@
     "dev": "node scripts/dev.mjs",
     "minca": "node --env-file=packages/cli/.env.dev --conditions=@minca/source --import tsx packages/cli/src/main.ts",
     "signal": "node packages/relay/signaling-server.mjs",
-    "build": "npm run build -w @minca/core && npm run bundle -w @minca/cli",
+    "build": "npm run build -w @minca/core -w @minca/storage -w @minca/session && npm run bundle -w @minca/cli",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm test --workspaces --if-present",
     "scenarios": "npm run scenarios -w @minca/scenarios",

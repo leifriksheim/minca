@@ -6,14 +6,7 @@
  * the moment the home's window takes focus, and the home's answer would have
  * nowhere to arrive.
  */
-import {
-  connectToHome,
-  homeAddress,
-  listAccounts,
-  pickPod,
-  rememberPod,
-  type Grant,
-} from '@minca/core/session';
+import { connectToHome, homeAddress, listAccounts, pickPod, rememberPod, type Grant } from '@minca/session';
 import {
   ask,
   CONNECT_REQUEST,

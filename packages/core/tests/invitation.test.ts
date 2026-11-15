@@ -19,7 +19,7 @@ import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager
 import { team } from '../src/space/presets.js';
 import { base64UrlDecode } from '../src/utils/encoding.js';
 import { createFakeHub } from './helpers/fake-transport.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { makeKey, person, type Person } from './helpers/person.js';
 import { resign, selfSigner } from './helpers/invitation.js';
 

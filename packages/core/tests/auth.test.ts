@@ -7,10 +7,10 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 
 import { createMincaAuth, type MincaAuth, type MincaAuthConfig, type AuthState } from '@minca/auth';
-import type { KeyValueStore } from '../src/session/stay-signed-in.js';
-import { createFolderAccountStore } from '../src/identity/account-store.js';
+import type { KeyValueStore } from '@minca/session';
+import { createFolderAccountStore } from '@minca/session';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 function memoryStorage(): KeyValueStore {
   const values = new Map<string, string>();

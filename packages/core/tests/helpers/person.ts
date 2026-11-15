@@ -10,7 +10,7 @@ import { createLocalRootSigner } from '../../src/identity/root-signer.js';
 import { createP256Provider } from '../../src/identity/crypto-p256.js';
 import { generateSeed } from '../../src/identity/recovery-code.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../../src/identity/did.js';
-import { appKeyFromSeed, keyProof, requestTerms, type SeededAppKey } from '../../src/session/connect.js';
+import { keyProof, requestTerms, type SeededAppKey } from '@minca/session';
 import { deriveAccountKey } from '../../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../../src/identity/contact-key.js';
 import { createSigner } from '../../src/schema/signer.js';
@@ -20,8 +20,9 @@ import { createStorageProvider } from '../../src/storage/storage-provider.js';
 import type { StoreFactory } from '../../src/node/stores.js';
 import type { Version } from '../../src/types.js';
 import type { FakeHub } from './fake-transport.js';
-import { memoryStores } from './memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { seenBy } from './as-member.js';
+import { appKeyFromSeed } from '../../../session/src/connect.js';
 
 /** Everything a test opened, closed after it */
 export const open: Array<{ close(): Promise<unknown> }> = [];

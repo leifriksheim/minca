@@ -25,7 +25,7 @@ import { createIdentityManager } from '../../../core/src/identity/identity-manag
 import { createLocalRootSigner } from '../../../core/src/identity/root-signer.js';
 import { generateSeed } from '../../../core/src/identity/recovery-code.js';
 import { deriveAccountKey } from '../../../core/src/identity/account-vault.js';
-import { memoryStores } from '../../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 const [spaces = 1000, accounts = 20, records = 20] = process.argv.slice(2).map(Number);
 const PORT = 18_700 + Math.floor(Math.random() * 200);

@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { connectorOffers } from '../src/session/hosting.js';
+import { connectorOffers } from '../src/hosting/hosting.js';
 
 test('a device takes only well-formed connectors from a host’s description, and ignores the rest', () => {
   assert.deepEqual(

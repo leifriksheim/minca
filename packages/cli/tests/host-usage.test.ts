@@ -6,7 +6,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createUsageMeter } from '../src/host-usage.js';
-import { createMemoryAdapter } from '../../core/tests/helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { utf8Decode } from '../../core/src/utils/encoding.js';
 
 const DAY = 86_400;

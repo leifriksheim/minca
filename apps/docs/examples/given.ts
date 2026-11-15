@@ -6,7 +6,7 @@
  */
 import * as z from 'zod';
 import { collection, type NodeRecord, type P2PNode, type SpaceSummary } from '@minca/core';
-import type { MincaConnection } from '@minca/core/session';
+import type { MincaConnection } from '@minca/session';
 
 /** The to-do collection from "Building an app" */
 const todoCollection = collection({

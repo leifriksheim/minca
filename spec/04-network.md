@@ -1039,8 +1039,8 @@ receiver MUST attribute a message to the connection's peer, not to `from`.
 | `who`  | `{ "note": proof }` | §6.4, §9.1                                      |
 | `live` | any JSON            | §9.2                                            |
 
-A channel's rooms carry their own types (`packages/core/src/session/pairing.ts`,
-`packages/core/src/session/connect-code.ts`); see [01 — Identity](01-identity.md) §15 and
+A channel's rooms carry their own types (`packages/session/src/pairing.ts`,
+`packages/session/src/connect-code.ts`); see [01 — Identity](01-identity.md) §15 and
 [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §3. Unknown types are
 ignored.
 

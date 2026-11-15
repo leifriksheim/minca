@@ -16,7 +16,7 @@ import type { StandardSchemaV1 } from '../src/types.js';
 import * as z from 'zod';
 import { isRecord } from '../src/utils/guards.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { team } from '../src/space/presets.js';
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import type { PairingOffer, PairingStage } from '@minca/core/session';
+import type { PairingOffer, PairingStage } from '@minca/session';
 import { useAuth } from '@minca/react';
 import { servedOverLan, relayProblem, relayOnlyLocal } from '@minca/app-shared/relay';
 import { Info } from '@minca/app-shared/Info';

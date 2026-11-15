@@ -17,7 +17,7 @@ import type { Typed } from '../src/query/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { team } from '../src/space/presets.js';
 import { until } from './helpers/until.js';
 
