@@ -2334,6 +2334,33 @@ describe('an app connected to several accounts', () => {
     assert.equal(connection.getState().node, null);
   });
 
+  test('disconnecting while switching to an account that is then disconnected too leaves no key or last account behind', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    grantStore(storage).save(b.grant, 'b');
+    const keys = keyStore([
+      ['a', a.key],
+      ['b', b.key],
+    ]);
+    const connection = tab(hub, storage, keys, a.grant.did);
+    await connection.start();
+    const switching = connection.use(b.grant.did);
+    await connection.disconnect(a.grant.did);
+    await connection.disconnect(b.grant.did);
+    await switching;
+    assert.equal(connection.getState().status, 'disconnected');
+    assert.equal(connection.getState().node, null);
+    assert.deepEqual([...keys.held.keys()], [], 'no key made again for an account let go');
+    assert.notEqual(
+      storage.getItem('minca.account'),
+      b.grant.did,
+      'the account let go is not the one to open next',
+    );
+  });
+
   test('switching back and forth quickly leaves no node running but the one acted for', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const a = await granted(hub);

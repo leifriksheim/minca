@@ -336,6 +336,7 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     // A grant that ran out starts nothing: connecting again renews it, with a new key.
     const late = grantExpired(grant);
     await stop({ status: late ? 'expired' : 'starting', home: grant.home, grant, error: null }, thisOpen);
+    if (overtaken.aborted) return;
     kept.set(LAST, grant.did);
     markStep(`connection: starting the account kept here${late ? ', whose grant ran out' : ''}`);
     if (late) return;
@@ -398,9 +399,6 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     markStep('connection: ready');
     ownTurn = turn ? { kept: { grant, keyName }, release: turn } : null;
     update({ status: 'ready', home: grant.home, grant, node, error: null });
-    // Opened in a tab put away meanwhile.
-    followVisibility();
-
     unwatch = watchGrant(node, grant, {
       // Writes stop working when the note runs out; say so rather than fail quietly.
       onExpired: () => update({ status: 'expired' }),
@@ -409,6 +407,8 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
         state.node === node &&
         void leave(grant.did, `Your account home disconnected this app from ${grant.name}.`, keyName),
     });
+    // Opened in a tab put away meanwhile.
+    followVisibility();
   }
 
   const connection: MincaConnection = {
