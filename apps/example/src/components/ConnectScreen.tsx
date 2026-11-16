@@ -35,7 +35,7 @@ export function ConnectScreen() {
     );
 
   return (
-    <main className={css.screen}>
+    <main className={css.screen} data-padded>
       <header>
         <Wordmark />
         <button data-intent="ghost" onClick={() => setIntro(true)}>

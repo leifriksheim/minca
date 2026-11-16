@@ -201,7 +201,7 @@
     const shown = kind ? inView.filter((e) => kindOf(e.body.category).id === kind) : inView;
     const kindsHere = KINDS.filter((k) => events.some((e) => kindOf(e.body.category).id === k.id));
 
-    return html`<main>
+    return html`<main data-padded>
       <div class="row" data-spread>
         <div role="tablist" aria-label="Events">
           ${VIEWS.map(
@@ -355,7 +355,7 @@
     const cancelled = body.status === 'cancelled';
     const away = distanceText(near, body.place);
     const answers = answersOf(event);
-    return html`<main>
+    return html`<main data-padded>
       <${EventCover} event=${event} size=${120}><${DateTile} at=${body.start} /></${EventCover}>
       <header>
         <div class="stack" data-gap="tight">

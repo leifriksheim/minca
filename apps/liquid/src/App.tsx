@@ -22,7 +22,7 @@ function Connect() {
   const { connection, state } = useConnection();
   const waiting = state.status === 'connecting' || state.status === 'starting';
   return (
-    <main className={styles.narrow}>
+    <main className={styles.narrow} data-padded>
       <Wordmark compact />
       <div className="stack">
         <h1>Liquid</h1>
@@ -49,7 +49,7 @@ function Spaces() {
   if (space)
     return <Assembly key={space.id} space={space} onBack={spaces.length > 1 ? () => setOpen(null) : null} />;
   return (
-    <main className={styles.narrow}>
+    <main className={styles.narrow} data-padded>
       <h1>Which space decides?</h1>
       {spaces.length === 0 ? (
         <p>Liquid has no spaces yet. Connect again, and give it one at your account home.</p>
@@ -79,7 +79,7 @@ function Assembly({ space, onBack }: { space: SpaceSummary; onBack: (() => void)
   if (assembly.status === 'loading') return <Loader />;
   if (assembly.status === 'failed' || !assembly.value)
     return (
-      <main className={styles.narrow}>
+      <main className={styles.narrow} data-padded>
         <div className="stack">
           <h1>{space.name} isn't an assembly yet</h1>
           <p>
@@ -96,7 +96,7 @@ function Assembly({ space, onBack }: { space: SpaceSummary; onBack: (() => void)
       </main>
     );
   return (
-    <main className={styles.wide}>
+    <main className={styles.wide} data-padded>
       {onBack && (
         <button onClick={onBack} data-intent="ghost">
           ← Spaces

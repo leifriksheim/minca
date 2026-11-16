@@ -49,7 +49,7 @@
     if (!polls || !votes) return null;
 
     if (view === NEW)
-      return html`<main>
+      return html`<main data-padded>
         <${Ask}
           onAsk=${async (question, options) => {
             const made = await minca.put(POLL, { question, options });
@@ -59,7 +59,7 @@
       </main>`;
     const opened = view && polls.find((p) => p.key === view);
     if (view && !opened)
-      return html`<main>
+      return html`<main data-padded>
         <${Empty} shape="bars" colour="coral" title="This poll is gone" text="Someone deleted it." />
       </main>`;
     if (opened)
@@ -70,12 +70,12 @@
     const row = (poll) =>
       html`<${PollRow} key=${poll.key} poll=${poll} votes=${votesOn(votes, poll)} go=${go} />`;
     if (polls.length === 0)
-      return html`<main>
+      return html`<main data-padded>
         <${Empty} shape="bars" colour="coral" title="No polls yet" text="Ask the group something, and see what everyone picks.">
           ${mayAsk && html`<button data-intent="primary" onClick=${() => go(NEW, 'New poll')}>New poll</button>`}
         </${Empty}>
       </main>`;
-    return html`<main>
+    return html`<main data-padded>
       <ul role="list" aria-label="Polls">
         ${newest.filter((p) => !p.body.closed).map(row)}
         ${
@@ -169,7 +169,7 @@
         : mine
           ? 'Tap your pick again to take it back'
           : 'Tap one to vote';
-    return html`<main>
+    return html`<main data-padded>
       <header>
         <span class="row" data-gap="tight">
           <${Person} did=${poll.createdBy} size=${28} />

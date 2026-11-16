@@ -22,7 +22,7 @@ export function App() {
 
   if (state.stage !== 'ready') {
     return (
-      <main className={styles.signIn}>
+      <main className={styles.signIn} data-padded>
         <Wordmark />
         <AccountHint />
         <SignIn />
@@ -48,7 +48,12 @@ export function App() {
           ))}
         </nav>
       </header>
-      <main className={styles.main} role="tabpanel" aria-label={TABS.find((each) => each.id === tab)?.label}>
+      <main
+        className={styles.main}
+        data-padded
+        role="tabpanel"
+        aria-label={TABS.find((each) => each.id === tab)?.label}
+      >
         <AccountHint />
         <AccountNotices />
         <HostingDue />

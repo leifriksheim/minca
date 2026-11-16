@@ -273,7 +273,7 @@
     if (view === EARLIER) return html`<${Tab} ...${shared} tab=${null} ...${on(null)} />`;
     const open = view && tabs.find((t) => t.key === view);
     if (view && !open)
-      return html`<main>
+      return html`<main data-padded>
         <${Empty} shape="receipt" colour="lilac" title="This tab isn't here any more" />
       </main>`;
     if (open) return html`<${Tab} key=${open.key} ...${shared} tab=${open} ...${on(open.key)} />`;
@@ -313,7 +313,7 @@
           ${standing(balancesOf(expenses, settlements), expenses.length + settlements.length)}
         </button>
       </li>`;
-    return html`<main>
+    return html`<main data-padded>
       ${
         sorted.length === 0 &&
         !anyEarlier &&
@@ -450,7 +450,7 @@
       [...one].filter(([, b]) => b !== 0).map(([did, b]) => ({ did, b, cur })),
     );
     people.sort((x, y) => (x.did === me ? -1 : y.did === me ? 1 : y.b - x.b));
-    return html`<main>
+    return html`<main data-padded>
       ${
         entries.length > 0 &&
         html`<article>

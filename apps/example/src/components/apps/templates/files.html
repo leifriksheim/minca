@@ -251,7 +251,7 @@
       view.kind === 'type' ? KINDS.find(([k]) => k === view.type)[1] : group ? group.body.title : 'All files';
     const at = shown.findIndex((f) => f.key === opened);
 
-    return html`<main data-wide>
+    return html`<main data-padded data-wide>
       <header>
         <div>
           <h1>${title}</h1>

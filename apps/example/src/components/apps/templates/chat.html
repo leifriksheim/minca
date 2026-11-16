@@ -161,6 +161,7 @@
       <div
         class="stack"
         data-gap="loose"
+        data-padded
         ref=${list}
         onScroll=${(event) => {
           const el = event.currentTarget;
@@ -213,7 +214,7 @@
               people=${people}
               onTyping=${setTyping}
             />`
-          : html`<p><small>Your role here doesn't let you send messages.</small></p>`
+          : html`<p data-padded><small>Your role here doesn't let you send messages.</small></p>`
       }
     </main>`;
   }
@@ -547,6 +548,7 @@
     const ready = draft.trim() || files.length || share.sharing;
     return html`<form
       ref=${bar}
+      data-padded
       class="stack"
       data-gap="tight"
       onSubmit=${(event) => {

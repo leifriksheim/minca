@@ -98,7 +98,7 @@ export const screenCode = `<script>
     const tick = (item) =>
       minca.update(item.key, { ...item.body, checked: !item.body.checked });
 
-    return html\`<main>
+    return html\`<main data-padded>
       <h1>Our list</h1>
       <ul>
         \${items.map((item) => html\`<li key=\${item.key}>

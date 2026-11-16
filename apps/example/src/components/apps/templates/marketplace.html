@@ -203,7 +203,7 @@
     const filtered = words || category || freeOnly;
 
     const sell = () => setEditing('new');
-    return html`<main>
+    return html`<main data-padded>
       <div class="row" data-spread>
         <div role="tablist" aria-label="Marketplace">
           ${[
@@ -382,7 +382,7 @@
     const condition = CONDITIONS.find((c) => c.id === body.condition);
     const setStatus = (status) => minca.update(listing.key, { ...body, status });
 
-    return html`<main>
+    return html`<main data-padded>
       <${Gallery} listing=${listing} />
       <section data-gap="tight">
         <header>

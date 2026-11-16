@@ -48,7 +48,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const last = at === CARDS.length - 1;
 
   return (
-    <main className={css.screen}>
+    <main className={css.screen} data-padded>
       <header>
         <Wordmark compact />
         {/* Not on the last card, where the main button goes on */}

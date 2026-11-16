@@ -48,24 +48,18 @@ button.person {
 }
 
 /* Something someone said (Said): the face in a column of its own, the words beside it, the line a shade darker
-   while pointed at. A later line in a run shows its time in the face's column, only while pointed at. */
+   while pointed at, out through the page's margin around it. A later line in a run shows its time in the face's
+   column, only while pointed at. */
 .said {
   display: grid;
   grid-template-columns: 36px 1fr;
   align-items: start;
   gap: 12px;
-  padding: 4px var(--space);
-  border-radius: var(--radius-small);
+  margin-inline: calc(-1 * var(--space-loose));
+  padding: 4px var(--space-loose);
 
   & > div {
     min-width: 0;
-  }
-
-  /* In a conversation, a line runs from side to side of the window, as chat apps have it */
-  main[data-fill] > :first-child & {
-    margin-inline: calc(-1 * var(--space-loose));
-    padding-inline: var(--space-loose);
-    border-radius: 0;
   }
 
   & > small {

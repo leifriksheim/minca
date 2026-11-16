@@ -932,7 +932,7 @@ function lasts(days: number): string {
 /** The page around it, under Minca's mark: what it is about (`top`), its title, and the rest */
 function Frame({ title, top, children }: { title?: ReactNode; top?: ReactNode; children: ReactNode }) {
   return (
-    <main className={styles.frame}>
+    <main className={styles.frame} data-padded>
       <Wordmark />
       {top}
       {title && <h1>{title}</h1>}

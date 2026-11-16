@@ -19,7 +19,7 @@ apps and the site import it, and the kit writes it into every app's screen.
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | `css/tokens.css`   | The palette, and the names everything reads: `--color-*`, `--space-*`, `--text-*`, `--radius-*`         |
 | `css/base.css`     | The page and its text                                                                                   |
-| `css/layout.css`   | `main`, `header`, `section`, `.row`, `.stack`, `.grid`, `.lanes`                                        |
+| `css/layout.css`   | `main`, `[data-padded]`, `header`, `section`, `.row`, `.stack`, `.grid`, `.lanes`                       |
 | `css/controls.css` | Buttons by `data-intent`, fields, switches, tabs                                                        |
 | `css/content.css`  | `article`, lists, `figure`, a month, `.tag`, `aside`, `.empty`, `data-tone`, `data-hue`, `data-actions` |
 | `css/overlay.css`  | `dialog`, `menu`                                                                                        |

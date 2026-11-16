@@ -51,7 +51,7 @@
     // opens here from elsewhere too.
     const open = view && lists.find((l) => l.key === view && l.body);
     if (view && !open)
-      return html`<main>
+      return html`<main data-padded>
         <${Empty} shape="tick" colour="peach" title="This list is gone" text="Someone deleted it." />
       </main>`;
     return open
@@ -77,7 +77,7 @@
       const made = await minca.put(LIST, { title, kind: 'checklist' });
       go(made.key, title);
     };
-    return html`<main>
+    return html`<main data-padded>
       ${sorted.length === 0 && html`<${Empty} shape="tick" colour="peach" title="No lists yet" text="Start one for groceries, packing or the week." />`}
       <ul role="list" aria-label="Lists">
         ${sorted.filter((list) => !isDone(list)).map(row)}
@@ -190,7 +190,7 @@
         { links: [{ rel: 'in', to: list.key }] },
       );
 
-    return html`<main>
+    return html`<main data-padded>
       <ul role="list" aria-label="To do">
         ${todo.map((item) => html`<${Item} key=${item.key} item=${item} />`)}
         ${mayAdd && html`<li><${AddRow} placeholder="Add an item" onAdd=${add} keep=${true} /></li>`}

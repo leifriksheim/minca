@@ -5,7 +5,7 @@ export const UI_GUIDE = `Before the screen's scripts run, window.ui holds Preact
     const tasks = useRecords('app.todo.task');         // null until loaded, then kept current
     const mayAdd = useCan('create', 'app.todo.task');
     if (!tasks) return null;
-    return html\`<main>
+    return html\`<main data-padded>
       <header>
         <h1>Tasks</h1>
         \${mayAdd && html\`<button data-intent="primary" onClick=\${() => minca.put('app.todo.task', { title: 'New' })}>Add</button>\`}
@@ -29,11 +29,11 @@ ui has:
   useShown()  { key } of the record this app was last asked to show (its "shows"), a new object each time;
     null until one is. Scroll to it, open it: useEffect(() => …, [shown])
   useView()  [view, go]: where in itself the screen is (null at its start); go(view, title) goes one level
-    in, titled in the app's bar, whose Back comes out: never draw a back button. go(null): the start
+    in, titled in the app's bar, whose Back comes out: never draw one. go(null): the start
   useMarked()  for a list, that key once data-key=\${key} is drawn, scrolled to: data-marked=\${key === marked}
     lights it up
   usePresence(state)  [{ did, device, state }] of everyone else here, each sharing a state (a cursor, "typing");
-    yours sent as it changes, 10 a second at most. Once per screen
+    yours sent as it changes. Once per screen
   useLive(callback)  callback({ from, device, data }) for each minca.live.send from another device, kept nowhere
   useBlob(key, ref)  the whole file, as a URL for <img>, <video> or <audio>; null until here
   <\${Avatar} did size? round? />  someone's face: their picture, or their account's shape. Always use it for a person
@@ -41,13 +41,13 @@ ui has:
   <\${Said} did time face?>…</\${Said}>  a message, face beside it; face={false}: later lines of a run
   <\${Comments} about=\${record} />  a record's comments and a box to add one
     (needs "std.comment" in collections)
-  <\${Attachments} about=\${key} />  a record's files (std.file about it): pictures, videos and sound play, others save
+  <\${Attachments} about=\${key} />  a record's files (std.file about it)
   attach(about, files)  keeps Files (dropped, pasted or picked) as std.file records about a record (or null),
     with thumbnails; → the records written
-  <\${Playable} record />  a std.file that is a video or a sound, playing where it is; fetched when played
-  useSeen(ref)  whether ref's element has come into view: load large things only then
+  <\${Playable} record />  a std.file video or sound, playing where it is; fetched when played
+  useSeen(ref)  whether ref's element has come into view
   sizeOf(bytes)  "812 KB", "3.1 MB"
-  <\${Record} record=\${r} onOpen? />  any record as one line; a click opens it where it belongs, or calls
+  <\${Record} record=\${r} onOpen? />  any record as one line; a click opens it, or calls
     onOpen. For records other apps own, as a shared one: minca.get(key, { link: 'shares' }), with
     onOpen=\${() => minca.open({ record: key, link: 'shares' })}
   useShare()  sharing into what you send: share.pick() asks the person for a
@@ -79,7 +79,8 @@ ui has:
 To show a record the way the app does, with its comments, attachments and history, call minca.open({ record: key }).
 
 Write plain HTML from this list, no CSS, <style> or style="": say what a thing is for, never how it looks.
-  <main> the column (data-wide: full width; data-fill: the window's height, its first child scrolling over a box to write in);
+  <main> the column, no margin (data-wide: full width; data-fill: the window's height, its first child scrolling
+    over a box to write in). data-padded: the margin, 1rem; on <main>, or only on parts that keep off the sides;
     <header> title + actions; <section> a group under an h2
   h1 h2 h3 p a strong code; <small> meta and hints; <mark>; <s> done; class="truncate" one line, cut short, taking a row's room
   <button> data-intent="primary" (the main one) | "subtle" (back, close) | "ghost" (toolbars, rows) | "danger" | "open" (a task, a row;
