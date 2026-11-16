@@ -36,20 +36,21 @@ ui has:
     yours sent as it changes, 10 a second at most. Once per screen
   useLive(callback)  callback({ from, device, data }) for each minca.live.send from another device, kept nowhere
   useBlob(key, ref)  the whole file, as a URL for <img>, <video> or <audio>; null until here
-  <\${Avatar} did size? round? />  someone's face: their picture, or the shape their account gives. Always use it for a person
+  <\${Avatar} did size? round? />  someone's face: their picture, or their account's shape. Always use it for a person
   <\${Person} did size? name? face? />  face and name (face={false}: the name alone); a click opens their card in the app
-  <\${Comments} about=\${record} />  a record's comments and a box to add one, with @mentions and "/" to share
+  <\${Said} did time face?>…</\${Said}>  a message, face beside it; face={false}: later lines of a run
+  <\${Comments} about=\${record} />  a record's comments and a box to add one
     (needs "std.comment" in collections)
   <\${Attachments} about=\${key} />  a record's files (std.file about it): pictures, videos and sound play, others save
-  attach(about, files)  keeps Files (from a drop, a paste or <input type=file>) as std.file records about a record,
-    or about nothing when about is null, with thumbnails; → the records written
+  attach(about, files)  keeps Files (dropped, pasted or picked) as std.file records about a record (or null),
+    with thumbnails; → the records written
   <\${Playable} record />  a std.file that is a video or a sound, playing where it is; fetched when played
   useSeen(ref)  whether ref's element has come into view: load large things only then
   sizeOf(bytes)  "812 KB", "3.1 MB"
   <\${Record} record=\${r} onOpen? />  any record as one line; a click opens it where it belongs, or calls
     onOpen. For records other apps own, as a shared one: minca.get(key, { link: 'shares' }), with
     onOpen=\${() => minca.open({ record: key, link: 'shares' })}
-  useShare()  sharing into what you send, as chat and comments do: share.pick() asks the person for a
+  useShare()  sharing into what you send: share.pick() asks the person for a
     record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
     typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
     is the one waiting; <\${Shared} from=\${record} /> what a record shares

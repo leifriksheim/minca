@@ -15,7 +15,7 @@ import { FormatMenu, MentionInput } from './editor';
 import { MentionText } from './markdown';
 import { mentionsIn } from './mentions';
 import { AddMenu, EmojiPicker } from './menus';
-import { Avatar, Person } from './people';
+import { Said } from './people';
 import { recordTitle } from './record';
 import { Shared, Sharing, useShare } from './share';
 import { Icon } from './shapes';
@@ -74,18 +74,11 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
     <h3>Comments ${comments?.length ? html`<small>${comments.length}</small>` : ''}</h3>
     ${(comments ?? []).map(
       (c) =>
-        html`<div class="comment" key=${c.key}>
-          <${Avatar} did=${c.createdBy ?? ''} size=${26} round />
-          <div>
-            <div>
-              <${Person} did=${c.createdBy ?? ''} face=${false} />
-              <small>· ${ago(c.createdAt)}</small>
-            </div>
-            <${MentionText} text=${c.body.text ?? ''} />
-            <${Shared} from=${c} />
-            ${mayAttach && html`<${Attachments} about=${c.key} />`}
-          </div>
-        </div>`,
+        html`<${Said} key=${c.key} did=${c.createdBy ?? ''} time=${ago(c.createdAt)}>
+          <${MentionText} text=${c.body.text ?? ''} />
+          <${Shared} from=${c} />
+          ${mayAttach && html`<${Attachments} about=${c.key} />`}
+        </${Said}>`,
     )}
     ${
       mayComment &&

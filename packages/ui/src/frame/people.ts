@@ -49,3 +49,35 @@ export function Person({
     <span>${name ?? known}</span>
   </button>`;
 }
+
+/**
+ * Something someone said, as chat apps and comments show it: their face in a column of its own, their name and the
+ * time above the words. A later line in a run of theirs leaves the face out (face={false}) and shows the time there
+ * while pointed at. Attributes like id go on the line itself.
+ */
+export function Said({
+  did,
+  time,
+  face = true,
+  children,
+  ...line
+}: {
+  did: string;
+  time: string;
+  face?: boolean;
+  children?: unknown;
+  [attribute: string]: unknown;
+}) {
+  return html`<div class="said" ...${line}>
+    ${face ? html`<${Avatar} did=${did} size=${36} round />` : html`<small>${time}</small>`}
+    <div class="stack" data-gap="tight">
+      ${
+        face &&
+        html`<div class="row" data-gap="tight">
+          <strong><${Person} did=${did} face=${false} /></strong><small>${time}</small>
+        </div>`
+      }
+      ${children}
+    </div>
+  </div>`;
+}

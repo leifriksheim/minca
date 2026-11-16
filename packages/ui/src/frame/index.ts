@@ -24,7 +24,7 @@ import { Modal } from './modal';
 import { AddMenu, EmojiPicker, Reactions, RowMenu, react } from './menus';
 import { Record, recordTitle } from './record';
 import { Shared, Sharing, useShare } from './share';
-import { Avatar, Person, useName } from './people';
+import { Avatar, Person, Said, useName } from './people';
 import {
   MapLink,
   NearButton,
@@ -89,6 +89,7 @@ Object.defineProperty(globalThis, 'ui', {
     useName,
     Avatar,
     Person,
+    Said,
     Comments,
     MentionInput,
     MentionText,

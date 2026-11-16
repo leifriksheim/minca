@@ -47,15 +47,51 @@ button.person {
   left: auto;
 }
 
-/* Comments: a face beside each */
-.comment {
+/* Something someone said (Said): the face in a column of its own, the words beside it, the line a shade darker
+   while pointed at. A later line in a run shows its time in the face's column, only while pointed at. */
+.said {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 36px 1fr;
   align-items: start;
-  gap: 10px;
+  gap: 12px;
+  padding: 4px var(--space);
+  border-radius: var(--radius-small);
 
   & > div {
     min-width: 0;
+  }
+
+  & > small {
+    padding-top: 2px;
+    font-size: 0.6875rem;
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  &:not(:hover, :focus-within) > small {
+    visibility: hidden;
+  }
+
+  @media (hover: hover) {
+    position: relative;
+
+    &:hover {
+      background: var(--color-sunken);
+    }
+
+    /* Its buttons float over the line's top edge, shown while any of the line is pointed at */
+    & > div {
+      position: static;
+    }
+
+    & [data-actions] {
+      top: -14px;
+      right: var(--space);
+    }
+
+    &:is(:hover, :focus-within) [data-actions] {
+      display: flex;
+    }
   }
 }
 
