@@ -254,8 +254,19 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
   /** How many keep the node running while the tab is put away (`keepAwake`), as a call must */
   let awake = 0;
 
-  /** Stops acting for the account acted for, if any, saying in the same breath what comes next */
-  async function stop(next: Partial<MincaConnectionState>): Promise<void> {
+  /** The open in flight, if any: stopping aborts it, so it stops waiting and closes what it started */
+  let latestOpen: AbortController | null = null;
+
+  /**
+   * Stops acting for the account acted for, if any, and any open in flight,
+   * saying in the same breath what comes next: `opening`, when an open does.
+   */
+  async function stop(
+    next: Partial<MincaConnectionState>,
+    opening: AbortController | null = null,
+  ): Promise<void> {
+    latestOpen?.abort();
+    latestOpen = opening;
     unwatch?.();
     unwatch = null;
     putAway = null;
@@ -319,17 +330,12 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
       error: `Your account couldn't be opened here: ${error instanceof Error ? error.message : String(error)}`,
     });
 
-  /** The latest open: a later one aborts it, so it stops waiting and closes what it started */
-  let latestOpen: AbortController | null = null;
-
   async function open({ grant, keyName }: KeptGrant): Promise<void> {
-    latestOpen?.abort();
     const thisOpen = new AbortController();
-    latestOpen = thisOpen;
     const overtaken = thisOpen.signal;
     // A grant that ran out starts nothing: connecting again renews it, with a new key.
     const late = grantExpired(grant);
-    await stop({ status: late ? 'expired' : 'starting', home: grant.home, grant, error: null });
+    await stop({ status: late ? 'expired' : 'starting', home: grant.home, grant, error: null }, thisOpen);
     kept.set(LAST, grant.did);
     markStep(`connection: starting the account kept here${late ? ', whose grant ran out' : ''}`);
     if (late) return;
@@ -351,10 +357,13 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
       markStep('connection: waiting for any other tab to close its node');
       // Said only if it takes a while: another tab or window in view has it.
       const slow = setTimeout(() => update({ error: ANOTHER_TAB }), 5000);
-      const letGo = await holdLock(`minca-node:${grant.did}`, overtaken);
-      clearTimeout(slow);
-      if (state.error === ANOTHER_TAB) update({ error: null });
-      return letGo;
+      try {
+        const letGo = await holdLock(`minca-node:${grant.did}`, overtaken);
+        if (state.error === ANOTHER_TAB) update({ error: null });
+        return letGo;
+      } finally {
+        clearTimeout(slow);
+      }
     };
     let node: P2PNode;
     // Nothing failed, but the person should hear that something waits, and what to try.

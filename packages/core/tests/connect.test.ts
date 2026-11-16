@@ -1920,7 +1920,7 @@ describe('an app connected to several accounts', () => {
    */
   function fakeLocks() {
     const held = new Map<string, Promise<void>>();
-    withLocks({
+    const locks = {
       request(
         name: string,
         ...rest: [() => Promise<void>] | [{ signal?: AbortSignal }, () => Promise<void>]
@@ -1940,7 +1940,14 @@ describe('an app connected to several accounts', () => {
         );
         return mine;
       },
-    });
+    };
+    withLocks(locks);
+    /** Holds an account's turn as another tab in view would, until the returned function lets go */
+    return function holdElsewhere(did: string): () => void {
+      let letGo = () => {};
+      void locks.request(`minca-node:${did}`, () => new Promise<void>((done) => (letGo = done)));
+      return () => letGo();
+    };
   }
 
   /** A connection on its own account, started */
@@ -2276,6 +2283,55 @@ describe('an app connected to several accounts', () => {
     ]);
     assert.equal(connection.getState().node?.did, b.grant.did);
     assert.equal(connection.getState().status, 'ready');
+  });
+
+  test('switching away while waiting for a turn another tab holds says nothing of that tab later', async (t) => {
+    const holdElsewhere = fakeLocks();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    grantStore(storage).save(b.grant, 'b');
+    const connection = createMincaConnection({
+      home: HOME,
+      request: { name: 'Todo', access: 'write' },
+      storage,
+      stores: () => memoryStores(),
+      keys: keyStore([
+        ['a', a.key],
+        ['b', b.key],
+      ]),
+      account: () => b.grant.did,
+    });
+    cleanup.push(() => connection.getState().node?.close() ?? Promise.resolve());
+    await connection.start();
+    holdElsewhere(a.grant.did);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    void connection.use(a.grant.did);
+    for (let i = 0; i < 50; i++) await new Promise((resolve) => setImmediate(resolve));
+    await connection.use(b.grant.did);
+    assert.equal(connection.getState().status, 'ready');
+    t.mock.timers.tick(10_000);
+    assert.equal(connection.getState().error, null);
+  });
+
+  test('disconnecting while waiting for a turn another tab holds leaves the account disconnected', async () => {
+    const holdElsewhere = fakeLocks();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    const otherTabLetsGo = holdElsewhere(a.grant.did);
+    const connection = tab(hub, storage, keyStore([['a', a.key]]));
+    const starting = connection.start();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await connection.disconnect(a.grant.did);
+    otherTabLetsGo();
+    await starting;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(connection.getState().status, 'disconnected');
+    assert.equal(connection.getState().node, null);
   });
 
   test('switching back and forth quickly leaves no node running but the one acted for', async () => {
