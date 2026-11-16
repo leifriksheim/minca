@@ -16,7 +16,8 @@ main {
     max-width: none;
   }
 
-  /* The window's height, its first child scrolling: a conversation over the box to write in */
+  /* The window's height, its first child scrolling, out to the window's sides: a conversation over the box to
+     write in */
   &[data-fill] {
     height: 100dvh;
     gap: var(--space);
@@ -24,6 +25,8 @@ main {
     & > :first-child {
       flex: 1;
       min-height: 0;
+      margin-inline: calc(-1 * var(--space-loose));
+      padding-inline: var(--space-loose);
       overflow-y: auto;
     }
   }

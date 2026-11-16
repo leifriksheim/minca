@@ -61,6 +61,13 @@ button.person {
     min-width: 0;
   }
 
+  /* In a conversation, a line runs from side to side of the window, as chat apps have it */
+  main[data-fill] > :first-child & {
+    margin-inline: calc(-1 * var(--space-loose));
+    padding-inline: var(--space-loose);
+    border-radius: 0;
+  }
+
   & > small {
     padding-top: 2px;
     font-size: 0.6875rem;
@@ -86,7 +93,7 @@ button.person {
 
     & [data-actions] {
       top: -14px;
-      right: var(--space);
+      right: var(--space-loose);
     }
 
     &:is(:hover, :focus-within) [data-actions] {
