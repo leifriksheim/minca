@@ -192,14 +192,17 @@ function inView(): Promise<void> {
   });
 }
 
-/** Holds a Web Lock, once granted, until the returned function lets go (nothing to hold without Web Locks) */
-function holdLock(name: string): Promise<() => void> {
+/**
+ * Holds a Web Lock, once granted, until the returned function lets go
+ * (nothing to hold without Web Locks). Rejects if `signal` aborts first.
+ */
+function holdLock(name: string, signal: AbortSignal): Promise<() => void> {
   const locks = globalThis.navigator?.locks;
   if (!locks) return Promise.resolve(() => {});
-  return new Promise((granted) => {
+  return new Promise((granted, refused) => {
     locks
-      .request(name, () => new Promise<void>((letGo) => granted(() => letGo())))
-      .catch(() => granted(() => {}));
+      .request(name, { signal }, () => new Promise<void>((letGo) => granted(() => letGo())))
+      .catch(() => (signal.aborted ? refused(new Error('No longer wanted')) : granted(() => {})));
   });
 }
 
@@ -316,11 +319,14 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
       error: `Your account couldn't be opened here: ${error instanceof Error ? error.message : String(error)}`,
     });
 
-  /** Counts opens, so one overtaken by a later one closes what it started */
-  let opening = 0;
+  /** The latest open: a later one aborts it, so it stops waiting and closes what it started */
+  let latestOpen: AbortController | null = null;
 
   async function open({ grant, keyName }: KeptGrant): Promise<void> {
-    const mine = ++opening;
+    latestOpen?.abort();
+    const thisOpen = new AbortController();
+    latestOpen = thisOpen;
+    const overtaken = thisOpen.signal;
     // A grant that ran out starts nothing: connecting again renews it, with a new key.
     const late = grantExpired(grant);
     await stop({ status: late ? 'expired' : 'starting', home: grant.home, grant, error: null });
@@ -345,7 +351,7 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
       markStep('connection: waiting for any other tab to close its node');
       // Said only if it takes a while: another tab or window in view has it.
       const slow = setTimeout(() => update({ error: ANOTHER_TAB }), 5000);
-      const letGo = await holdLock(`minca-node:${grant.did}`);
+      const letGo = await holdLock(`minca-node:${grant.did}`, overtaken);
       clearTimeout(slow);
       if (state.error === ANOTHER_TAB) update({ error: null });
       return letGo;
@@ -353,7 +359,7 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     let node: P2PNode;
     // Nothing failed, but the person should hear that something waits, and what to try.
     const slow = setTimeout(() => {
-      if (mine === opening && state.status === 'starting' && !state.error) update({ error: SLOW_START });
+      if (!overtaken.aborted && state.status === 'starting' && !state.error) update({ error: SLOW_START });
     }, SLOW_START_MS);
     try {
       if (!made || typeof made.terminate === 'function') release = await takeTurn();
@@ -369,13 +375,14 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
         : await start();
     } catch (error) {
       release?.();
+      if (overtaken.aborted) return;
       throw error;
     } finally {
       clearTimeout(slow);
     }
     const turn = release;
     // Switched again while this one started: it is not wanted.
-    if (mine !== opening) {
+    if (overtaken.aborted) {
       await node.close().finally(() => turn?.());
       return;
     }

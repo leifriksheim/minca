@@ -25,7 +25,7 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
 import { base64UrlDecode } from '../src/utils/encoding.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 const provider = createP256Provider();
 

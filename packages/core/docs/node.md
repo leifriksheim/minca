@@ -975,7 +975,8 @@ Each tab acts for its own account, and sees other tabs' changes to
 `state.accounts`. A tab whose account was connected again elsewhere keeps
 its key until it restarts, then takes the newer grant. One whose key was
 revoked takes up a newer grant rather than forgetting it. A shared worker
-runs a node per key. Switching again before a node has started closes it.
+runs a node per key. Switching again before a node has started closes it,
+or stops it waiting for its turn.
 [Spec 06 §2.10](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
 ### Showing notifications

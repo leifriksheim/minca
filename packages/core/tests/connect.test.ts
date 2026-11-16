@@ -2,7 +2,7 @@
  * An app acting for an account through a grant from its home: it writes where
  * it was given access, nowhere else, and never holds the seed.
  */
-import { test, describe, afterEach } from 'node:test';
+import { test, describe, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMincaAuth, type MincaAuth } from '@minca/auth';
@@ -42,6 +42,17 @@ const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((close) => close()));
 });
+
+/** Without Web Locks, whatever the runtime has, unless a test fakes them (`fakeLocks`) */
+function withLocks(locks: unknown): void {
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { value: { locks }, configurable: true, writable: true });
+  cleanup.push(async () => {
+    if (saved) Object.defineProperty(globalThis, 'navigator', saved);
+    else Reflect.deleteProperty(globalThis, 'navigator');
+  });
+}
+beforeEach(() => withLocks(undefined));
 
 /**
  * The account home: a signed-in flow on the hub. Signing out waits only
@@ -1903,25 +1914,32 @@ describe('an app connected to several accounts', () => {
     return { hide: () => show('hidden'), show: () => show('visible') };
   }
 
-  /** Web Locks as browsers have them, for a runtime without: exclusive, granted in turn */
+  /**
+   * Web Locks as browsers have them: exclusive, granted in turn. A request
+   * whose signal aborts before its turn is dropped, and rejects.
+   */
   function fakeLocks() {
     const held = new Map<string, Promise<void>>();
-    const locks = {
-      request(name: string, run: () => Promise<void>) {
-        const mine = (held.get(name) ?? Promise.resolve()).then(run);
+    withLocks({
+      request(
+        name: string,
+        ...rest: [() => Promise<void>] | [{ signal?: AbortSignal }, () => Promise<void>]
+      ) {
+        const [{ signal }, run] = rest.length === 1 ? [{}, rest[0]] : rest;
+        const before = held.get(name) ?? Promise.resolve();
+        const aborted = new Promise<never>((_, reject) => {
+          if (signal?.aborted) reject(new DOMException('Aborted', 'AbortError'));
+          signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), {
+            once: true,
+          });
+        });
+        const mine = Promise.race([before, aborted]).then(run);
         held.set(
           name,
-          mine.catch(() => {}),
+          Promise.all([before, mine.catch(() => {})]).then(() => {}),
         );
         return mine;
       },
-    };
-    const g: Record<string, unknown> = globalThis;
-    const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-    Object.defineProperty(globalThis, 'navigator', { value: { locks }, configurable: true, writable: true });
-    cleanup.push(async () => {
-      if (saved) Object.defineProperty(globalThis, 'navigator', saved);
-      else delete g.navigator;
     });
   }
 
@@ -2231,6 +2249,33 @@ describe('an app connected to several accounts', () => {
       [b.grant.did],
       'B is still there, to choose',
     );
+  });
+
+  test('switching quickly, with Web Locks, settles on the account last chosen and waits on no lock', async () => {
+    fakeLocks();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    grantStore(storage).save(b.grant, 'b');
+    const connection = tab(
+      hub,
+      storage,
+      keyStore([
+        ['a', a.key],
+        ['b', b.key],
+      ]),
+    );
+    await connection.start();
+    // An open overtaken while it waits for B's lock must give up, not wait for the one that took it.
+    await Promise.all([
+      connection.use(b.grant.did),
+      connection.use(a.grant.did),
+      connection.use(b.grant.did),
+    ]);
+    assert.equal(connection.getState().node?.did, b.grant.did);
+    assert.equal(connection.getState().status, 'ready');
   });
 
   test('switching back and forth quickly leaves no node running but the one acted for', async () => {
