@@ -13,7 +13,7 @@ import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { deriveAccountRegistry } from '../src/space/account-registry.js';
 import { automation } from '@minca/std';
 import { notifyOn } from '../src/space/own-automations.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 describe('the account’s own automations', () => {
   test('they are a system collection: no definition another key of the account writes can stop the person pausing or removing one', async () => {

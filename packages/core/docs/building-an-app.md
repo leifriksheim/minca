@@ -14,7 +14,7 @@ Every app starts by asking the person for access, with
 declare function Todos(): React.JSX.Element;
 // ---cut---
 import { createRoot } from 'react-dom/client';
-import { createMincaConnection } from '@minca/core/session';
+import { createMincaConnection } from '@minca/session';
 import { MincaProvider, useConnection } from '@minca/react';
 
 const connection = createMincaConnection({
@@ -58,7 +58,7 @@ The person's account, its settings and its other apps live at their home, not
 in your app. Open it from a click, for the account your app acts for:
 
 ```ts
-import type { MincaConnection } from '@minca/core/session';
+import type { MincaConnection } from '@minca/session';
 declare const connection: MincaConnection;
 // ---cut---
 connection.openHome(); // the account page

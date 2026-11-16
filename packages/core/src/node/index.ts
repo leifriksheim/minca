@@ -4,11 +4,6 @@
  */
 export { createNode } from './node.js';
 export { serveNode, remoteNode, serveSigner, remoteSigner } from './remote.js';
-export { startPageNode } from './worker.js';
-export type { PageNodeConfig, WorkerNodeConfig, WorkerLike } from './worker.js';
-
-export { indexedDBStores, folderStores, directoryStores } from './stores.js';
-export { browserWriterKeys } from './writer-keys.js';
 export type { ClaimedWriter, HeadStore, WriterKeySource } from './writer-keys.js';
 export { copyAccountData } from './copy.js';
 export { createCarrierNode, createCarryCore } from './carrier.js';
@@ -22,7 +17,7 @@ export type {
   Trigger,
 } from '../space/own-automations.js';
 export type { CopyAccountParams, CopyResult } from './copy.js';
-export type { StoreFactory, StoreOptions, WorkerStores } from './stores.js';
+export type { StoreFactory, StoreOptions } from './stores.js';
 export type { Keeper } from '../space/roles.js';
 export type {
   P2PNode,

@@ -15,12 +15,12 @@ import { createVersion } from '../src/schema/version.js';
 import { nextVersion } from '../src/records/version.js';
 import { createStorageProvider, type StorageProvider } from '../src/storage/storage-provider.js';
 import type { BlobStore } from '../src/storage/blob-store.js';
-import { createMemoryBlobStore } from '../src/storage/blob/memory.js';
-import { createS3BlobStore } from '../src/storage/blob/s3.js';
+import { createMemoryBlobStore } from '@minca/storage/memory';
+import { createS3BlobStore } from '@minca/storage/s3';
 import { createMirror, deleteMirrored, type Taken } from '../src/storage/mirror.js';
 import { packSegment, segmentName, unpackSegment } from '../src/storage/segment.js';
 import type { Version } from '../src/types.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { patience } from './helpers/until.js';
 
 const provider = createP256Provider();

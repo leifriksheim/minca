@@ -17,7 +17,7 @@ import { newRecordKey } from '../src/records/key.js';
 import { isSealedBody } from '../src/privacy/space-encryption.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { team } from '../src/space/presets.js';
 import { hold, letGo } from './helpers/hold.js';
 import { stored } from './helpers/stored.js';

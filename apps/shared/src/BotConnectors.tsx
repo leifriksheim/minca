@@ -16,7 +16,7 @@ import {
 } from '@minca/std';
 import { useMay } from './may';
 import { useAction } from './action';
-import { popupFeatures } from '@minca/core/session';
+import { popupFeatures } from '@minca/session';
 
 /**
  * A hosted bot's connectors: the services its host offers, each connected

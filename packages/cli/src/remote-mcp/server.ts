@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { directoryStores } from '@minca/core';
+import { directoryStores } from '@minca/storage/folder';
 import { openFsDirectory } from '../fs-directory.js';
 import { addressOf } from '../host.js';
 import { commaList, errorCode } from '../json.js';

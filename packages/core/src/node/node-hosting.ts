@@ -29,7 +29,7 @@ import {
   type HostStatus,
   type OverSpace,
   type SignedStatus,
-} from '../session/hosting.js';
+} from '../hosting/hosting.js';
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { isRecord } from '../utils/guards.js';
 import { hashedKey } from '../utils/hash.js';

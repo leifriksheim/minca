@@ -36,7 +36,7 @@ import {
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { type NodeConfig, type StorageAdapter, type StoreFactory } from '@minca/core';
 import { callAction, NODE_ACTIONS } from '@minca/actions';
-import type { Grant } from '@minca/core/session';
+import type { Grant } from '@minca/session';
 import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
 import { MINCA_ICONS, mcpTools, toolInstructions } from '../mcp.js';

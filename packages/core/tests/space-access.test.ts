@@ -31,7 +31,7 @@ import { community, team } from '../src/space/presets.js';
 import { checkSpace } from '../src/space/constitution.js';
 import { base64UrlEncode } from '../src/utils/encoding.js';
 import { createFakeHub } from './helpers/fake-transport.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import { stored } from './helpers/stored.js';

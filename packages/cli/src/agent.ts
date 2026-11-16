@@ -1,7 +1,7 @@
 /**
  * The terminal as an agent: `minca connect` opens the account home with a
  * one-time code and gets a records-only note from it there, signed to a key
- * made here that never leaves (`packages/core/src/session/connect-code.ts`). Then the
+ * made here that never leaves (`packages/session/src/connect-code.ts`). Then the
  * commands an agent runs, and `minca agent`, run a node of their own as the agent, under that note.
  *
  * A key signs in one process at a time, or its log forks (spec 02 §4.10), so
@@ -25,15 +25,8 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import {
-  createNode,
-  directoryStores,
-  didOf,
-  folderStores,
-  COLLECTION_DEFINE,
-  type NodeConfig,
-  type P2PNode,
-} from '@minca/core';
+import { createNode, didOf, COLLECTION_DEFINE, type NodeConfig, type P2PNode } from '@minca/core';
+import { directoryStores, folderStores } from '@minca/storage/folder';
 import { profile } from '@minca/std';
 import {
   checkGrant,
@@ -46,7 +39,7 @@ import {
   nodeOptionsFromGrant,
   usableGrant,
   type Grant,
-} from '@minca/core/session';
+} from '@minca/session';
 import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';

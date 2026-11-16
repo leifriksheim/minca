@@ -43,7 +43,7 @@ import {
 } from '../src/space/roles.js';
 import { assign, remove, revoke, stepDown, succeed, unassign, writes } from './helpers/access.js';
 import { createSpaceManager } from '../src/space/space-manager.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { forge, person, settle } from './helpers/person.js';
 import { joined } from './helpers/joined.js';

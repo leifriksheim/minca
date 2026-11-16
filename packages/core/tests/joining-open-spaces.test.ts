@@ -11,7 +11,7 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { decodeLoose } from '../src/records/loose.js';
 import { base64UrlEncode, utf8Encode } from '../src/utils/encoding.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import * as z from 'zod';
 
 async function account() {

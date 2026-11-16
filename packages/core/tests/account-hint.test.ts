@@ -5,10 +5,11 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { accountHomeLink, clearAccountHint, readAccountHint } from '../src/session/account-hint.js';
+import { clearAccountHint, readAccountHint } from '@minca/session';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { createMincaConnection, openAccountHome } from '../src/session/connection.js';
+import { createMincaConnection, openAccountHome } from '@minca/session';
+import { accountHomeLink } from '../../session/src/account-hint.js';
 
 const scope: Record<string, unknown> = globalThis;
 const before = { location: scope.location, history: scope.history, open: scope.open };

@@ -7,7 +7,8 @@ sync. Most apps never make one: the connection starts it for you
 that holds the account's keys, such as a script, a server or a test.
 
 ```ts
-import { createNode, deriveAccountKey, generateSeed, indexedDBStores, rootFromSeed } from '@minca/core';
+import { createNode, deriveAccountKey, generateSeed, rootFromSeed } from '@minca/core';
+import { indexedDBStores } from '@minca/storage/indexeddb';
 
 const seed = generateSeed();
 const { signer } = await rootFromSeed(seed);
@@ -177,22 +178,23 @@ A node asks its `StoreFactory` for stores by path:
 It also opens `mirrors/<spaceId>/<n>` for a [mirror](storage.md#mirrors),
 `folder/<spaceId>` for a data folder, and `host` for a host's subscriptions.
 
-What a path means is up to the factory:
+What a path means is up to the factory. Each comes from its own entry point
+of `@minca/storage`, so an app bundles only the one it uses:
 
-- `indexedDBStores(prefix)` makes one IndexedDB database per path, named
-  `<prefix>:<path with / replaced by :>`. It never seals, since the browser
-  profile already guards it.
-- `folderStores(directory, { basePath?, localKey?, local? })` uses a
-  [data folder](storage.md#data-folders). The `registry` goes in the folder
-  under `basePath`, sealed under `localKey` (`deriveLocalKey(seed)`) when
-  given. Every other path goes in `local`, and each space is mirrored to the
-  folder's segments.
-- `directoryStores(directory, { localKey? })` uses a directory on this
-  device, one file per entry and per version, sealing the `registry` the same
-  way.
-- `sqliteStores(db, { localKey? })` keeps every path in one SQLite database,
-  given its connection ([SQLite](storage.md#sqlite)), sealing the `registry`
-  the same way.
+- `indexedDBStores(prefix)` (`@minca/storage/indexeddb`) makes one
+  IndexedDB database per path, named `<prefix>:<path with / replaced by :>`.
+  It never seals, since the browser profile already guards it.
+- `folderStores(directory, { basePath?, localKey?, local? })`
+  (`@minca/storage/folder`) uses a [data folder](storage.md#data-folders).
+  The `registry` goes in the folder under `basePath`, sealed under
+  `localKey` (`deriveLocalKey(seed)`) when given. Every other path goes in
+  `local`, and each space is mirrored to the folder's segments.
+- `directoryStores(directory, { localKey? })` (`@minca/storage/folder`) uses
+  a directory on this device, one file per entry and per version, sealing
+  the `registry` the same way.
+- `sqliteStores(db, { localKey? })` (`@minca/storage/sqlite`) keeps every
+  path in one SQLite database, given its connection
+  ([SQLite](storage.md#sqlite)), sealing the `registry` the same way.
 
 [Sign-in](sign-in.md) picks stores with `storesFor(account)`: IndexedDB with
 prefix `minca:<dataPath with : for />` in the browser, or `folderStores(pod,
@@ -338,7 +340,8 @@ by default.
 ```ts
 declare const signer: RootSigner;
 // ---cut---
-import { createNode, indexedDBStores, type RootSigner } from '@minca/core';
+import { createNode, type RootSigner } from '@minca/core';
+import { indexedDBStores } from '@minca/storage/indexeddb';
 
 const node = await createNode({
   signer,
@@ -872,7 +875,7 @@ starts again unconnected.
 `homeAddress(input)` turns what a person typed into the home's connect page:
 
 ```ts
-import { homeAddress } from '@minca/core/session';
+import { homeAddress } from '@minca/session';
 
 homeAddress('minca.example.com'); // 'https://minca.example.com/connect'
 ```
@@ -972,7 +975,8 @@ Each tab acts for its own account, and sees other tabs' changes to
 `state.accounts`. A tab whose account was connected again elsewhere keeps
 its key until it restarts, then takes the newer grant. One whose key was
 revoked takes up a newer grant rather than forgetting it. A shared worker
-runs a node per key. Switching again before a node has started closes it.
+runs a node per key. Switching again before a node has started closes it,
+or stops it waiting for its turn.
 [Spec 06 §2.10](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
 ### Showing notifications

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useConnection } from '@minca/react';
-import type { ConnectedAccount } from '@minca/core/session';
+import type { ConnectedAccount } from '@minca/session';
 
 /**
  * Which account a tab acts for is in its address, `?as=` and the end of the

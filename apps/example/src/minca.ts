@@ -1,5 +1,5 @@
 // This app's Minca setup: it never holds a seed, and connects to the person's account home instead.
-import { createMincaConnection, type MincaConnectionConfig } from '@minca/core/session';
+import { createMincaConnection, type MincaConnectionConfig } from '@minca/session';
 import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
 import { desktopConnection } from './desktop';
 import { accountFromAddress } from './account-address';

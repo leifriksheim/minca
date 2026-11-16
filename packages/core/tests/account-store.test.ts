@@ -5,12 +5,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import {
-  createFolderAccountStore,
-  accountDataPath,
-  newAccountId,
-  type AccountSummary,
-} from '../src/identity/account-store.js';
+import { createFolderAccountStore, accountDataPath, newAccountId, type AccountSummary } from '@minca/session';
 import { createVault, wrapSeedWithPassphrase } from '../src/identity/account-vault.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { generateSeed } from '../src/identity/recovery-code.js';

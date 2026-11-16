@@ -17,7 +17,7 @@ import { createStorageProvider } from '../../../packages/core/src/storage/storag
 import { team } from '../../../packages/core/src/space/presets.js';
 import { runContracts, type CitedVersion } from '../../../packages/core/src/records/contracts.js';
 import { createFakeHub, type FakeHub } from '../../../packages/core/tests/helpers/fake-transport.js';
-import { memoryStores } from '../../../packages/core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { seenBy } from '../../../packages/core/tests/helpers/as-member.js';
 import { hold } from '../../../packages/core/tests/helpers/hold.js';
 import { joined } from '../../../packages/core/tests/helpers/joined.js';

@@ -18,7 +18,7 @@ const comments: Typed<{ text: string }> = { name: 'std.comment' };
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { patience } from './helpers/until.js';
 
 function record(body: unknown): NodeRecord {

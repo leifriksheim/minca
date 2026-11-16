@@ -16,8 +16,8 @@ import {
   HostError,
   newSubscriptionSeed,
   subscriptionKey,
-} from '../../core/src/session/hosting.js';
-import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
+} from '../../core/src/hosting/hosting.js';
+import { memoryStores } from '@minca/storage/memory';
 import { createReminders, isEmail, mailerFromEnv, type Mailer } from '../src/reminders.js';
 import { startHost } from '../src/host.js';
 import { bodyOf, urlOf } from './helpers/json.js';

@@ -1,7 +1,7 @@
 import { defineConfig } from 'bumpp';
 
 /**
- * Both packages, the desktop app and the Chrome extension share one version.
+ * The npm packages, the desktop app and the Chrome extension share one version.
  * bumpp asks for the next one, writes it to each, refreshes the lockfile, and
  * commits and tags it (`v0.1.2`), locally. `npm run release`
  * (scripts/release.mjs) runs it and pushes; the tag publishes to npm and
@@ -10,6 +10,8 @@ import { defineConfig } from 'bumpp';
 export default defineConfig({
   files: [
     'packages/core/package.json',
+    'packages/storage/package.json',
+    'packages/session/package.json',
     'packages/cli/package.json',
     'apps/desktop/electrobun.config.ts',
     'apps/extension/static/manifest.json',

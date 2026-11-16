@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createFakeHub } from './helpers/fake-transport.js';
 import { createEmitter } from '../src/utils/events.js';
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { createNetworkManager, type NetworkManager } from '../src/network/network-manager.js';
 import { createMesh } from '../src/network/mesh.js';
 import { createRendezvous } from '../src/network/rendezvous.js';

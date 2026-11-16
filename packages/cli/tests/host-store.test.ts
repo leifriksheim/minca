@@ -10,7 +10,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { directoryStores } from '../../core/src/node/stores.js';
+import { directoryStores } from '@minca/storage/folder';
 import { createP256Provider } from '../../core/src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../../core/src/identity/did.js';
 import { createSigner } from '../../core/src/schema/signer.js';
@@ -93,7 +93,7 @@ describe('a host on SQLite', () => {
       const { made, stores: before } = await oldHost(data);
       // As if a first start had copied part of a store into the database it builds, then stopped.
       const { DatabaseSync } = await import('node:sqlite');
-      const { sqliteStores } = await import('../../core/src/storage/sqlite-adapter.js');
+      const { sqliteStores } = await import('../../storage/src/sqlite/adapter.js');
       const db = new DatabaseSync(path.join(data, 'host.sqlite.importing'));
       const partial = await sqliteStores(db)('spaces/bspace1');
       await partial.putVersion(made[1]!);
@@ -122,7 +122,7 @@ describe('a host on SQLite', () => {
 
       await assert.rejects(hostStores(data), /are both here/);
       const { DatabaseSync } = await import('node:sqlite');
-      const { sqliteStores } = await import('../../core/src/storage/sqlite-adapter.js');
+      const { sqliteStores } = await import('../../storage/src/sqlite/adapter.js');
       const db = new DatabaseSync(path.join(data, 'host.sqlite'));
       const kept = await (await sqliteStores(db)('host')).get('subscription:1');
       db.close();

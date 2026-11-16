@@ -1,6 +1,6 @@
 /** The code each step shows: what the playground itself runs, cut down to the part that step is about. */
 
-export const connectCode = `import { createMincaConnection } from '@minca/core/session';
+export const connectCode = `import { createMincaConnection } from '@minca/session';
 import { MincaProvider, useConnection } from '@minca/react';
 
 const connection = createMincaConnection({

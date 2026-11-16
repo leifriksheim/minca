@@ -26,13 +26,13 @@ import {
   base64UrlEncode,
   createNode,
   didOf,
-  directoryStores,
   openValue,
   sealValue,
   serveNode,
   type P2PNode,
   type RootSigner,
 } from '@minca/core';
+import { directoryStores } from '@minca/storage/folder';
 import { watchNotifications } from '@minca/std';
 import {
   checkGrant,
@@ -45,7 +45,7 @@ import {
   watchGrant,
   type ConnectRequest,
   type Grant,
-} from '@minca/core/session';
+} from '@minca/session';
 import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { configuredRelays, enableWebRTC } from './agent.js';
 import { isRecord, messageOf } from './json.js';

@@ -9,9 +9,6 @@
 import {
   createIdentityManager,
   rootFromSeed,
-  accountDataPath,
-  newAccountId,
-  createBrowserAccountStore,
   createVault,
   withWrap,
   wrapSeedWithDeviceKey,
@@ -24,9 +21,6 @@ import {
   deriveAccountKey,
   deriveContactKeyBytes,
   deriveMemberKeyBytes,
-  createDeviceKey,
-  getDeviceKey,
-  deleteDeviceKey,
   registerPasskey,
   authenticatePasskey,
   hasPlatformAuthenticator,
@@ -35,20 +29,15 @@ import {
   seedToRecoveryCode,
   recoveryCodeToSeed,
   isValidRecoveryCode,
-  isFolderStorageAvailable,
   base64UrlEncode,
-  startPageNode,
   copyAccountData,
   describeHost,
   isProtocolError,
   protocolError,
-  type AccountStore,
-  type AccountSummary,
   type AccountVault,
   type DeviceWrap,
   type PassphraseWrap,
   type PairingTicket,
-  type WorkerLike,
   type StoreFactory,
   type NodeNetworkConfig,
   type P2PNode,
@@ -56,6 +45,19 @@ import {
   type PeerTransport,
   type OwnAutomation,
 } from '@minca/core';
+import {
+  accountDataPath,
+  newAccountId,
+  createBrowserAccountStore,
+  createDeviceKey,
+  getDeviceKey,
+  deleteDeviceKey,
+  startPageNode,
+  type AccountStore,
+  type AccountSummary,
+  type WorkerLike,
+} from '@minca/session';
+import { isFolderStorageAvailable } from '@minca/storage/folder';
 import type { AutomationApp, AutomationSpaces } from '@minca/core/schemas';
 import { fromProposal, proposalSpaces, sameAutomation } from './proposals.js';
 import {
@@ -95,7 +97,7 @@ import {
   type Handover,
   type PairingOffer,
   type PairingStage,
-} from '@minca/core/session';
+} from '@minca/session';
 import { isObject } from './guards.js';
 
 export interface MincaAuthConfig {
@@ -125,7 +127,7 @@ export interface MincaAuthConfig {
   };
   /**
    * Runs the node in a worker, off the page's main thread
-   * (`@minca/core/node-worker`). Called once per sign-in; the worker
+   * (`@minca/session/worker`). Called once per sign-in; the worker
    * ends when the node closes. Not with `browser.stores`, which a worker
    * can't be handed. Default: the node runs on the page.
    */

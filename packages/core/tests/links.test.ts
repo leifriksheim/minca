@@ -13,7 +13,7 @@ import { createVersion } from '../src/schema/version.js';
 import { checkLinks } from '../src/records/links.js';
 import { reaction as reactionSchema, comment as commentSchema, useSchemas } from '@minca/std';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { team } from '../src/space/presets.js';
 import { joined } from './helpers/joined.js';
 import { hold } from './helpers/hold.js';

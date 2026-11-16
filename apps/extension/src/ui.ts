@@ -2,7 +2,7 @@
  * The little the two visible pages share: building elements, and drawing the
  * spaces and the pod the same way in both.
  */
-import { ensureFolderPermission, recallDataFolder } from '@minca/core/storage';
+import { ensureFolderPermission, recallDataFolder } from '@minca/storage/folder';
 import { avatarElement } from '@minca/ui/avatar';
 import { MARK_BANDS, MARK_VIEWBOX } from '@minca/app-shared/mark';
 import type { ExtensionStatus, PodState } from './shared';

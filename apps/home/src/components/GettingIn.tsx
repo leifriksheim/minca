@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { accountCredentialName, type AccountEntry } from '@minca/auth';
-import type { AccountSummary } from '@minca/core';
+import type { AccountSummary } from '@minca/session';
 import { useAuth } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Choices, MARK_SIZE, type Choice } from '@minca/app-shared/Choices';

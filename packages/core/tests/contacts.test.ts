@@ -15,7 +15,7 @@ import { contactKeyPair, contactPublicKey, deriveContactKeyBytes } from '../src/
 import { openValueFrom, sealValueTo } from '../src/identity/hpke.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { team } from '../src/space/presets.js';
 import { until } from './helpers/until.js';
 import { open, person as somebody } from './helpers/person.js';

@@ -6,7 +6,7 @@ import { test, describe, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { createReconciler, fingerprintOf, ItemSet, type Item } from '../src/sync/negentropy.js';
 import { createStorageProvider, type StorageProvider } from '../src/storage/storage-provider.js';
 import { createSyncEngine, type Holds } from '../src/sync/sync-engine.js';

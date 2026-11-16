@@ -92,10 +92,14 @@ for (const source of specSources) {
 // its folder; each gets the name it is imported by, and a short path.
 const modules = [
   { dir: '@minca/core', slug: 'core', title: '@minca/core' },
-  { dir: 'core/src/session', slug: 'session', title: '@minca/core/session' },
   { dir: 'core/src/schemas', slug: 'schemas', title: '@minca/core/schemas' },
-  { dir: 'core/src/storage', slug: 'storage', title: '@minca/core/storage' },
   { dir: 'core/src/inbox', slug: 'inbox', title: '@minca/core/inbox' },
+  { dir: 'session/src', slug: 'session', title: '@minca/session' },
+  ...['indexeddb', 'folder', 'sqlite', 's3', 'memory'].map((entry) => ({
+    dir: `storage/src/${entry}`,
+    slug: `storage-${entry}`,
+    title: `@minca/storage/${entry}`,
+  })),
   { dir: 'std/src', slug: 'std', title: '@minca/std' },
   { dir: 'actions/src', slug: 'actions', title: '@minca/actions' },
   { dir: 'auth/src', slug: 'auth', title: '@minca/auth' },

@@ -15,17 +15,16 @@ import {
   deriveChannel,
   type Channel,
 } from '../src/identity/channel.js';
-import { checkGrant, type Grant } from '../src/session/connect.js';
-import { bytesField, meetOnChannel } from '../src/session/channel-room.js';
+import { checkGrant, type Grant } from '@minca/session';
+
 import {
   answerConnectCode,
   connectCodeIn,
   connectCodeUrl,
   connectWithCode,
   newConnectCode,
-  readConnectCode,
   type ConnectCodeStage,
-} from '../src/session/connect-code.js';
+} from '@minca/session';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../src/utils/encoding.js';
 import { isObject } from '../src/utils/guards.js';
 import { sha256 } from '../src/utils/hash.js';
@@ -34,6 +33,8 @@ import type { NetworkMessage } from '../src/types.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { until } from './helpers/until.js';
 import { open, person, type Person, newAppKey } from './helpers/person.js';
+import { bytesField, meetOnChannel } from '../../session/src/channel-room.js';
+import { readConnectCode } from '../../session/src/connect-code.js';
 
 /** Where the home in these tests lives */
 const ORIGIN = 'https://home.test';

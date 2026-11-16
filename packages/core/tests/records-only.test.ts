@@ -41,23 +41,19 @@ import {
   type DraftCollection,
 } from '@minca/std';
 import { createMincaAuth, type MincaAuth } from '@minca/auth';
-import { grantSigner, isProposeRequest, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
-import {
-  answerConnectCode,
-  connectWithCode,
-  newConnectCode,
-  receiveConnectCode,
-} from '../src/session/connect-code.js';
+import { grantSigner, isProposeRequest, nodeOptionsFromGrant, type Grant } from '@minca/session';
+import { answerConnectCode, connectWithCode, newConnectCode, receiveConnectCode } from '@minca/session';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
-import { createFolderAccountStore } from '../src/identity/account-store.js';
-import { createDirectoryBlobStore } from '../src/storage/blob/directory.js';
-import { folderStores, type StoreFactory } from '../src/node/stores.js';
+import { createFolderAccountStore } from '@minca/session';
+import { createDirectoryBlobStore } from '@minca/storage/folder';
+import { folderStores } from '@minca/storage/folder';
+import type { StoreFactory } from '../src/node/stores.js';
 import { seenBy } from './helpers/as-member.js';
 import { joined } from './helpers/joined.js';
 import { stored } from './helpers/stored.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { team } from '../src/space/presets.js';
 import {

@@ -18,7 +18,7 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createFakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {

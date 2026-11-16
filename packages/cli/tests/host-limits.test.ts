@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { createNode } from '../../core/src/node/node.js';
 import { createHostNode, spaceSubscription, type HostConfig, type HostNode } from '../src/host-node.js';
 import type { P2PNode } from '../../core/src/node/types.js';
-import type { HostLimits } from '../../core/src/session/hosting.js';
+import type { HostLimits } from '../../core/src/hosting/hosting.js';
 import { createIdentityManager } from '../../core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { createP256Provider } from '../../core/src/identity/crypto-p256.js';
@@ -22,12 +22,12 @@ import {
   signStatus,
   subscriptionKey,
   type HostStatus,
-} from '../../core/src/session/hosting.js';
+} from '../../core/src/hosting/hosting.js';
 import { didOf } from '../../core/src/identity/did.js';
 import { parseSpaceInvite } from '../../core/src/space/space-manager.js';
-import { createMemoryBlobStore } from '../../core/src/storage/blob/memory.js';
+import { createMemoryBlobStore } from '@minca/storage/memory';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
-import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { until } from '../../core/tests/helpers/until.js';
 import { joined } from '../../core/tests/helpers/joined.js';
 import { hold } from '../../core/tests/helpers/hold.js';

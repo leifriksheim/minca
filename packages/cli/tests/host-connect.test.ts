@@ -10,7 +10,7 @@ import { createBotConnect, verifierOf, type ConnectStep } from '../src/host-conn
 import { githubConnector } from '../src/connectors/github-connector.js';
 import type { GitHubApp } from '../src/connectors/github.js';
 import type { HostConnector } from '../src/connectors/connector.js';
-import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 const BOT = 'did:key:zBot';
 const ADMIN = 'did:key:zAdmin';

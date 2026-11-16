@@ -10,22 +10,22 @@ import assert from 'node:assert/strict';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import {
   createFolderAdapter,
-  resolvePath,
   writeFolderFile,
   type DirectoryHandleLike,
   type FolderAdapter,
-} from '../src/storage/folder-adapter.js';
-import { reconcileFolder } from '../src/storage/folder-reconcile.js';
-import { createDirectoryBlobStore } from '../src/storage/blob/directory.js';
+} from '@minca/storage/folder';
+import { reconcileSharedStore } from '../src/storage/shared-store.js';
+import { createDirectoryBlobStore } from '@minca/storage/folder';
 import { createMirror, type Taken } from '../src/storage/mirror.js';
-import { folderStores, type StoreFactory } from '../src/node/stores.js';
+import { folderStores } from '@minca/storage/folder';
+import type { StoreFactory } from '../src/node/stores.js';
 import { createNode } from '../src/node/node.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { team } from '../src/space/presets.js';
 import { createStorageProvider, type StorageProvider } from '../src/storage/storage-provider.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { until } from './helpers/until.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
@@ -34,6 +34,7 @@ import { createVersion } from '../src/schema/version.js';
 import { utf8Encode, utf8Decode } from '../src/utils/encoding.js';
 import type { Version } from '../src/types.js';
 import { packSegment, segmentName } from '../src/storage/segment.js';
+import { resolvePath } from '../../storage/src/folder/adapter.js';
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
@@ -250,7 +251,7 @@ describe('two origins, one folder', () => {
     // Reconciling notices the file A added. (Both read the same root pointer
     // from disk, so B's lists already include it; reconciling is what repairs
     // a tree whose pointer write was lost.)
-    const result = await reconcileFolder(b.storage, b.adapter);
+    const result = await reconcileSharedStore(b.storage, b.adapter);
     assert.deepEqual(result.added, [version.id]);
     assert.equal(result.changed, true);
 
@@ -268,11 +269,11 @@ describe('two origins, one folder', () => {
 
     const version = await makeVersion('short-lived');
     await a.storage.addVersion(version);
-    await reconcileFolder(b.storage, b.adapter);
+    await reconcileSharedStore(b.storage, b.adapter);
     assert.equal((await b.storage.queryVersions(COLLECTION)).length, 1);
 
     await a.storage.removeVersion(version.id);
-    await reconcileFolder(b.storage, b.adapter);
+    await reconcileSharedStore(b.storage, b.adapter);
 
     assert.equal((await b.storage.queryVersions(COLLECTION)).length, 0);
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
@@ -293,7 +294,7 @@ describe('two origins, one folder', () => {
     const versions = await store.getDirectoryHandle('versions');
     await versions.removeEntry(`${version.id}.json`);
 
-    const result = await reconcileFolder(a.storage, a.adapter);
+    const result = await reconcileSharedStore(a.storage, a.adapter);
 
     assert.deepEqual(result.removed, [version.id]);
     assert.deepEqual(result.repaired, [version.id], 'the entries should have been fixed');
@@ -312,11 +313,11 @@ describe('two origins, one folder', () => {
     await a.storage.addVersion(fromA);
     await b.storage.addVersion(fromB);
 
-    await reconcileFolder(a.storage, a.adapter);
-    await reconcileFolder(b.storage, b.adapter);
+    await reconcileSharedStore(a.storage, a.adapter);
+    await reconcileSharedStore(b.storage, b.adapter);
     // A second pass on A: B's reconcile may have written entries after A had
     // already finished looking.
-    await reconcileFolder(a.storage, a.adapter);
+    await reconcileSharedStore(a.storage, a.adapter);
 
     const idsFrom = async (origin: { storage: StorageProvider }) =>
       (await origin.storage.queryVersions(COLLECTION)).map((item) => item.id).sort();
@@ -334,7 +335,7 @@ describe('two origins, one folder', () => {
     const a = await openOrigin(folder.open());
     await a.storage.addVersion(await makeVersion('settled'));
 
-    const result = await reconcileFolder(a.storage, a.adapter);
+    const result = await reconcileSharedStore(a.storage, a.adapter);
     assert.equal(result.changed, false);
     assert.deepEqual(result.added, []);
     assert.deepEqual(result.removed, []);

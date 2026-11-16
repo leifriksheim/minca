@@ -29,7 +29,7 @@ import { createLocalRootSigner } from '../../../core/src/identity/root-signer.js
 import { generateSeed } from '../../../core/src/identity/recovery-code.js';
 import { deriveAccountKey } from '../../../core/src/identity/account-vault.js';
 import { community } from '../../../core/src/space/presets.js';
-import { memoryStores } from '../../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 const [messages = 5000, edits = 200, members = 300, spaces = 30] = process.argv.slice(2).map(Number);
 const LATENCY_MS = Number(process.env.BENCH_LATENCY_MS ?? 60);

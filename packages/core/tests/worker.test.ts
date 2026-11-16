@@ -6,16 +6,17 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runNodeWorker, startNodeInWorker, workerNetwork } from '../src/node/worker.js';
-import type { WorkerStores } from '../src/node/stores.js';
+import { runNodeWorker, startNodeInWorker } from '@minca/session';
+import type { WorkerStores } from '@minca/session';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner, type RootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { team } from '../src/space/presets.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { until } from './helpers/until.js';
 import { isRecord } from '../src/utils/guards.js';
 import { newAppKey } from './helpers/person.js';
+import { workerNetwork } from '../../session/src/worker.js';
 
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => {

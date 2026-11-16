@@ -1,0 +1,46 @@
+{
+  "name": "@minca/session",
+  "version": "0.3.1",
+  "type": "module",
+  "description": "An app and its account home: connecting, grants, connect codes, pairing a phone, and a browser node in a worker",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leifriksheim/minca.git",
+    "directory": "packages/session"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "@minca/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "@minca/source": "./src/node-worker.ts",
+      "types": "./dist/node-worker.d.ts",
+      "import": "./dist/node-worker.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@minca/core": "*",
+    "@minca/storage": "*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -5,7 +5,7 @@
  * next.config.mjs points `@minca/playground` at that. TypeScript reads this
  * file instead (tsconfig.json), so the types are the source's.
  */
-export { createMincaConnection, type MincaConnection } from '@minca/core/session';
+export { createMincaConnection, type MincaConnection } from '@minca/session';
 // useSchemas defines what a space lacks; it isn't a React hook, whatever its name says.
 export { listItem, useSchemas as addSchemas } from '@minca/std';
 export type { NodeCollection } from '@minca/core';

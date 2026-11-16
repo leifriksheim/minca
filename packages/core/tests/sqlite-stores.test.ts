@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { after, sqliteStores } from '../src/storage/sqlite-adapter.js';
+import { sqliteStores } from '@minca/storage/sqlite';
 import { createBodyCache } from '../src/storage/body-cache.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
@@ -30,6 +30,7 @@ import { hold } from './helpers/hold.js';
 import { joined } from './helpers/joined.js';
 import { until } from './helpers/until.js';
 import { team } from '../src/space/presets.js';
+import { after } from '../../storage/src/sqlite/adapter.js';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const text = (value: Uint8Array | null) => (value ? new TextDecoder().decode(value) : null);

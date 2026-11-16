@@ -74,8 +74,9 @@ in the [spec](https://github.com/leifriksheim/minca/tree/main/spec).
 
 ## Rules of thumb
 
-- Import only from the package's entry points: `@minca/core` and its
-  `/session`, `/schemas`, `/elements`, `/storage` and `/inbox`, and
+- Import only from the packages' entry points: `@minca/core` and its
+  `/schemas` and `/inbox`, `@minca/session` to connect to an account home,
+  `@minca/storage/<kind>` for where a node keeps its data, and
   `@minca/react` for React.
 - Name your collections `app.<yours>.<thing>`. `sys.*` belongs to the
   protocol and `std.*` to the standard library.

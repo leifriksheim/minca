@@ -8,7 +8,7 @@
  * key that outlives its node must keep that, or the next would fork it.
  */
 import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
-import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
+import { checkGrant, usableGrant, type Grant } from '@minca/session';
 import { holdEverySpace, startGrantedAgent } from '../agent.js';
 import { catchUp } from '../level.js';
 import { isRecord, messageOf } from '../json.js';

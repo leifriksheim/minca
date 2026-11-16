@@ -4,7 +4,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { issueDelegation } from '../src/identity/ucan.js';

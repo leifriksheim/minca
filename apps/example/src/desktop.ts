@@ -14,7 +14,7 @@ import {
   type MincaConnection,
   type MincaConnectionConfig,
   type MincaConnectionState,
-} from '@minca/core/session';
+} from '@minca/session';
 
 interface NodeChannel {
   send(data: unknown): void;

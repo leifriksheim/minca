@@ -1,0 +1,182 @@
+/**
+ * @module session/places
+ * Where accounts and their data are kept: a pod, or this browser.
+ *
+ * Two questions a sign-in flow keeps apart:
+ *
+ * - **Where does my data live?** A folder you picked (a *pod*), or this
+ *   browser. That is a place.
+ * - **Who am I?** An account in that place. A place can hold several.
+ */
+import type { StoreFactory } from '@minca/core';
+import {
+  ensureFolderPermission,
+  folderStores,
+  forgetDataFolder,
+  pickDataFolder,
+  recallDataFolder,
+  rememberDataFolder,
+  type DirectoryHandleLike,
+} from '@minca/storage/folder';
+import {
+  createBrowserAccountStore,
+  createFolderAccountStore,
+  type AccountStore,
+  type AccountSummary,
+} from './account-store.js';
+import { workerStores, type WorkerStores } from './worker-stores.js';
+
+/** Where accounts and their data are kept */
+export interface Place {
+  readonly kind: 'folder' | 'browser';
+  readonly store: AccountStore;
+  /** The folder, when there is one — for its name, and for opening stores */
+  readonly directory: DirectoryHandleLike | null;
+}
+
+/** What a pod holds, for deciding what to do before switching to it */
+export interface PodContents {
+  /** This account's copy in the pod, when it has one */
+  readonly account: AccountSummary | null;
+  /** Other accounts in the pod — never touched by a move */
+  readonly others: number;
+  /** It is the pod already in use */
+  readonly same: boolean;
+}
+
+/** Accounts kept in this browser. Always available; never shared with another site. */
+export async function browserPlace(): Promise<Place> {
+  return { kind: 'browser', store: await createBrowserAccountStore(), directory: null };
+}
+
+/** Wraps a folder as a place. */
+function folderPlace(directory: DirectoryHandleLike): Place {
+  return { kind: 'folder', store: createFolderAccountStore(directory), directory };
+}
+
+/**
+ * Asks for a pod without switching to it — so a signed-in person can be asked
+ * what should happen to their data first. Must be called from a click.
+ */
+export async function pickPod(): Promise<Place> {
+  return folderPlace(await pickDataFolder({ id: 'minca-pod' }));
+}
+
+/** Remembers a pod as the one this site opens next time. */
+export async function rememberPod(pod: Place): Promise<void> {
+  if (!pod.directory) throw new Error('That is not a folder.');
+  await rememberDataFolder(pod.directory);
+}
+
+/**
+ * Re-opens the pod this site used last.
+ *
+ * @param request Whether to prompt for permission. Needs a click when true; use
+ *   false on page load to find out whether a button has to be shown.
+ * @returns The pod, or null when there is none or access was declined
+ */
+export async function recallPod(request: boolean): Promise<Place | null> {
+  const directory = await recallDataFolder();
+  if (!directory) return null;
+  if (!(await ensureFolderPermission(directory, { request }))) return null;
+  return folderPlace(directory);
+}
+
+/**
+ * The name of the pod this site used last, when it needs a click to open
+ * again (the browser keeps no permission between visits unless asked to).
+ */
+export async function podToReopen(): Promise<string | null> {
+  const directory = await recallDataFolder();
+  if (!directory) return null;
+  if (await ensureFolderPermission(directory, { request: false })) return null;
+  return directory.name;
+}
+
+/** Stops using the pod. Nothing in it is touched. */
+export async function forgetPod(): Promise<void> {
+  await forgetDataFolder();
+}
+
+/** Every account in a place, most recently used first. */
+export async function listAccounts(place: Place): Promise<ReadonlyArray<AccountSummary>> {
+  return place.store.list();
+}
+
+/** What a pod holds of this account and others, and whether it is the one in use. */
+export async function inspectPod(pod: Place, current: Place, did: string): Promise<PodContents> {
+  const accounts = await listAccounts(pod);
+  return {
+    account: accounts.find((account) => account.did === did) ?? null,
+    others: accounts.filter((account) => account.did !== did).length,
+    same: current.kind === 'folder' && (await sameFolder(pod.directory, current.directory)),
+  };
+}
+
+async function sameFolder(a: DirectoryHandleLike | null, b: DirectoryHandleLike | null): Promise<boolean> {
+  if (!a || !b || !canCompare(a)) return false;
+  return (await a.isSameEntry(b).catch(() => false)) === true;
+}
+
+/**
+ * The stores for one account.
+ *
+ * Paths are account-scoped either way, so two accounts in one browser never
+ * share a store, the same way two accounts in one folder never share a subtree.
+ * A pod's registry is sealed under the account's local key, so someone who copies the
+ * folder cannot read the private spaces in it.
+ *
+ * @param folder The unlocked pod and its local key, when the account lives in one
+ */
+export function storesFor(
+  account: AccountSummary,
+  folder?: {
+    readonly directory: DirectoryHandleLike;
+    readonly localKey: CryptoKey;
+    /** Where this device keeps a pod's own stores; default this origin's IndexedDB (`folderStores`) */
+    readonly local?: StoreFactory;
+  },
+): StoreFactory {
+  return folder?.local
+    ? folderStores(folder.directory, {
+        basePath: account.dataPath,
+        localKey: folder.localKey,
+        local: folder.local,
+      })
+    : workerStores(describeStores(account, folder));
+}
+
+/** The same stores as {@link storesFor}, said as data, for a node in a worker to open */
+export function describeStores(
+  account: AccountSummary,
+  folder?: { readonly directory: DirectoryHandleLike; readonly localKey: CryptoKey },
+): WorkerStores {
+  return folder
+    ? { directory: folder.directory, basePath: account.dataPath, localKey: folder.localKey }
+    : { indexedDB: databaseName(account) };
+}
+
+/** Deletes the IndexedDB databases an account kept in this browser, or every one whose name starts with a prefix. */
+export async function deleteBrowserData(account: AccountSummary | string): Promise<void> {
+  const prefix = typeof account === 'string' ? account : databaseName(account);
+  const databases = (await globalThis.indexedDB?.databases?.()) ?? [];
+  const names = databases
+    .map((db) => db.name)
+    .filter((name): name is string => name?.startsWith(prefix) === true);
+  await Promise.all(names.map(deleteDatabase));
+}
+
+const databaseName = (account: AccountSummary) => `minca:${account.dataPath.replace(/\//g, ':')}`;
+
+/** Deletes one database, settling however the browser answers */
+function deleteDatabase(name: string): Promise<void> {
+  return new Promise((resolve) => {
+    const request = globalThis.indexedDB.deleteDatabase(name);
+    request.onsuccess = request.onerror = request.onblocked = () => resolve();
+  });
+}
+
+/** `FileSystemHandle.isSameEntry`, which not every handle a test or an older browser gives has */
+function canCompare(handle: object): handle is { isSameEntry(other: unknown): Promise<boolean> } {
+  return 'isSameEntry' in handle && typeof handle.isSameEntry === 'function';
+}

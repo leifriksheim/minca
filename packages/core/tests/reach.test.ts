@@ -16,7 +16,7 @@ import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { encodeInviteLink } from '../src/space/invite-link.js';
 import { host } from '@minca/std';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { createFakeHub } from './helpers/fake-transport.js';
 
 const closing: Array<() => Promise<unknown>> = [];

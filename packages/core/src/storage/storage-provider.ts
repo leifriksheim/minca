@@ -85,10 +85,10 @@ export interface StorageProvider {
   close(): Promise<void>;
 }
 
-export const CURRENT_PREFIX = 'r/';
-export const GENESIS_PREFIX = 'g/';
-export const HISTORY_PREFIX = 'h/';
-export const ITEM_PREFIX = 'i/';
+const CURRENT_PREFIX = 'r/';
+const GENESIS_PREFIX = 'g/';
+const HISTORY_PREFIX = 'h/';
+const ITEM_PREFIX = 'i/';
 /** `t/<collection>/<time>/<id>`: the versions of {@link ITEM_PREFIX} in their collection's shallow set */
 export const SHALLOW_PREFIX = 't/';
 /** Present once a store's `t/` entries are complete: one kept before them is indexed once, when first read */
@@ -107,7 +107,7 @@ const historyKey = (e: Version) => `${HISTORY_PREFIX}${e.key}/${String(e.seq).pa
  * Where a version sorts for sync: its own time, in whole seconds. Only an
  * order — a wrong clock makes a version slower to find, never lost.
  */
-export function syncTime(version: Pick<Version, 'createdAt'>): number {
+function syncTime(version: Pick<Version, 'createdAt'>): number {
   const ms = Date.parse(version.createdAt);
   return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;
 }

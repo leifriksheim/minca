@@ -29,7 +29,7 @@ import { createIdentityManager } from '../../../core/src/identity/identity-manag
 import { createLocalRootSigner } from '../../../core/src/identity/root-signer.js';
 import { generateSeed } from '../../../core/src/identity/recovery-code.js';
 import { deriveAccountKey } from '../../../core/src/identity/account-vault.js';
-import { memoryStores } from '../../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 const [records = 3000, bytes = 50_000, files = 0, fileBytes = 5_000_000] = process.argv.slice(2).map(Number);
 const PORT = 18_900 + Math.floor(Math.random() * 90);

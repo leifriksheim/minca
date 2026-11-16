@@ -9,11 +9,10 @@
  * syncs it; a directory store by another process (a command beside a
  * daemon). Nothing announces either, so both are looked for.
  */
-import type { StorageAdapter, Version } from '../types.js';
-import { reconcileFolder } from '../storage/folder-reconcile.js';
+import { isSharedStorageAdapter, type StorageAdapter, type Version } from '../types.js';
+import { reconcileSharedStore } from '../storage/shared-store.js';
 import type { BlobStore } from '../storage/blob-store.js';
 import { createMirror, type Mirror, type Taken } from '../storage/mirror.js';
-import type { FolderAdapter } from '../storage/folder-adapter.js';
 import type { StoreFactory } from './stores.js';
 import { unref } from '../utils/guards.js';
 import { type Standing, storable, type SpaceBase } from './space-versions.js';
@@ -29,9 +28,6 @@ export interface MirrorsDeps extends SpaceBase {
   /** Tells the peers this node took in something new */
   readonly announceSoon: () => void;
 }
-
-const isFolderAdapter = (adapter: StorageAdapter): adapter is FolderAdapter =>
-  'reload' in adapter && typeof adapter.reload === 'function';
 
 export async function openMirrors(deps: MirrorsDeps) {
   const { space, storage, adapter, admit, recordsChanged, announceSoon } = deps;
@@ -87,8 +83,9 @@ export async function openMirrors(deps: MirrorsDeps) {
 
   const look = async (): Promise<boolean> => {
     // The same verdict as for a version from a peer.
-    const reconciled = isFolderAdapter(adapter)
-      ? (await reconcileFolder(storage, adapter, async (version) => storable(await admit(version)))).changed
+    const reconciled = isSharedStorageAdapter(adapter)
+      ? (await reconcileSharedStore(storage, adapter, async (version) => storable(await admit(version))))
+          .changed
       : false;
     const pulled = folderMirror ? (await folderMirror.pull()).added > 0 : false;
     return reconciled || pulled;
@@ -98,7 +95,7 @@ export async function openMirrors(deps: MirrorsDeps) {
 
   /** Looks for what other writers changed, from now on */
   function watch(): void {
-    if (deps.watchIntervalMs > 0 && (folderMirror || isFolderAdapter(adapter))) {
+    if (deps.watchIntervalMs > 0 && (folderMirror || isSharedStorageAdapter(adapter))) {
       let running = false;
       watchTimer = setInterval(() => {
         if (running) return;

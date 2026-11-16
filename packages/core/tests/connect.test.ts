@@ -2,12 +2,11 @@
  * An app acting for an account through a grant from its home: it writes where
  * it was given access, nowhere else, and never holds the seed.
  */
-import { test, describe, afterEach } from 'node:test';
+import { test, describe, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMincaAuth, type MincaAuth } from '@minca/auth';
 import {
-  grantStore,
   homeAddress,
   startConnectedNode,
   watchGrant,
@@ -15,12 +14,12 @@ import {
   type ConnectRequest,
   type Grant,
   type ProposeRequest,
-} from '../src/session/connect.js';
-import { createMincaConnection } from '../src/session/connection.js';
-import { createFolderAccountStore } from '../src/identity/account-store.js';
+} from '@minca/session';
+import { createMincaConnection } from '@minca/session';
+import { createFolderAccountStore } from '@minca/session';
 import type { NodeEvent, P2PNode } from '../src/node/types.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { team } from '../src/space/presets.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
@@ -37,11 +36,23 @@ import { until } from './helpers/until.js';
 import { watchNotifications, type NotifyMatch } from '@minca/std';
 import { notifyOn } from '../src/space/own-automations.js';
 import { asked, newAppKey, testAppKey } from './helpers/person.js';
+import { grantStore } from '../../session/src/connect.js';
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((close) => close()));
 });
+
+/** Without Web Locks, whatever the runtime has, unless a test fakes them (`fakeLocks`) */
+function withLocks(locks: unknown): void {
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { value: { locks }, configurable: true, writable: true });
+  cleanup.push(async () => {
+    if (saved) Object.defineProperty(globalThis, 'navigator', saved);
+    else Reflect.deleteProperty(globalThis, 'navigator');
+  });
+}
+beforeEach(() => withLocks(undefined));
 
 /**
  * The account home: a signed-in flow on the hub. Signing out waits only
@@ -1427,7 +1438,7 @@ describe('an app showing its own notifications', () => {
 
 describe('the app asking its home', () => {
   test('a hello that arrives before the request is ready is still answered, and the request repeats until answered', async () => {
-    const { connectToHome } = await import('../src/session/connect.js');
+    const { connectToHome } = await import('../../session/src/connect.js');
     const key = await testAppKey('early-hello');
     const toHome: Array<{ message: unknown; origin: string }> = [];
     const popup = {
@@ -1530,7 +1541,7 @@ describe('the home receiving a request', () => {
   test('it says hello once, and still takes a request that comes much later', async () => {
     const popup = popupWindow();
     try {
-      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const { receiveConnectRequest } = await import('../../session/src/connect.js');
       const received = receiveConnectRequest(5000);
       // A phone that paused the app's tab: its request comes when the tab runs again.
       await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -1555,7 +1566,7 @@ describe('the home receiving a request', () => {
   test('it stops waiting when the app that opened it is gone', async () => {
     const popup = popupWindow();
     try {
-      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const { receiveConnectRequest } = await import('../../session/src/connect.js');
       const received = receiveConnectRequest(60_000);
       const g: { opener?: unknown } = globalThis;
       if (isRecord(g.opener)) g.opener.closed = true;
@@ -1568,7 +1579,7 @@ describe('the home receiving a request', () => {
   test('a request it cannot read is refused out loud, not left waiting', async () => {
     const popup = popupWindow();
     try {
-      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const { receiveConnectRequest } = await import('../../session/src/connect.js');
       const received = receiveConnectRequest(1000);
       popup.send({
         type: 'minca:request',
@@ -1587,7 +1598,7 @@ describe('the home receiving a request', () => {
   });
 
   test('a request with a field it does not know is refused, subscriptions while connecting included', async () => {
-    const { receiveConnectRequest } = await import('../src/session/connect.js');
+    const { receiveConnectRequest } = await import('../../session/src/connect.js');
     for (const request of [
       await asked({
         v: 1,
@@ -1630,7 +1641,7 @@ describe('the home receiving a request', () => {
   });
 
   test('a proposed subscription whose click leads to another site, or that names a protocol collection, is refused', async () => {
-    const { receiveConnectRequest } = await import('../src/session/connect.js');
+    const { receiveConnectRequest } = await import('../../session/src/connect.js');
     const asked = [
       {
         v: 2,
@@ -1672,7 +1683,7 @@ describe('the home receiving a request', () => {
   test('a carry request is read', async () => {
     const popup = popupWindow();
     try {
-      const { receiveConnectRequest, isProposeRequest } = await import('../src/session/connect.js');
+      const { receiveConnectRequest, isProposeRequest } = await import('../../session/src/connect.js');
       const received = receiveConnectRequest(1000);
       popup.send(
         {
@@ -1696,7 +1707,7 @@ describe('the home receiving a request', () => {
   });
 
   test('a proposal is read, and one with nothing in it, or asking for more, is refused', async () => {
-    const { receiveConnectRequest, isProposeRequest } = await import('../src/session/connect.js');
+    const { receiveConnectRequest, isProposeRequest } = await import('../../session/src/connect.js');
     const origin = 'https://app.test';
     for (const request of [
       { v: 2, kind: 'propose', automations: [] },
@@ -1903,26 +1914,40 @@ describe('an app connected to several accounts', () => {
     return { hide: () => show('hidden'), show: () => show('visible') };
   }
 
-  /** Web Locks as browsers have them, for a runtime without: exclusive, granted in turn */
+  /**
+   * Web Locks as browsers have them: exclusive, granted in turn. A request
+   * whose signal aborts before its turn is dropped, and rejects.
+   */
   function fakeLocks() {
     const held = new Map<string, Promise<void>>();
     const locks = {
-      request(name: string, run: () => Promise<void>) {
-        const mine = (held.get(name) ?? Promise.resolve()).then(run);
+      request(
+        name: string,
+        ...rest: [() => Promise<void>] | [{ signal?: AbortSignal }, () => Promise<void>]
+      ) {
+        const [{ signal }, run] = rest.length === 1 ? [{}, rest[0]] : rest;
+        const before = held.get(name) ?? Promise.resolve();
+        const aborted = new Promise<never>((_, reject) => {
+          if (signal?.aborted) reject(new DOMException('Aborted', 'AbortError'));
+          signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), {
+            once: true,
+          });
+        });
+        const mine = Promise.race([before, aborted]).then(run);
         held.set(
           name,
-          mine.catch(() => {}),
+          Promise.all([before, mine.catch(() => {})]).then(() => {}),
         );
         return mine;
       },
     };
-    const g: Record<string, unknown> = globalThis;
-    const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-    Object.defineProperty(globalThis, 'navigator', { value: { locks }, configurable: true, writable: true });
-    cleanup.push(async () => {
-      if (saved) Object.defineProperty(globalThis, 'navigator', saved);
-      else delete g.navigator;
-    });
+    withLocks(locks);
+    /** Holds an account's turn as another tab in view would, until the returned function lets go */
+    return function holdElsewhere(did: string): () => void {
+      let letGo = () => {};
+      void locks.request(`minca-node:${did}`, () => new Promise<void>((done) => (letGo = done)));
+      return () => letGo();
+    };
   }
 
   /** A connection on its own account, started */
@@ -2230,6 +2255,109 @@ describe('an app connected to several accounts', () => {
       connection.getState().accounts.map((account) => account.did),
       [b.grant.did],
       'B is still there, to choose',
+    );
+  });
+
+  test('switching quickly, with Web Locks, settles on the account last chosen and waits on no lock', async () => {
+    fakeLocks();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    grantStore(storage).save(b.grant, 'b');
+    const connection = tab(
+      hub,
+      storage,
+      keyStore([
+        ['a', a.key],
+        ['b', b.key],
+      ]),
+    );
+    await connection.start();
+    // An open overtaken while it waits for B's lock must give up, not wait for the one that took it.
+    await Promise.all([
+      connection.use(b.grant.did),
+      connection.use(a.grant.did),
+      connection.use(b.grant.did),
+    ]);
+    assert.equal(connection.getState().node?.did, b.grant.did);
+    assert.equal(connection.getState().status, 'ready');
+  });
+
+  test('switching away while waiting for a turn another tab holds says nothing of that tab later', async (t) => {
+    const holdElsewhere = fakeLocks();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    grantStore(storage).save(b.grant, 'b');
+    const connection = createMincaConnection({
+      home: HOME,
+      request: { name: 'Todo', access: 'write' },
+      storage,
+      stores: () => memoryStores(),
+      keys: keyStore([
+        ['a', a.key],
+        ['b', b.key],
+      ]),
+      account: () => b.grant.did,
+    });
+    cleanup.push(() => connection.getState().node?.close() ?? Promise.resolve());
+    await connection.start();
+    holdElsewhere(a.grant.did);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    void connection.use(a.grant.did);
+    for (let i = 0; i < 50; i++) await new Promise((resolve) => setImmediate(resolve));
+    await connection.use(b.grant.did);
+    assert.equal(connection.getState().status, 'ready');
+    t.mock.timers.tick(10_000);
+    assert.equal(connection.getState().error, null);
+  });
+
+  test('disconnecting while waiting for a turn another tab holds leaves the account disconnected', async () => {
+    const holdElsewhere = fakeLocks();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    const otherTabLetsGo = holdElsewhere(a.grant.did);
+    const connection = tab(hub, storage, keyStore([['a', a.key]]));
+    const starting = connection.start();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await connection.disconnect(a.grant.did);
+    otherTabLetsGo();
+    await starting;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(connection.getState().status, 'disconnected');
+    assert.equal(connection.getState().node, null);
+  });
+
+  test('disconnecting while switching to an account that is then disconnected too leaves no key or last account behind', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    grantStore(storage).save(b.grant, 'b');
+    const keys = keyStore([
+      ['a', a.key],
+      ['b', b.key],
+    ]);
+    const connection = tab(hub, storage, keys, a.grant.did);
+    await connection.start();
+    const switching = connection.use(b.grant.did);
+    await connection.disconnect(a.grant.did);
+    await connection.disconnect(b.grant.did);
+    await switching;
+    assert.equal(connection.getState().status, 'disconnected');
+    assert.equal(connection.getState().node, null);
+    assert.deepEqual([...keys.held.keys()], [], 'no key made again for an account let go');
+    assert.notEqual(
+      storage.getItem('minca.account'),
+      b.grant.did,
+      'the account let go is not the one to open next',
     );
   });
 

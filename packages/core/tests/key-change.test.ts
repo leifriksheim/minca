@@ -41,7 +41,7 @@ import { createClientAuth, type ReadAccess } from '../src/network/peer-auth.js';
 import { team } from '../src/space/presets.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';

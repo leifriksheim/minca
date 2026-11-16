@@ -20,7 +20,7 @@ import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
 import { generateSeed } from '../../core/src/identity/recovery-code.js';
 import { team } from '../../core/src/space/presets.js';
 import { isRecord } from '../../core/src/utils/guards.js';
-import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 interface Case {
   readonly id: string;

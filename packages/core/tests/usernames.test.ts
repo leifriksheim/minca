@@ -11,7 +11,7 @@ import { WebSocketServer } from 'ws';
 import { createRelay, MAX_MESSAGE_BYTES } from '../../relay/relay.mjs';
 import { createNames } from '../../names/names.mjs';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
-import { createFolderAccountStore } from '../src/identity/account-store.js';
+import { createFolderAccountStore } from '@minca/session';
 import { createMincaAuth, type MincaAuth } from '@minca/auth';
 import {
   adHocName,
@@ -27,7 +27,7 @@ import { portOf } from './helpers/net.js';
 import { patience } from './helpers/until.js';
 import { open, person as somebody } from './helpers/person.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 
 const provider = createP256Provider();
 

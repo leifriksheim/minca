@@ -11,7 +11,7 @@ import { team } from '../../src/space/presets.js';
 import type { P2PNode } from '../../src/node/types.js';
 import { createStorageProvider } from '../../src/storage/storage-provider.js';
 import { createFakeHub } from '../helpers/fake-transport.js';
-import { memoryStores } from '../helpers/memory-stores.js';
+import { memoryStores } from '@minca/storage/memory';
 import { hold } from '../helpers/hold.js';
 import { joined } from '../helpers/joined.js';
 import { person, ms } from './common.js';

@@ -1,8 +1,4 @@
-import type {
-  DirectoryHandleLike,
-  FileHandleLike,
-  WritableFileLike,
-} from '../../src/storage/folder-adapter.js';
+import type { DirectoryHandleLike, FileHandleLike, WritableFileLike } from '@minca/storage/folder';
 
 /**
  * An in-memory stand-in for a File System Access directory handle.

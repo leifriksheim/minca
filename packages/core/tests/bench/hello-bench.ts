@@ -9,7 +9,7 @@ import { createStorageProvider } from '../../src/storage/storage-provider.js';
 import { createSyncEngine, type SyncEngine } from '../../src/sync/sync-engine.js';
 import type { Version } from '../../src/types.js';
 import { cidFromBytes } from '../../src/utils/hash.js';
-import { createMemoryAdapter } from '../helpers/memory-adapter.js';
+import { createMemoryAdapter } from '@minca/storage/memory';
 
 const N = Number(process.argv[2] ?? 100_000);
 
