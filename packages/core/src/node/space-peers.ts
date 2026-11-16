@@ -35,6 +35,10 @@ import type { Standing, SpaceBase } from './space-versions.js';
 import type { History } from './space-history.js';
 import type { Keys } from './space-keys.js';
 
+/** Sync messages from one peer waiting to be handled, past which this node stops reading from it */
+const PAUSE_AT = 8;
+/** And how few are left when it reads again */
+const RESUME_AT = 2;
 /** How long a peer checked here has to become a peer before the check is forgotten: past any handshake's timeout */
 const STALE_ADMISSION_MS = 60_000;
 /** How long a removed member's socket stays open after nothing more is sent on it, for frames already on their way */
@@ -176,6 +180,7 @@ export interface PeersDeps extends SpaceBase {
   readonly recordsChanged: (placed?: ReadonlyArray<Version>) => void;
   readonly filesChanged: () => void;
   readonly onArrived: ((version: Version) => void) | undefined;
+  readonly listedKey: (() => Promise<SpaceKey | null>) | undefined;
 }
 
 export async function openPeers(deps: PeersDeps) {
@@ -235,6 +240,7 @@ export async function openPeers(deps: PeersDeps) {
     sendToPeer: (peerId, message) => {
       routes.get(peerId)?.send(peerId, { type: 'sync', from: session.did, payload: message });
     },
+    backlog: (peerId) => routes.get(peerId)?.buffered(peerId) ?? 0,
     validate: async (version, from) => {
       const verdict = await admit(version, from);
       return verdict.ok || verdict.withdrawn
@@ -301,16 +307,25 @@ export async function openPeers(deps: PeersDeps) {
             return held ? deriveReadKey(held, provider) : (record.read ?? null);
           },
           current: meeting.readKey,
-          async earlier() {
+          async earlier(wanted?: string) {
             const { current } = (await access()).history;
             const newest = newestKey(current);
-            const older = [...current.keys]
-              .reverse()
+            // The one the other side checks against first, however old: a verifier behind by any number
+            // of changes is proved its key, and learns the rest. The others in the history's order.
+            const epochs = [...current.keys].reverse();
+            const asked = epochs.findIndex((epoch) => epoch.readKey === wanted);
+            if (asked > 0) epochs.unshift(...epochs.splice(asked, 1));
+            const older = epochs
               .map((epoch) => keyring.get(epoch.keyId))
               .filter((held): held is SpaceKey => held !== undefined && held !== newest);
-            return Promise.all(
+            const proving = await Promise.all(
               older.slice(0, MAX_EARLIER_READ_KEYS).map((held) => deriveReadKey(held, provider)),
             );
+            if (!wanted || asked >= 0) return proving;
+            // Away through key changes: the one the account's list carries may be it (06 §1.3).
+            const listed = await deps.listedKey?.();
+            const read = listed ? await deriveReadKey(listed, provider) : null;
+            return read?.did === wanted ? [read, ...proving].slice(0, MAX_EARLIER_READ_KEYS) : proving;
           },
           async membership() {
             const held = newestKey((await access()).history.current);
@@ -547,9 +562,23 @@ export async function openPeers(deps: PeersDeps) {
   }
 
   function listen(network: NetworkManager): void {
+    /** Sync messages from each peer on this network taken in and not yet handled: it is this network that pauses */
+    const behind = new Map<string, number>();
     network.on('message', (message: NetworkMessage) => {
-      if (message.type === 'sync') void sync.handleMessage(message.from, message.payload);
-      else onMessage(message);
+      if (message.type !== 'sync') return onMessage(message);
+      // A peer's messages are handled one at a time. Past a few waiting, stop
+      // reading from it until they are done: what it sends faster than this
+      // node takes in waits in the network, not in memory.
+      const peer = message.from;
+      const queued = (behind.get(peer) ?? 0) + 1;
+      behind.set(peer, queued);
+      if (queued === PAUSE_AT) network.pause(peer);
+      void sync.handleMessage(peer, message.payload).finally(() => {
+        const left = (behind.get(peer) ?? 1) - 1;
+        if (left > 0) behind.set(peer, left);
+        else behind.delete(peer);
+        if (left === RESUME_AT) network.resume(peer);
+      });
     });
     network.on('peer-connected', (info: PeerInfo) => {
       if (cutOff.has(info.did)) {

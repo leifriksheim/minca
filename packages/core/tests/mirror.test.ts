@@ -193,6 +193,43 @@ describe('a mirror', () => {
     assert.deepEqual(await texts(fresh.storage), ['another record', 'v10']);
   });
 
+  test('a restart does not rewrite a compacted space: what the last compaction left is kept', async () => {
+    const shared = counted(createMemoryBlobStore());
+    const who = await author();
+    const storage = createStorageProvider(createMemoryAdapter());
+    const state = createMemoryAdapter();
+    const open = () =>
+      createMirror({
+        store: shared.store,
+        space: SPACE,
+        storage,
+        accept: async () => 'stored',
+        state,
+        flushMs: 5,
+        flushBytes: 1,
+        compactAt: 4,
+      });
+    let mirror = await open();
+    for (let i = 0; i < 6; i++) {
+      await storage.addVersion(await note(who, `record ${i}`));
+      await mirror.flush();
+    }
+    // One version a segment, so a compaction leaves one segment for each record held.
+    const compacted = await shared.store.list(`${SPACE}/`);
+    assert.equal(compacted.length, 6);
+    await mirror.close();
+
+    mirror = await open();
+    await storage.addVersion(await note(who, 'after a restart'));
+    await mirror.flush();
+    const after = await shared.store.list(`${SPACE}/`);
+    assert.equal(after.length, 7, 'the new record goes in a segment of its own');
+    assert.ok(
+      compacted.every((key) => after.includes(key)),
+      'the segments the last compaction left are not rewritten',
+    );
+  });
+
   test('a refused copy is not counted as there: the version, once held, still goes out', async () => {
     const shared = createMemoryBlobStore();
     const who = await author();

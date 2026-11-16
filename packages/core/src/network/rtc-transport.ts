@@ -142,6 +142,7 @@ export function createRTCTransport(config?: RTCTransportConfig): SignalledTransp
     close,
     closeAll: () => [...connections.keys()].forEach(close),
     binding,
+    buffered: (peerId: string) => connections.get(peerId)?.channel?.bufferedAmount ?? 0,
     on,
     off,
   });

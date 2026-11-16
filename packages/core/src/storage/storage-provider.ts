@@ -95,8 +95,8 @@ export const SHALLOW_PREFIX = 't/';
 const SHALLOW_INDEXED = 'shallow-indexed';
 /** Versions read at a time while indexing a store kept before `t/`, between which other work runs */
 const INDEX_CHUNK = 200;
-/** Version bodies a store keeps in memory when it has a cache of its own, the one used longest ago let go first */
-const MAX_BODIES = 50_000;
+/** Bytes of version bodies a store keeps in memory when it has a cache of its own, the one used longest ago let go first */
+const MAX_BODY_BYTES = 32 * 1024 * 1024;
 
 const currentKey = (key: string) => `${CURRENT_PREFIX}${key}`;
 const genesisKey = (key: string) => `${GENESIS_PREFIX}${key}`;
@@ -257,7 +257,7 @@ export function createStorageProvider(adapter: StorageAdapter, cache?: BodyCache
   /** `r/` and `g/` entries: the id they name, or null for none */
   const pointers = new Map<string, string | null>();
   /** Version bodies by id, the one used longest ago let go first */
-  const bodies = (cache ?? createBodyCache(MAX_BODIES)).part();
+  const bodies = (cache ?? createBodyCache(MAX_BODY_BYTES)).part();
   /** Counts changes landed, so a read that raced one is not kept */
   let landed = 0;
 

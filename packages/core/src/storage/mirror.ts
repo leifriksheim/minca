@@ -86,6 +86,7 @@ export interface Mirror {
 const keys = {
   writer: 'mirror:writer',
   counter: 'mirror:counter',
+  left: 'mirror:left',
   read: (segment: string) => `mirror:read:${segment}`,
   known: (id = '') => `mirror:known:${id}`,
 };
@@ -111,8 +112,11 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
   const writer = await readOrCreate(state, keys.writer, newWriterId);
   const mine = `${space}/${writer}/`;
   let counter = Number((await readText(state, keys.counter)) ?? 0);
-  /** How many segments the last compaction left, so the next waits for twice that */
-  let left = 0;
+  /**
+   * How many segments the last compaction left, so the next waits for twice
+   * that. Kept, or a restart would rewrite a large space whole on its first flush.
+   */
+  let left = Number((await readText(state, keys.left)) ?? 0);
   /** The versions the store is known to hold; read once, since every flush asks about all of them */
   const known = await loadKnown();
 
@@ -129,6 +133,9 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     const gone = ids.size > 0 && (await store.list(`${space}/`).catch(() => null))?.length === 0;
     if (!gone) return ids;
     for (const id of ids) await state.delete(keys.known(id));
+    // Nothing of this writer's is there either: the next compaction waits for none.
+    left = 0;
+    await state.delete(keys.left);
     return new Set();
   }
 
@@ -149,13 +156,13 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     await state.put(keys.read(name), MARK);
   }
 
-  /** Writes versions in segments of about `flushBytes`; how many segments that took */
+  /** Writes versions in segments of about `flushBytes`, as they come; how many segments that took */
   async function writeSegments(
-    versions: Iterable<Version>,
+    versions: AsyncIterable<Version>,
     written: (batch: ReadonlyArray<Version>) => Promise<void> = async () => {},
   ): Promise<number> {
     let count = 0;
-    for (const batch of segmentBatches(versions, flushBytes)) {
+    for await (const batch of segmentBatches(versions, flushBytes)) {
       await writeSegment(batch);
       await written(batch);
       count += 1;
@@ -163,12 +170,17 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     return count;
   }
 
+  /** The versions this store holds of these ids, read one at a time */
+  async function* held(ids: Iterable<string>): AsyncGenerator<Version> {
+    for (const id of ids) {
+      const version = await storage.getVersion(id);
+      if (version) yield version;
+    }
+  }
+
   async function flushNow(): Promise<void> {
     const unknown = (await storage.versionIds()).filter((id) => !known.has(id));
-    const waiting = (await Promise.all(unknown.map((id) => storage.getVersion(id)))).filter(
-      (version) => version !== null,
-    );
-    await writeSegments(waiting, async (batch) => {
+    await writeSegments(held(unknown), async (batch) => {
       for (const version of batch) await markKnown(version.id);
     });
     // Twice what the last compaction left, or a big space would be rewritten whole on every flush.
@@ -179,17 +191,22 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     const old = await mySegments();
     if (old.length < 2) return;
     // What this store holds now: a version superseded since is a stub, and one it never held
-    // was put there by someone else and goes.
-    const keep = new Map<string, Version>();
-    for (const key of old) {
-      for (const version of (await fetchSegment(key)) ?? []) {
-        if (keep.has(version.id)) continue;
-        const held = await storage.getVersion(version.id);
-        if (held) keep.set(version.id, held);
+    // was put there by someone else and goes. Read a segment at a time, so memory holds one
+    // segment and the one being written, however large the space.
+    const seen = new Set<string>();
+    async function* keep(): AsyncGenerator<Version> {
+      for (const key of old) {
+        for (const version of (await fetchSegment(key)) ?? []) {
+          if (seen.has(version.id)) continue;
+          seen.add(version.id);
+          const now = await storage.getVersion(version.id);
+          if (now) yield now;
+        }
       }
     }
     // New first, then delete: a reader in between sees each version twice, which is harmless.
-    left = await writeSegments(keep.values());
+    left = await writeSegments(keep());
+    await state.put(keys.left, utf8Encode(String(left)));
     for (const key of old) await store.delete(key);
   }
 

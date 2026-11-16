@@ -52,6 +52,17 @@ reference implementation, or any implementation, honestly.
 
 ### 3.1 Stranger
 
+- **Accepted.**
+  - Knowing a private space's id, it can ask any node whether it holds the
+    space: the node names its current read key in its challenge, before
+    anything is proved, and asking again shows when the key changes, so
+    when someone was removed (04 §5.3, §6.3). A web page can ask the
+    visitor's own node on `localhost` (`minca run`), which ties the person
+    to the space. The id is a random string, but not a secret: members,
+    former members, invite holders, the hosts and relays the space uses,
+    and anyone who sees a `?space=` address or an app's address for the
+    space have it. Blinding the name would close this
+    ([#120](https://github.com/leifriksheim/minca/issues/120)).
 - **Holds.**
   - Without an invite secret, nothing it signs in a space counts: a version
     needs its author to be a member, and to hold a grant for what it does, as
@@ -456,6 +467,19 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     on each pass and every 15 seconds while the space is open: nothing
     bounds bytes served per peer
     (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
+  - Any peer a node syncs with can send it messages as large as the
+    connection takes (16 MiB at a host). A node handles one peer's messages
+    one at a time and, where the connection can pause (a host's sockets),
+    stops reading past 8 waiting: up to about 128 MiB of a host's memory
+    per connection. An honest peer's messages are 1 MiB, or one version
+    alone, which nothing bounds. Over WebRTC, and in browsers, nothing
+    pauses. A node sends a peer what it lacks, and answers its `want`s,
+    only as the connection drains, and keeps at most 16 answers waiting
+    for one peer, each up to 200 ids: a peer that asks and doesn't read
+    holds up only its own answers. All of this is per connection, and a
+    member may bring as many device keys as it likes, as may anyone in a
+    public space (05 §5, §6.4;
+    [#33](https://github.com/leifriksheim/minca/issues/33)).
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or
     sorts on them, and that grow with every record a member links to it.
@@ -772,6 +796,9 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
     in the collections it holds, up to 1024 places (03 §6.3). Peers don't
     check how a cutoff was built, so a remover may leave the removed account's lines out
     ([#166](https://github.com/leifriksheim/minca/issues/166)).
+  - Knowing the space's id, it can watch for later removals, and see which
+    nodes still hold the space, by asking for their challenge (§3.1,
+    Accepted).
   - It keeps a private space's first key, from which `onePer` keys are
     derived, so it can test guesses of who voted on what in envelopes that
     reach it later (02 §7.3, 03 §8.6).

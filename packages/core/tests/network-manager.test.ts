@@ -652,8 +652,8 @@ describe('the mesh, through real relays', () => {
        * Carol was removed at K1: she holds K0 and K1, but no one still in
        * vouches for her note.
        */
-      const changed = async () => {
-        const keys = [await generateSpaceKey(), await generateSpaceKey(), await generateSpaceKey()];
+      const changed = async (count = 3) => {
+        const keys = await Promise.all(Array.from({ length: count }, () => generateSpaceKey()));
         const reads = await Promise.all(keys.map((key) => deriveReadKey(key, provider)));
         const members = new Set<string>();
         const bound = { space: 'changed' };
@@ -662,11 +662,16 @@ describe('the mesh, through real relays', () => {
         const access = (who: { did: string }, held: number[], current: number): ReadAccess => ({
           key: async () => reads[held.at(-1)!]!,
           current: () => reads[current]!.did,
-          earlier: async () =>
-            held
+          // Newest first, the one the other side named first of all, as a node's own access does.
+          earlier: async (wanted?: string) => {
+            const older = held
               .slice(0, -1)
               .reverse()
-              .map((i) => reads[i]!),
+              .map((i) => reads[i]!);
+            const asked = older.findIndex((read) => read.did === wanted);
+            if (asked > 0) older.unshift(...older.splice(asked, 1));
+            return older;
+          },
           membership: async () => sealValue(keys[held.at(-1)!]!.seal, MEMBERSHIP_LABEL, bound, note(who.did)),
           // A peer proving an older key gets in when its note opens with that key and names someone still a member.
           admits: async (peerDid, readKey, membership) => {
@@ -688,6 +693,25 @@ describe('the mesh, through real relays', () => {
         members.add(alice.did).add(bob.did);
         const a = peer('behind', alice, access(alice, [0, 1, 2], 2));
         const b = peer('behind', bob, access(bob, [0], 0));
+        const [seenA, seenB] = [collect(a), collect(b)];
+        await b.connect();
+        await a.connect();
+        await until(
+          () => seenA.connected.includes(bob.did) && seenB.connected.includes(alice.did),
+          5000,
+          'Alice and Bob to meet',
+        );
+        a.disconnect();
+        b.disconnect();
+      });
+
+      test('a peer that missed more changes than a proof carries unasked still meets one that did not', async () => {
+        // K0 → … → K6: Alice proves K6 and, unasked, only the four before it. Bob names K0 in his hello.
+        const { access, members } = await changed(7);
+        const [alice, bob] = [await identity(), await identity()];
+        members.add(alice.did).add(bob.did);
+        const a = peer('far-behind', alice, access(alice, [0, 1, 2, 3, 4, 5, 6], 6));
+        const b = peer('far-behind', bob, access(bob, [0], 0));
         const [seenA, seenB] = [collect(a), collect(b)];
         await b.connect();
         await a.connect();

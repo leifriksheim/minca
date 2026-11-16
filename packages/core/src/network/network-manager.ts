@@ -35,6 +35,11 @@ export interface NetworkManager {
   readonly on: <K extends keyof NetworkEvents>(event: K, callback: NetworkEvents[K]) => void;
   readonly off: <K extends keyof NetworkEvents>(event: K, callback: NetworkEvents[K]) => void;
   readonly isConnected: () => boolean;
+  /** Bytes sent to a peer not yet gone (`PeerTransport.buffered`); 0 where the transport can't say */
+  readonly buffered: (peerId: string) => number;
+  /** Stops reading from a peer, and starts again, where the transport can (`PeerTransport.pause`) */
+  readonly pause: (peerId: string) => void;
+  readonly resume: (peerId: string) => void;
 }
 
 /** Creates a network manager over a transport that dials on its own. */
@@ -93,5 +98,8 @@ export function createNetworkManager(config: NetworkManagerConfig): NetworkManag
     on,
     off,
     isConnected: () => peers.size > 0,
+    buffered: (peerId: string) => transport.buffered?.(peerId) ?? 0,
+    pause: (peerId: string) => transport.pause?.(peerId),
+    resume: (peerId: string) => transport.resume?.(peerId),
   });
 }
