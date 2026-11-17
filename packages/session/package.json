@@ -1,6 +1,6 @@
 {
   "name": "@minca/session",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
   "description": "An app and its account home: connecting, grants, connect codes, pairing a phone, and a browser node in a worker",
   "repository": {

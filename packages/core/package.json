@@ -1,6 +1,6 @@
 {
   "name": "@minca/core",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
   "description": "The Minca protocol: identity, signed records, spaces, the network and sync, and a node that holds them",
   "repository": {

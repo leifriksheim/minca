@@ -1,6 +1,6 @@
 {
   "name": "@minca/storage",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
   "description": "Where a Minca node keeps its data: IndexedDB, SQLite, a folder on disk, S3 or memory, each on its own entry point behind @minca/core's StorageAdapter",
   "repository": {
