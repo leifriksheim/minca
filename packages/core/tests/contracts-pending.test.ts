@@ -86,6 +86,12 @@ test('a pending decision becomes visible in list once its cited vote arrives', a
     'pending at alice',
   );
   assert.equal((await alice.node.records.list(space, { collection: 'app.proposal.passed' })).length, 0);
+  let watched: ReadonlyArray<string> | null = null;
+  const stopWatching = alice.node.records.watch(space, { collection: 'app.proposal.passed' }, (result) => {
+    watched = result.records.map((r) => r.key);
+  });
+  await until(async () => watched !== null, 4000, 'the first watched result');
+  assert.deepEqual(watched, [], 'a pending decision is not in a watched query');
 
   await letGo(bob.node, space);
   await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(vote);
@@ -95,4 +101,6 @@ test('a pending decision becomes visible in list once its cited vote arrives', a
   const listed = await alice.node.records.list(space, { collection: 'app.proposal.passed' });
   assert.ok(await alice.node.records.get(space, passedKey), 'get shows it');
   assert.equal(listed.length, 1, 'list still hides the decision after its vote arrived');
+  await until(async () => watched?.includes(passedKey) === true, 4000, 'the watch to show the decision');
+  stopWatching();
 });
