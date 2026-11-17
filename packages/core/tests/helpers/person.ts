@@ -102,7 +102,7 @@ export async function forge(
       // A fresh key: its first place in its log here.
       log: fields.log ?? { n: 0 },
       // A new record at a key of the person's own, unless the test names one.
-      version: fields.version ?? { key: await newRecordKey(who.node.did), seq: 0 },
+      version: fields.version ?? { key: await newRecordKey(who.node.did, fields.collection), seq: 0 },
       ...fields,
       author: keyDid,
       space,

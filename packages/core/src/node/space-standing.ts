@@ -10,9 +10,9 @@ import type { Version } from '../types.js';
 import { actsForAccount } from '../identity/abilities.js';
 import { isStub } from '../schema/version.js';
 import { chainProblem } from '../records/version.js';
-import { keyKind, onePerForm, ownsKey } from '../records/key.js';
+import { isSharedKeyOf, keyKind, ownsKey } from '../records/key.js';
 import { changedFixedField, onePerKey } from '../records/rules.js';
-import { ACCESS_COLLECTIONS, isMember, may, type AccessState, type Needs } from '../space/roles.js';
+import { ACCESS_COLLECTIONS, isMember, may, type Needs } from '../space/roles.js';
 import { RECORD_DELETE, RECORD_WRITE } from '../space/grants.js';
 import {
   type Versions,
@@ -33,13 +33,14 @@ export function createStanding(
   const { space, storage, keyring, versions, history, rules } = deps;
   const { copyProblem, judge, openBody, unreadable, firstOf, namedFirst } = versions;
   const { access, toEvent } = history;
-  const { onePerKeying, definitionIn, inForce, rulesAt, tagProblem } = rules;
+  const { onePerKeying, inForce, rulesAt, tagProblem } = rules;
 
   // ─── Record keys ───────────────────────────────────────────────────
   //
-  // Outside sys.*, a first version is at a key its account owns, or at a
-  // shared onePer key (02 §4.1, `records/key.ts`), so no member can write a
-  // first version at another's key and become its creator.
+  // Outside sys.*, a first version is at a key its account owns in its
+  // collection, or at a shared key of its collection (02 §4.1,
+  // `records/key.ts`), so no member can write a first version at another's
+  // key and become its creator, nor at a key of another collection's.
 
   /** Why a first version's key isn't one its account may write first, from the version alone; null when it may */
   async function keyProblem(version: Version, root: string): Promise<Refusal | null> {
@@ -50,35 +51,12 @@ export function createStanding(
       return kind === null
         ? null
         : { ok: false, reason: 'A sys.* record is never at an owned or a one: key' };
-    if (kind === 'shared') return null;
-    if (kind === 'owned' && (await ownsKey(version.key, root))) return null;
-    const reason =
-      kind === 'owned'
-        ? 'Its key belongs to another account'
-        : 'A new record needs a key its account owns, or a shared one: key';
-    return { ok: false, reason };
-  }
-
-  /**
-   * Why a first version can't be at a key of a `onePer` key's form, shared
-   * `one:<hex>` or owned `<owner>.one:<hex>` (02 §7.3): only a collection
-   * whose rules have `onePer` gives one, owned when it names `@author`.
-   * Judged from the definition alone, so peers that can't derive the key
-   * agree. Null when it can, or when this node can't read the definition.
-   */
-  async function onePerKeyProblem(version: Version, state: AccessState): Promise<Refusal | null> {
-    const form = onePerForm(version.key);
-    if (version.seq !== 0 || !form || version.collection.startsWith('sys.')) return null;
-    const id = await inForce(state, version.collection);
-    const found = id ? await definitionIn(id) : 'missing';
-    if (found === 'unreadable') return null;
-    const onePer = typeof found === 'string' ? undefined : found.definition.rules?.onePer;
-    if (!onePer) return { ok: false, reason: 'A one: key is only for a collection whose rules have onePer' };
-    if (form === 'shared' && onePer.includes('@author'))
-      return { ok: false, reason: 'A shared one: key is only for a onePer that does not name @author' };
-    if (form === 'owned' && !onePer.includes('@author'))
-      return { ok: false, reason: 'An owned one: key is only for a onePer that names @author' };
-    return null;
+    const { collection } = version;
+    if (kind === 'shared' && (await isSharedKeyOf(version.key, collection))) return null;
+    if (kind === 'owned' && (await ownsKey(version.key, root, collection))) return null;
+    if (kind === null)
+      return { ok: false, reason: 'A new record needs a key its account owns, or a shared one: key' };
+    return { ok: false, reason: `Its key is not one its account may write first in ${collection}` };
   }
 
   /**
@@ -174,8 +152,6 @@ export function createStanding(
     const state = history.at(seen, within);
     const wrote = history.seenAs(seen);
     if (!state || !wrote) return ACCESS_LATER;
-    const form = await onePerKeyProblem(version, state);
-    if (form) return form;
     // Rival definitions that differ give no rules, which must not mean anything goes (02 §6.3).
     if (state.contested.has(version.collection) && !(await inForce(state, version.collection)))
       return {

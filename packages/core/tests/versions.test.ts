@@ -30,7 +30,8 @@ import { stored } from './helpers/stored.js';
 
 /** A key for a store, which keeps versions whatever their key: whose it is is a peer's check, not a store's */
 const newRecordKey = () => base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16)));
-const ownedFreshKey = () => ownedFreshKeyOf('did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E');
+const ownedFreshKey = () =>
+  ownedFreshKeyOf('did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E', 'app.note');
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
@@ -424,7 +425,7 @@ describe('versioned records through the node', () => {
     const { id: space } = await me.spaces.create({ name: 'Todos', visibility: 'public' });
     const made = await me.records.put(space, 'app.note', { text: 'first' }, { key: 'pinned' });
     // A name is put in the writer's namespace, and the record is known by its whole key.
-    assert.equal(made.key, await me.records.keyFor(space, 'pinned'));
+    assert.equal(made.key, await me.records.keyFor(space, 'app.note', 'pinned'));
     await me.records.delete(space, made.key);
     assert.equal(await me.records.get(space, made.key), null);
     const back = await me.records.put(space, 'app.note', { text: 'again' }, { key: 'pinned' });

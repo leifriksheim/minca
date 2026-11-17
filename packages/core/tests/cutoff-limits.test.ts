@@ -57,7 +57,7 @@ async function pad(who: Person, into: Person, space: string, count: number): Pro
           author: keyDid,
           collection: `app.junk${i}`,
           space,
-          version: { key: await newRecordKey(who.node.did), seq: 0 },
+          version: { key: await newRecordKey(who.node.did, `app.junk${i}`), seq: 0 },
           body: { i },
           proof: note,
           seen,

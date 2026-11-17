@@ -468,13 +468,10 @@ its password or passkeys. Its note stops working for live checks at
 > holding its key, so an app granted a private space reads all of it until
 > the space's key changes ([03](03-spaces.md), `changeKey`). A note can
 > already limit writing to some collections, with a policy on `.collection`
-> that every peer checks ([01](01-identity.md) §8), but a home doesn't offer
-> one yet: a key that writes as the account may write a first version at any
-> key the account owns, in a collection its note allows, and a record's
-> current version is chosen by key alone ([02](02-records.md) §4.3), so it
-> could replace the account's record in any other collection. Reading per
-> collection would need collection keys the home can hand out alone. Not
-> designed yet. See [#348](https://github.com/leifriksheim/minca/issues/348).
+> that every peer checks ([01](01-identity.md) §8), and since a key names its
+> collection ([02](02-records.md) §4.1) it reaches no record of another; a
+> home doesn't offer one yet. Reading per collection would need collection
+> keys the home can hand out alone. Not designed yet. See [#348](https://github.com/leifriksheim/minca/issues/348).
 
 ### 2.9 Expiry and renewal
 

@@ -211,7 +211,7 @@ describe('topic tags on records', () => {
         log: { n: 0 },
         proof: ucan,
         collection: 'app.chat',
-        version: { key: await newRecordKey(alice.node.did), seq: 0 },
+        version: { key: await newRecordKey(alice.node.did, 'app.chat'), seq: 0 },
         body: { text: 'psst', channel: 'random' },
         tags: [await alice.node.collections.tag(space, 'app.chat', 'channel', 'design')],
       }),
@@ -311,7 +311,7 @@ describe('topic tags on links', () => {
         log: { n: 0 },
         proof: ucan,
         collection: rooms.name,
-        version: { key: await newRecordKey(alice.node.did), seq: 0 },
+        version: { key: await newRecordKey(alice.node.did, rooms.name), seq: 0 },
         body: { text: 'psst' },
         links: [{ rel: 'channel', to: 'randomrandomrandomrandom00' }],
         tags: [

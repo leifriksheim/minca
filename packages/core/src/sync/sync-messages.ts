@@ -12,7 +12,7 @@ import type { Version } from '../types.js';
 import { isObject } from '../utils/guards.js';
 
 /** The sync protocol version this peer speaks */
-export const SYNC_PROTOCOL_VERSION = 8;
+export const SYNC_PROTOCOL_VERSION = 9;
 
 type V = { readonly v: typeof SYNC_PROTOCOL_VERSION };
 

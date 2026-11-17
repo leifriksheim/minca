@@ -74,7 +74,7 @@ describe('links', () => {
     const me = await person();
     const { id: space } = await me.spaces.create({ name: 'Todos', visibility: 'public' });
     await useSchemas(me, space, [reactionSchema]);
-    const later = await me.records.keyFor(space, 'not-here-yet');
+    const later = await me.records.keyFor(space, 'app.todo.item', 'not-here-yet');
     const reaction = await me.records.put(
       space,
       'std.reaction',

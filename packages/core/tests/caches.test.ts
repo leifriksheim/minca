@@ -219,7 +219,7 @@ describe('holding part of a space', () => {
           author: did,
           collection: 'app.chat',
           space,
-          version: { key: await newRecordKey(alice.node.did), seq: 0 },
+          version: { key: await newRecordKey(alice.node.did, 'app.chat'), seq: 0 },
           body: { text },
           proof: note,
           seen,

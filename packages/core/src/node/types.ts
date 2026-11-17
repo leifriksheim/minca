@@ -586,8 +586,8 @@ export interface NodeRecords {
    * (`pending`), or this library can't judge it (`unjudged`, with why)
    */
   contracts(spaceId: string, key: string, version?: string): Promise<RecordContracts | null>;
-  /** The key `name` has in an account's namespace (this one's by default): where `put(…, { key: name })` writes */
-  keyFor(spaceId: string, name: string, account?: string): Promise<string>;
+  /** The key `name` has in an account's namespace in a collection (this one's by default): where `put(…, { key: name })` writes */
+  keyFor(spaceId: string, collection: string, name: string, account?: string): Promise<string>;
   /** The key a record with this body has under its collection's `onePer`; null when there is none */
   onePerKey(
     spaceId: string,

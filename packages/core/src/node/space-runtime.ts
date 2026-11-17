@@ -457,8 +457,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     noteOf: async (recordKey: string): Promise<Delegation | null> =>
       (await index.currentOf(recordKey))?.proof ?? null,
 
-    /** The key `name` has in an account's namespace: this account's, unless another is named */
-    keyFor: (name: string, account: string = rootDid): Promise<string> => ownedKey(account, name),
+    /** The key `name` has in an account's namespace in a collection: this account's, unless another is named */
+    keyFor: (collection: string, name: string, account: string = rootDid): Promise<string> =>
+      ownedKey(account, collection, name),
 
     /** Seals a file, keeps it, and gives back the reference a body names it by (spec 05 §16.6) */
     addFile: (bytes: Uint8Array): Promise<SealedFile> => files.add(bytes),

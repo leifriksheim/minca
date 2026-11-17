@@ -570,11 +570,13 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     decision per proposal), anyone granted `/record/write` there can start a
     chain of their own, and outrank the first; `.byCreator` in a grant keeps
     others from editing a chain, not from replacing it. A collection that
-    needs one writer per key limits who may write it (02 §7.1, §7.3). By design. Keys are
-    unique in a space, not a collection, so it can also write first at a
-    shared key of collection X from a collection Y it may write (one with
-    a `onePer` without `@author`), and X's record for those parts can't be
-    written (02 §4.1). A space keeps the grants it was founded with, so in a
+    needs one writer per key limits who may write it (02 §7.1, §7.3). By design.
+    A shared key names its collection, so no one can write first at one from
+    another collection (02 §4.1). In a collection with no `onePer` in force
+    as of its `seen`, a shared key is checked only for its tag, so one
+    written as of a `seen` from before the collection had `onePer` stands at
+    a derived key with any body ([#151](https://github.com/leifriksheim/minca/issues/151)).
+    By design. A space keeps the grants it was founded with, so in a
     `community` or `coop` founded before a collection joined the presets'
     `STAFF_COLLECTIONS`, a member may still write it: at `std.space-profile`'s
     shared key a member can start a chain that outranks staff and edit it
@@ -1003,18 +1005,16 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     of its own: that note acts for no account, so a records-only key can't
     shed the label others show it with, nor knock or pin as the account
     (01 §7.4, §7.5).
-  - It can't take the account's `onePer` key in one collection with a record
-    of another: every peer that reads the definition refuses a first version
-    at a key of a `onePer` key's form outside a `onePer` that gives it
-    (02 §4.1).
-- **Does not hold yet.**
-  - A policy keeping its note to some collections doesn't keep it from the
-    account's records in others: it may write a first version at any key the
-    account owns, in a collection its note allows, then a later one there,
-    and a record's current version is chosen by key alone (02 §4.3), so it
-    replaces or deletes the account's record at that key whatever its
-    collection. So no home offers collection limits yet
+  - A policy keeping its note to some collections keeps it from the
+    account's records in every other: a key names its collection, so every
+    peer refuses its first version at a key of another collection's, and a
+    later version stays in its record's collection (02 §4.1, §4.7;
+    `packages/core/tests/records-only.test.ts`, "a key limited to one
+    collection can’t replace or delete the account’s record in another"; `record-keys.test.ts`, "a key of another collection is
+    refused…"). No home offers such a policy yet, and it limits writing only:
+    reading a private space is holding its key
     ([#348](https://github.com/leifriksheim/minca/issues/348), 06 §2.8).
+- **Does not hold yet.**
   - Given the contacts under a grant for some spaces, it holds the contact
     key, and with it the inbox keys (06 §2.8, 07 §1): it can open every
     knock on the account's inbox, join a space for two first under its
@@ -1102,11 +1102,6 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     account's devices, but a carrier, host or mirror reader that can't tell
     the space is the account's own lets it stand, so they disagree (03 §5.2,
     [#10](https://github.com/leifriksheim/minca/issues/10)) _(traced)_.
-  - An account's chosen key is the same in every collection, so with a
-    records grant it can write a record at a chosen name another app of the
-    account's uses in another collection, and that app can't write its record
-    there. Only the account's own keys and apps can; apps should choose names
-    that include their collection (02 §4.1). By design.
   - An MCP service a person connects a chat app through (`minca mcp-server`)
     is such an app. It keeps its key and note on its disk sealed under a key
     only the app's access token carries, itself sealed under a key of the

@@ -89,7 +89,7 @@ describe('attacks on a shared space', () => {
     const relabelled = await forge(alice, space, {
       collection: 'app.other',
       body: sealed,
-      version: { key: await newRecordKey(alice.node.did), seq: 0 },
+      version: { key: await newRecordKey(alice.node.did, 'app.other'), seq: 0 },
     });
     assert.deepEqual((await alice.node.records.get(space, note.key))?.body, { text: 'secret' });
     for (const copy of [moved, relabelled]) {

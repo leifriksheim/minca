@@ -614,7 +614,7 @@ describe('a key record that did not count', () => {
       version: { key: SPACE_KEY_RECORD, seq: 0 },
     });
     // A note sealed under the planted key.
-    const key = await newRecordKey(bob.node.did);
+    const key = await newRecordKey(bob.node.did, 'app.note');
     await forge(bob, space, {
       collection: 'app.note',
       body: await sealBody({ body: { text: 'planted' } }, planted, { space, collection: 'app.note', key }),

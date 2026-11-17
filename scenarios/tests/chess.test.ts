@@ -711,7 +711,7 @@ describe('chess: whose record (#72)', () => {
       members: [BOB],
       contracts: { 'app.x': [{ that: 'seq == 0 || author == creator', else: 'Only its creator edits it' }] },
     };
-    const key = await ownedKey(ALICE, 'k');
+    const key = await ownedKey(ALICE, 'app.x', 'k');
     const hers = version({ id: 'x-alice', key, collection: 'app.x', author: ALICE });
     // Bob's, with the lower id the lowest-id rule would have taken.
     const his = version({ id: 'a-bob', key, collection: 'app.x', author: BOB });

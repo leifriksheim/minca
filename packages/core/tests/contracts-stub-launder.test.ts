@@ -37,7 +37,7 @@ test('a failing first version, not kept whole, is laundered by the next', async 
     else: 'Created with at most 10',
   });
   await letGo(bob.node, space);
-  const k1 = await ownedKey(bob.node.did, 'k1');
+  const k1 = await ownedKey(bob.node.did, 'app.claim', 'k1');
   const bad = await forge(bob, space, {
     author: '',
     collection: 'app.claim',
