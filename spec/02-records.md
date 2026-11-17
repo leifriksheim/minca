@@ -347,7 +347,7 @@ and the record's collection. A shared key is `one:<tag>.<hex>`; its tag names
 the collection:
 
 ```
-owner(root, collection) = lowercase( base32( SHA-256( UTF-8( "minca/record-owner/v1|" ‖ root ‖ "|" ‖ collection ) )[0..16) ) )   // 26 characters
+owner(root, collection) = lowercase( base32( SHA-256( UTF-8( "minca/record-owner/v2|" ‖ root ‖ "|" ‖ collection ) )[0..16) ) )   // 26 characters
 tag(collection)         = lowercase( base32( SHA-256( UTF-8( "minca/shared-key/v1|" ‖ collection ) )[0..16) ) )               // 26 characters
 ```
 
@@ -365,9 +365,9 @@ holds no `|`. base32 is §2's alphabet without padding.
   `one:<hex>` when the parts include `@author`, a shared key otherwise.
 
 Example: the root `did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E`
-has owner part `rkltwrl6wmjjdqg2y522kvzyra` in `app.settings`. Its fresh keys
-there look like `rkltwrl6wmjjdqg2y522kvzyra.mfrggzdfmztwq2lknnwg23tpoa`, and
-the name `settings` chosen by it is `rkltwrl6wmjjdqg2y522kvzyra.settings`.
+has owner part `mj6bhbzx5m7tqmu35fjtg4wo4u` in `app.settings`. Its fresh keys
+there look like `mj6bhbzx5m7tqmu35fjtg4wo4u.mfrggzdfmztwq2lknnwg23tpoa`, and
+the name `settings` chosen by it is `mj6bhbzx5m7tqmu35fjtg4wo4u.settings`.
 The tag of `std.decision` is `7elebqud5aetyhmrmrpaoiaggq`.
 
 **Checking.** A peer MUST refuse a first version outside `sys.*` whose key is
@@ -402,7 +402,7 @@ and have it read in place of theirs.
 > The owner part says no more than the version does: its `author` and `proof`
 > name the account in the clear in every space.
 
-_Source: `packages/core/src/records/key.ts` (`keyKind`, `ownerTag`, `ownedKey`, `sharedKey`, `newRecordKey`, `ownsKey`, `isSharedKeyOf`), `packages/core/src/node/space-standing.ts` (`keyProblem`, `judgeStanding`), `packages/core/src/node/space-writing.ts` (`keyToWrite`). Tests: `packages/core/tests/record-keys.test.ts` (all; "a key in another collection"), `packages/core/tests/records-only.test.ts` ("a note’s policy is checked by every peer…"), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
+_Source: `packages/core/src/records/key.ts` (`keyKind`, `ownerTag`, `ownedKey`, `sharedKey`, `newRecordKey`, `ownsKey`, `isSharedKeyOf`), `packages/core/src/node/space-standing.ts` (`keyProblem`, `judgeStanding`), `packages/core/src/node/space-writing.ts` (`keyToWrite`). Tests: `packages/core/tests/record-keys.test.ts` (all; "a key in another collection"), `packages/core/tests/records-only.test.ts` ("a key limited to one collection can’t replace or delete the account’s record in another"), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
 
 ### 4.2 Version fields
 
@@ -1255,19 +1255,19 @@ Example — in the public space
 `bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a`, `std.vote`
 (`onePer: ["@author", "link:about"]`) by
 `did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E` about the record
-`f7abdsn45ta362ttnhr44eeli4.poll` in `std.poll`:
+`g67js7ozqmkbn2kkcvjhl2ke3u.poll` in `std.poll`:
 
 ```
 std.vote
 @author=did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E
-link:about=f7abdsn45ta362ttnhr44eeli4.poll
+link:about=g67js7ozqmkbn2kkcvjhl2ke3u.poll
 ```
 
-gives `aoxcamscgsmfuhe522jafpuvaq.one:65f6115ee63c78318cfa13ea2b67123870eb72f8`.
+gives `3gtuspob6srwlkr5ixzbwnobtq.one:093e7d2020c9e1c35ed7f0fb97d8294ed376afc3`.
 A `std.decision` (`onePer: ["link:about"]`) about the same record gives the
-shared key `one:7elebqud5aetyhmrmrpaoiaggq.6f4eeff1be4d44a8aacba29e4ceadc5b6d329bbc`.
+shared key `one:7elebqud5aetyhmrmrpaoiaggq.6c339b678bdb967bbc4f5e0ec9aee9c9a6f000cf`.
 With the private space key `ff fe … e0` of 03 §8.1 as K₀, the vote's key is
-`aoxcamscgsmfuhe522jafpuvaq.one:7ec7e8221bda6f1c6475fca2ed7f9e8678f8b8ad`.
+`3gtuspob6srwlkr5ixzbwnobtq.one:9872ccec89c8f4d056b34f410d026134e2bcee45`.
 
 Checking: a peer MUST refuse a `seq 0` version of a collection with `onePer` in
 force whose `key` is not the derived key (including when a part is missing and

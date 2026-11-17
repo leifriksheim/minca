@@ -13,7 +13,7 @@ import { isObject, isStoredVersion } from '../utils/guards.js';
 
 export const SEGMENT_SUFFIX = '.seg';
 /** The segment format; a reader skips segments of any other */
-const SEGMENT_VERSION = 8;
+const SEGMENT_VERSION = 9;
 
 /** Packs versions into a segment's bytes */
 export function packSegment(versions: ReadonlyArray<Version>): Uint8Array {

@@ -54,7 +54,7 @@ async function tagOf(input: string): Promise<string> {
  * input reads one way.
  */
 export function ownerTag(root: string, collection: string): Promise<string> {
-  return tagOf(`minca/record-owner/v1|${root}|${collection}`);
+  return tagOf(`minca/record-owner/v2|${root}|${collection}`);
 }
 
 /** The tag that names a collection in its shared keys */

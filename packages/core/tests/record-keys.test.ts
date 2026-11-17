@@ -39,12 +39,12 @@ const SEED_7_DID = 'did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E';
 describe('the kinds of key', () => {
   test('the examples in 02 §4.1', async () => {
     const owner = await ownerTag(SEED_7_DID, 'app.settings');
-    assert.equal(owner, 'rkltwrl6wmjjdqg2y522kvzyra');
+    assert.equal(owner, 'mj6bhbzx5m7tqmu35fjtg4wo4u');
     assert.equal(
       await ownedKey(SEED_7_DID, 'app.settings', 'settings'),
-      'rkltwrl6wmjjdqg2y522kvzyra.settings',
+      'mj6bhbzx5m7tqmu35fjtg4wo4u.settings',
     );
-    assert.equal(await lineKey(SEED_7_DID, 'app.pay'), '57syxegck7qbrawiiolioruo6i.line');
+    assert.equal(await lineKey(SEED_7_DID, 'app.pay'), 've3nypi5dox6ldsyoc25rsgdge.line');
     const fresh = await newRecordKey(SEED_7_DID, 'app.note');
     assert.equal(fresh.length, 53);
     assert.match(fresh, RECORD_KEY_PATTERN);
@@ -84,7 +84,7 @@ describe('the kinds of key', () => {
 });
 
 describe('onePer keys', () => {
-  const about = [{ rel: 'about', to: 'f7abdsn45ta362ttnhr44eeli4.poll' }];
+  const about = [{ rel: 'about', to: 'g67js7ozqmkbn2kkcvjhl2ke3u.poll' }];
 
   test('the example in 02 §7.3', async () => {
     const secret = await onePerSecret({ spaceId: 'bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a' });
@@ -93,13 +93,13 @@ describe('onePer keys', () => {
       links: about,
       body: { choice: 0 },
     });
-    assert.equal(vote, 'aoxcamscgsmfuhe522jafpuvaq.one:65f6115ee63c78318cfa13ea2b67123870eb72f8');
+    assert.equal(vote, '3gtuspob6srwlkr5ixzbwnobtq.one:093e7d2020c9e1c35ed7f0fb97d8294ed376afc3');
     const decision = await onePerKey(secret, 'std.decision', ['link:about'], {
       root: SEED_7_DID,
       links: about,
       body: {},
     });
-    assert.equal(decision, 'one:7elebqud5aetyhmrmrpaoiaggq.6f4eeff1be4d44a8aacba29e4ceadc5b6d329bbc');
+    assert.equal(decision, 'one:7elebqud5aetyhmrmrpaoiaggq.6c339b678bdb967bbc4f5e0ec9aee9c9a6f000cf');
     // In a private space whose first key K₀ is 03 §8.1's `ff fe … e0`.
     const k0 = new Uint8Array(32).map((_, i) => 0xff - i);
     const hidden = await onePerKey(
@@ -112,7 +112,7 @@ describe('onePer keys', () => {
         body: { choice: 0 },
       },
     );
-    assert.equal(hidden, 'aoxcamscgsmfuhe522jafpuvaq.one:7ec7e8221bda6f1c6475fca2ed7f9e8678f8b8ad');
+    assert.equal(hidden, '3gtuspob6srwlkr5ixzbwnobtq.one:9872ccec89c8f4d056b34f410d026134e2bcee45');
   });
 
   test('with @author it is an owned key of the author; without, a shared one', async () => {

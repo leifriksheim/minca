@@ -572,7 +572,11 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     others from editing a chain, not from replacing it. A collection that
     needs one writer per key limits who may write it (02 §7.1, §7.3). By design.
     A shared key names its collection, so no one can write first at one from
-    another collection (02 §4.1). A space keeps the grants it was founded with, so in a
+    another collection (02 §4.1). In a collection with no `onePer` in force
+    as of its `seen`, a shared key is checked only for its tag, so one
+    written as of a `seen` from before the collection had `onePer` stands at
+    a derived key with any body ([#151](https://github.com/leifriksheim/minca/issues/151)).
+    By design. A space keeps the grants it was founded with, so in a
     `community` or `coop` founded before a collection joined the presets'
     `STAFF_COLLECTIONS`, a member may still write it: at `std.space-profile`'s
     shared key a member can start a chain that outranks staff and edit it
@@ -1005,8 +1009,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     account's records in every other: a key names its collection, so every
     peer refuses its first version at a key of another collection's, and a
     later version stays in its record's collection (02 §4.1, §4.7;
-    `packages/core/tests/records-only.test.ts`, "a note’s policy is checked
-    by every peer…"; `record-keys.test.ts`, "a key of another collection is
+    `packages/core/tests/records-only.test.ts`, "a key limited to one
+    collection can’t replace or delete the account’s record in another"; `record-keys.test.ts`, "a key of another collection is
     refused…"). No home offers such a policy yet, and it limits writing only:
     reading a private space is holding its key
     ([#348](https://github.com/leifriksheim/minca/issues/348), 06 §2.8).

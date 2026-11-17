@@ -215,7 +215,7 @@ one of per account, like settings. For those, pass a name:
 ```typescript
 await node.records.put(space.id, 'app.settings', { theme: 'dark' }, { key: 'settings' });
 
-const mine = await node.records.keyFor(space.id, 'app.settings', 'settings'); // 'rkltwrl6wmjjdqg2y522kvzyra.settings'
+const mine = await node.records.keyFor(space.id, 'app.settings', 'settings'); // 'mj6bhbzx5m7tqmu35fjtg4wo4u.settings'
 const theirs = await node.records.keyFor(space.id, 'app.settings', 'settings', did); // someone else's, if they wrote one
 await node.records.get(space.id, theirs);
 ```
