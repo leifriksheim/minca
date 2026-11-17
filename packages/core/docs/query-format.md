@@ -83,11 +83,12 @@ open are left out, here and in every include, so a result's `body` is never
 `null`. What "stands" means is in
 [spec 02 §9.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
 
-> **Planned: leaving out records that do not conform.** Today a record whose
-> body or links don't fit the definition is flagged `conforms: false` but
-> still counted by queries, includes and counts. The plan is to leave such
-> records out unless the query asks for them, with a new optional member such
-> as `"nonconforming": true`.
+A record whose body or links don't fit its collection's definition is still
+counted, here, in every include and in every count, and comes flagged
+`conforms: false`. Whether it fits depends on the definition in force and on
+the records it links to, which other people write. Leaving it out would let
+whoever defines the collection, or owns a record others link to, hide those
+records from everyone. Show the flag instead.
 
 ## Field values
 

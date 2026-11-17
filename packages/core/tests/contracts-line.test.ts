@@ -12,6 +12,7 @@ import { lineKey } from '../src/records/key.js';
 import { checkLine, type Contract } from '../src/records/contracts.js';
 import type { DefineCollection } from '../src/node/types.js';
 import type { Version } from '../src/types.js';
+import type { Typed } from '../src/query/types.js';
 import { communityNode, type Community } from './helpers/community.js';
 import { forge, person, type Person } from './helpers/person.js';
 import { createFakeHub } from './helpers/fake-transport.js';
@@ -243,6 +244,12 @@ describe('the line rule: a twin arriving by sync', () => {
       },
     );
     assert.equal((await alice.node.records.get<Pay>(space, a0.key))?.body?.balance, 5);
+    let watched: ReadonlyArray<{ key: string; body: Pay }> = [];
+    const payments: Typed<Pay> = { name: 'app.pay' };
+    const stopWatching = alice.node.records.watch(space, { collection: payments }, (result) => {
+      watched = result.records;
+    });
+    await until(async () => watched.some((r) => r.key === a0.key), 4000, 'the watch to show a0');
 
     // Bob's phone pays after b0 too, and it reaches Alice while she holds the space open.
     await letGo(bob.node, space);
@@ -260,6 +267,14 @@ describe('the line rule: a twin arriving by sync', () => {
       'the twin to undo b1',
     );
     assert.equal(await alice.node.records.get(space, a0.key), null, 'what claimed b1 falls with it');
+    // A watched query sees the same: no verdicts, only a result that changed.
+    await until(
+      async () =>
+        !watched.some((r) => r.key === a0.key) && watched.find((r) => r.key === key)?.body.balance === -10,
+      4000,
+      'the watch to drop a0 and show b0',
+    );
+    stopWatching();
   });
 });
 
