@@ -540,7 +540,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: await ownedKey(bob.node.did, 'misplaced'), seq: 0 },
+        version: { key: await ownedKey(bob.node.did, WARRANT_COLLECTION, 'misplaced'), seq: 0 },
         retain: true,
       },
       { keep: false },

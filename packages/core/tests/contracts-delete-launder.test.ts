@@ -32,7 +32,7 @@ test('a failing first version, then a delete, is laundered by the version after'
     'defs',
   );
   await letGo(bob.node, space);
-  const k1 = await ownedKey(bob.node.did, 'k1');
+  const k1 = await ownedKey(bob.node.did, 'app.claim', 'k1');
   const bad = await forge(bob, space, {
     author: '',
     collection: 'app.claim',

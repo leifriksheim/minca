@@ -1,7 +1,7 @@
 /**
- * Keys that belong to their creator (spec 02 §4.1, #72): a first version
- * outside `sys.*` is at a key its account owns, or at a shared `one:` key a
- * collection's `onePer` gives. A member who writes a first version at someone
+ * Keys that belong to their creator and their collection (spec 02 §4.1, #72,
+ * #463): a first version outside `sys.*` is at a key its account owns in its
+ * collection, or at a shared `one:` key of its collection. A member who writes a first version at someone
  * else's key, however low its id, is refused by every peer, whichever version
  * reaches it first; and a private space's `onePer` keys can't be guessed by
  * anyone without its key (#87).
@@ -10,6 +10,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  isSharedKeyOf,
   keyKind,
   lineKey,
   newRecordKey,
@@ -17,6 +18,7 @@ import {
   ownerTag,
   ownsKey,
   RECORD_KEY_PATTERN,
+  sharedKey,
 } from '../src/records/key.js';
 import { changedFixedField, onePerKey, onePerSecret } from '../src/records/rules.js';
 import { replayAccess, type AccessEvent, type AccessGenesis } from '../src/space/roles.js';
@@ -36,28 +38,37 @@ const SEED_7_DID = 'did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E';
 
 describe('the kinds of key', () => {
   test('the examples in 02 §4.1', async () => {
-    const owner = await ownerTag(SEED_7_DID);
-    assert.equal(owner, 'akthxqofxox3iszhpi5j3zhl6a');
-    assert.equal(await ownedKey(SEED_7_DID, 'settings'), 'akthxqofxox3iszhpi5j3zhl6a.settings');
+    const owner = await ownerTag(SEED_7_DID, 'app.settings');
+    assert.equal(owner, 'rkltwrl6wmjjdqg2y522kvzyra');
     assert.equal(
-      await lineKey(SEED_7_DID, 'app.pay'),
-      'akthxqofxox3iszhpi5j3zhl6a.line:klp5y62opzf5madcl4zhreep3a',
+      await ownedKey(SEED_7_DID, 'app.settings', 'settings'),
+      'rkltwrl6wmjjdqg2y522kvzyra.settings',
     );
-    const fresh = await newRecordKey(SEED_7_DID);
+    assert.equal(await lineKey(SEED_7_DID, 'app.pay'), '57syxegck7qbrawiiolioruo6i.line');
+    const fresh = await newRecordKey(SEED_7_DID, 'app.note');
     assert.equal(fresh.length, 53);
     assert.match(fresh, RECORD_KEY_PATTERN);
-    assert.ok(await ownsKey(fresh, SEED_7_DID));
-    assert.ok(!(await ownsKey(fresh, 'did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt')));
+    assert.ok(await ownsKey(fresh, SEED_7_DID, 'app.note'));
+    assert.ok(!(await ownsKey(fresh, SEED_7_DID, 'app.other')), 'not in another collection');
+    assert.ok(
+      !(await ownsKey(fresh, 'did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt', 'app.note')),
+      'not by another account',
+    );
+    const shared = await sharedKey('std.decision', '0'.repeat(40));
+    assert.equal(shared, `one:7elebqud5aetyhmrmrpaoiaggq.${'0'.repeat(40)}`);
+    assert.ok(await isSharedKeyOf(shared, 'std.decision'));
+    assert.ok(!(await isSharedKeyOf(shared, 'std.vote')));
   });
 
   test('a key is owned, shared, or neither', () => {
     assert.equal(keyKind('akthxqofxox3iszhpi5j3zhl6a.profile'), 'owned');
-    assert.equal(keyKind(`one:${'0'.repeat(40)}`), 'shared');
+    assert.equal(keyKind(`one:${'a'.repeat(26)}.${'0'.repeat(40)}`), 'shared');
     for (const neither of [
       'mfrggzdfmztwq2lknnwg23tpoa',
       'profile',
       'collection:app.poll',
-      `one:${'0'.repeat(39)}`,
+      `one:${'0'.repeat(40)}`,
+      `one:${'a'.repeat(26)}.${'0'.repeat(39)}`,
       `ONE:${'0'.repeat(40)}`,
       'blz5ozlw6dwa5cn2n2lfu4rjb.profile',
       'akthxqofxox3iszhpi5j3zhl6a.',
@@ -67,13 +78,13 @@ describe('the kinds of key', () => {
   });
 
   test('a name too long for an owned key is refused, not cut', async () => {
-    await assert.rejects(ownedKey(SEED_7_DID, 'x'.repeat(102)), /1–101 characters/);
-    assert.equal((await ownedKey(SEED_7_DID, 'x'.repeat(101))).length, 128);
+    await assert.rejects(ownedKey(SEED_7_DID, 'app.x', 'x'.repeat(102)), /1–101 characters/);
+    assert.equal((await ownedKey(SEED_7_DID, 'app.x', 'x'.repeat(101))).length, 128);
   });
 });
 
 describe('onePer keys', () => {
-  const about = [{ rel: 'about', to: 'akthxqofxox3iszhpi5j3zhl6a.poll' }];
+  const about = [{ rel: 'about', to: 'f7abdsn45ta362ttnhr44eeli4.poll' }];
 
   test('the example in 02 §7.3', async () => {
     const secret = await onePerSecret({ spaceId: 'bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a' });
@@ -82,13 +93,13 @@ describe('onePer keys', () => {
       links: about,
       body: { choice: 0 },
     });
-    assert.equal(vote, 'akthxqofxox3iszhpi5j3zhl6a.one:a91e596711387286109b7a5b7f6d511b2620458a');
+    assert.equal(vote, 'aoxcamscgsmfuhe522jafpuvaq.one:65f6115ee63c78318cfa13ea2b67123870eb72f8');
     const decision = await onePerKey(secret, 'std.decision', ['link:about'], {
       root: SEED_7_DID,
       links: about,
       body: {},
     });
-    assert.equal(decision, 'one:a1452e7523f8d551ce60f1a9f265a1878fa6b97a');
+    assert.equal(decision, 'one:7elebqud5aetyhmrmrpaoiaggq.6f4eeff1be4d44a8aacba29e4ceadc5b6d329bbc');
     // In a private space whose first key K₀ is 03 §8.1's `ff fe … e0`.
     const k0 = new Uint8Array(32).map((_, i) => 0xff - i);
     const hidden = await onePerKey(
@@ -101,7 +112,7 @@ describe('onePer keys', () => {
         body: { choice: 0 },
       },
     );
-    assert.equal(hidden, 'akthxqofxox3iszhpi5j3zhl6a.one:22da47c4972f8ae73081b863a93577bd52bbe942');
+    assert.equal(hidden, 'aoxcamscgsmfuhe522jafpuvaq.one:7ec7e8221bda6f1c6475fca2ed7f9e8678f8b8ad');
   });
 
   test('with @author it is an owned key of the author; without, a shared one', async () => {
@@ -111,13 +122,13 @@ describe('onePer keys', () => {
       links: about,
       body: {},
     });
-    assert.ok(mine && (await ownsKey(mine, SEED_7_DID)));
+    assert.ok(mine && (await ownsKey(mine, SEED_7_DID, 'app.vote')));
     const shared = await onePerKey(secret, 'app.decision', ['link:about'], {
       root: SEED_7_DID,
       links: about,
       body: {},
     });
-    assert.equal(shared && keyKind(shared), 'shared');
+    assert.ok(shared && (await isSharedKeyOf(shared, 'app.decision')));
   });
 
   test('a field is hashed as canonical JSON: member order makes no difference (#20)', async () => {
@@ -156,7 +167,7 @@ describe('onePer keys', () => {
     );
     assert.notEqual(vote.key, guessed);
     // Only its owner part says whose it is, which the version's note says anyway.
-    assert.ok(await ownsKey(vote.key, alice.node.did));
+    assert.ok(await ownsKey(vote.key, alice.node.did, 'app.vote'));
     assert.equal(vote.key, await alice.node.records.onePerKey(space, 'app.vote', {}, { links }));
     // And the same vote in another private space has another key.
     const { id: other } = await alice.node.spaces.create({ name: 'Vote 2', ...team, visibility: 'private' });
@@ -286,7 +297,7 @@ async function attackerFirst(
   takeover: ReadonlyArray<Version>,
   read: (body: unknown) => unknown,
   expected: unknown,
-  refusal = /belongs to another account/,
+  refusal = /not one its account may write first/,
 ) {
   const { hub, alice, bob, carol, space } = setup;
   await letGo(alice.node, space);
@@ -366,10 +377,10 @@ describe('a first version at someone else’s key, ground to a lower id', () => 
     );
     const his = await bob.node.records.put(space, 'app.settings', { question: 'light' }, { key: 'settings' });
     assert.notEqual(hers.key, his.key);
-    assert.equal(hers.key, await bob.node.records.keyFor(space, 'settings', alice.node.did));
+    assert.equal(hers.key, await bob.node.records.keyFor(space, 'app.settings', 'settings', alice.node.did));
     await assert.rejects(
       bob.node.records.put(space, 'app.settings', { question: 'mine' }, { key: hers.key }),
-      /belongs to another account/,
+      /isn't a key of yours in app\.settings/,
     );
     const theirs = (await (await stored(alice.stores, space)).getVersion(hers.version))!;
     const takeover = await takeOver(bob, space, theirs, { question: 'Hijacked' });
@@ -422,24 +433,6 @@ describe('a first version at someone else’s key, ground to a lower id', () => 
     assert.match(refusals.join('; '), /needs a key its account owns/);
     assert.equal(await (await stored(alice.stores, space)).getVersion(odd.id), null);
   });
-
-  test('a shared one: key is refused in a collection whose rules have no onePer', async () => {
-    const { alice, bob, space } = await club();
-    const refusals: string[] = [];
-    alice.node.subscribe((event) => {
-      if (event.type === 'rejected') refusals.push(event.reason);
-    });
-    await letGo(bob.node, space);
-    const squat = await forge(bob, space, {
-      collection: 'app.poll',
-      body: { question: 'Moved' },
-      version: { key: `one:${'ab'.repeat(20)}`, seq: 0 },
-    });
-    await hold(bob.node, space);
-    await until(async () => refusals.length > 0, 4000, 'Alice to refuse it');
-    assert.match(refusals.join('; '), /only for a collection whose rules have onePer/);
-    assert.equal(await (await stored(alice.stores, space)).getVersion(squat.id), null);
-  });
 });
 
 describe('a key in another collection', () => {
@@ -452,7 +445,23 @@ describe('a key in another collection', () => {
     return refusals;
   };
 
-  test('an owned one: key is refused outside a onePer that names @author, so no record can squat a vote', async () => {
+  test('the same name in two collections gives two records, and neither touches the other', async () => {
+    const { alice, bob, space } = await club();
+    const settings = await alice.node.records.put(
+      space,
+      'app.settings',
+      { theme: 'dark' },
+      { key: 'settings' },
+    );
+    const poll = await alice.node.records.put(space, 'app.poll', { question: '?' }, { key: 'settings' });
+    assert.notEqual(poll.key, settings.key);
+    await until(async () => (await bob.node.records.get(space, poll.key)) !== null, 4000, 'the poll');
+    await alice.node.records.delete(space, poll.key);
+    await until(async () => (await bob.node.records.get(space, poll.key)) === null, 4000, 'the delete');
+    assert.deepEqual((await bob.node.records.get(space, settings.key))?.body, { theme: 'dark' });
+  });
+
+  test('a key of another collection is refused, owned or shared: no record can squat one', async () => {
     const { alice, bob, space } = await club();
     await alice.node.collections.define(space, {
       name: 'app.decision',
@@ -468,42 +477,43 @@ describe('a key in another collection', () => {
     const poll = await alice.node.records.put(space, 'app.poll', { question: 'Where?' });
     const links = [{ rel: 'about', to: poll.key }];
     const voteKey = (await bob.node.records.onePerKey(space, 'app.vote', {}, { links }))!;
-    assert.ok(await ownsKey(voteKey, bob.node.did));
-    // put won't write a record of another collection there.
+    const decisionKey = (await bob.node.records.onePerKey(space, 'app.decision', {}, { links }))!;
     await assert.rejects(
       bob.node.records.put(space, 'app.poll', { question: 'Squat' }, { key: voteKey }),
-      /onePer key, and app\.poll has no onePer/,
+      /isn't a key of yours in app\.poll/,
     );
-    // Signed by hand, every peer that reads the definition refuses it, in either collection.
+    // Signed by hand, every peer refuses them: the key names another collection.
     const refusals = refusalsAt(alice);
     await letGo(bob.node, space);
     const squats = [
       await forge(bob, space, {
         collection: 'app.poll',
         body: { question: 'Squat' },
-        retain: true,
         version: { key: voteKey, seq: 0 },
       }),
       await forge(bob, space, {
-        collection: 'app.decision',
+        collection: 'app.vote',
         body: {},
         retain: true,
         links,
-        version: { key: await ownedKey(bob.node.did, `one:${'ef'.repeat(20)}`), seq: 0 },
+        version: { key: decisionKey, seq: 0 },
       }),
     ];
     await hold(bob.node, space);
     await until(async () => refusals.length >= 2, 4000, 'Alice to refuse them');
-    assert.match(refusals.join('; '), /only for a collection whose rules have onePer/);
-    assert.match(refusals.join('; '), /owned one: key is only for a onePer that names @author/);
+    assert.match(refusals.join('; '), /not one its account may write first in app\.poll/);
+    assert.match(refusals.join('; '), /not one its account may write first in app\.vote/);
     for (const squat of squats)
       assert.equal(await (await stored(alice.stores, space)).getVersion(squat.id), null);
-    // Alice's own vote is untouched by any of it.
+    // Alice's decision and vote are untouched by any of it.
+    const decision = await alice.node.records.put(space, 'app.decision', {}, { links });
+    assert.equal(decision.key, decisionKey);
     const vote = await alice.node.records.put(space, 'app.vote', { choice: 1 }, { links });
     await until(async () => (await bob.node.records.get(space, vote.key)) !== null, 4000, 'the vote');
+    await until(async () => (await bob.node.records.get(space, decision.key)) !== null, 4000, 'the decision');
   });
 
-  test('a shared one: key is refused in a collection whose onePer names @author', async () => {
+  test('a shared key in a collection whose onePer names @author is refused: it is not the derived key', async () => {
     const { alice, bob, space } = await club();
     const poll = await alice.node.records.put(space, 'app.poll', { question: 'Where?' });
     const refusals = refusalsAt(alice);
@@ -513,35 +523,12 @@ describe('a key in another collection', () => {
       body: { choice: 0 },
       retain: true,
       links: [{ rel: 'about', to: poll.key }],
-      version: { key: `one:${'cd'.repeat(20)}`, seq: 0 },
+      version: { key: await sharedKey('app.vote', 'cd'.repeat(20)), seq: 0 },
     });
     await hold(bob.node, space);
     await until(async () => refusals.length > 0, 4000, 'Alice to refuse it');
-    assert.match(refusals.join('; '), /shared one: key is only for a onePer that does not name @author/);
+    assert.match(refusals.join('; '), /its key must be derived from them/);
     assert.equal(await (await stored(alice.stores, space)).getVersion(shared.id), null);
-  });
-
-  test('put refuses a chosen name its account already holds in another collection, deleted or not', async () => {
-    const { alice, space } = await club();
-    const settings = await alice.node.records.put(
-      space,
-      'app.settings',
-      { theme: 'dark' },
-      { key: 'settings' },
-    );
-    const clash = /already holds a app\.settings record/;
-    await assert.rejects(
-      alice.node.records.put(space, 'app.poll', { question: '?' }, { key: 'settings' }),
-      clash,
-    );
-    await alice.node.records.delete(space, settings.key);
-    await assert.rejects(
-      alice.node.records.put(space, 'app.poll', { question: '?' }, { key: 'settings' }),
-      clash,
-    );
-    // Its own collection may bring it back.
-    const back = await alice.node.records.put(space, 'app.settings', { theme: 'light' }, { key: 'settings' });
-    assert.equal(back.key, settings.key);
   });
 });
 

@@ -12,7 +12,7 @@
  * before and versions it cites. It is the definition's `contract`, apart from
  * these, because readers judge it and peers don't (`records/contracts.ts`).
  */
-import { ownedKey } from './key.js';
+import { ownedKey, sharedKey } from './key.js';
 import { canonicalize } from '../schema/version.js';
 import { bytesToHex, utf8Encode } from '../utils/encoding.js';
 import { isRecord, readField } from '../utils/guards.js';
@@ -85,7 +85,7 @@ const publicSeed = (spaceId: string) => utf8Encode(`minca/public-one-per/v1|${sp
  * The key a record must have under `onePer`, or null when something it names
  * is missing (no such link, no such field). With `@author` among the parts,
  * an owned key of the author's (`records/key.ts`), so no one else can write
- * its first version; without, a shared `one:` key.
+ * its first version; without, a shared key of the collection's.
  */
 export async function onePerKey(
   secret: CryptoKey,
@@ -96,8 +96,10 @@ export async function onePerKey(
   const parts = onePer.map((part) => onePerPart(part, record));
   if (parts.includes(null)) return null;
   const mac = await hmacPrefix(secret, [collection, ...parts].join('\n'), 20);
-  const name = `one:${bytesToHex(mac)}`;
-  return onePer.includes('@author') ? ownedKey(record.root, name) : name;
+  const hex = bytesToHex(mac);
+  return onePer.includes('@author')
+    ? ownedKey(record.root, collection, `one:${hex}`)
+    : sharedKey(collection, hex);
 }
 
 /** One part of a `onePer` key's input: `<part>=<value>`, or null when the record has no value for it */

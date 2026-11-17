@@ -440,11 +440,10 @@ Every version of a line collection **MUST** be at its author's line key,
 `lineKey(root, collection)`, or it fails:
 
 ```
-lineKey(root, collection) = owner(root) + "." + "line:" + base32(SHA-256(utf8(collection))[0..16])
+lineKey(root, collection) = owner(root, collection) + ".line"
 ```
 
-with `owner` and the owned key form of 02 §4.1, and base32 lower case
-without padding. Being an owned key, only that account's own versions stand
+with `owner` and the owned key form of 02 §4.1. Being an owned key, only that account's own versions stand
 there (02 §4.1). Without it, anyone could write a first version at someone
 else's line key, or a next version after their payment, and kill the line;
 and an account could open a second line and claim each payment once in each.

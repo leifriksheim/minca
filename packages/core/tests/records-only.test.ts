@@ -329,7 +329,7 @@ describe('an agent acting for a person', () => {
       {
         collection: 'app.note',
         body: { text: 'in' },
-        version: { key: await ownedKey(alice.node.did, 'in'), seq: 0 },
+        version: { key: await ownedKey(alice.node.did, 'app.note', 'in'), seq: 0 },
       },
       { policy },
     );
@@ -339,7 +339,7 @@ describe('an agent acting for a person', () => {
       {
         collection: 'app.other',
         body: { text: 'out' },
-        version: { key: await ownedKey(alice.node.did, 'out'), seq: 0 },
+        version: { key: await ownedKey(alice.node.did, 'app.other', 'out'), seq: 0 },
       },
       { policy },
     );
@@ -358,6 +358,38 @@ describe('an agent acting for a person', () => {
     );
     assert.equal((await bob.node.records.get(space, outside.key))?.verified ?? null, null);
     assert.equal((await bob.node.records.get(space, inside.key))?.verified, true);
+  });
+
+  test('a key limited to one collection can’t replace or delete the account’s record in another', async () => {
+    const { alice, bob, space } = await setup();
+    const theirs = await alice.node.records.put(space, 'app.other', { text: 'mine' });
+    await until(async () => (await bob.node.records.get(space, theirs.key)) !== null, 4000, 'the record');
+    await letGo(alice.node, space);
+    const policy: Policy = [['==', '.collection', 'app.note']];
+    // A first version at the record's key, in the collection the note allows, then a delete after it.
+    const takeover = await forgeAsAgent(
+      alice,
+      space,
+      { collection: 'app.note', body: { text: 'taken' }, version: { key: theirs.key, seq: 0 } },
+      { policy },
+    );
+    const gone = await forgeAsAgent(
+      alice,
+      space,
+      {
+        collection: 'app.note',
+        body: null,
+        deleted: true,
+        version: { key: theirs.key, seq: 1, prev: takeover.id, genesis: takeover.id },
+      },
+      { policy },
+    );
+    await hold(alice.node, space);
+    await settle(300);
+    const bobs = createStorageProvider(await bob.stores(`spaces/${space}`));
+    assert.equal(await bobs.getVersion(takeover.id), null);
+    assert.equal(await bobs.getVersion(gone.id), null);
+    assert.deepEqual((await bob.node.records.get(space, theirs.key))?.body, { text: 'mine' });
   });
 
   test('taking someone out of the space, under a records-only note, is ignored too', async () => {
@@ -1556,7 +1588,7 @@ describe('an agent running a node of its own', () => {
           seen: await seenBy(ada.node, registry),
           collection: 'app.note',
           version: {
-            key: await ownedKey(ada.node.did, `note-${command === '/' ? 'all' : 'records'}`),
+            key: await ownedKey(ada.node.did, 'app.note', `note-${command === '/' ? 'all' : 'records'}`),
             seq: 0,
           },
           body: { text: 'Joined somewhere' },

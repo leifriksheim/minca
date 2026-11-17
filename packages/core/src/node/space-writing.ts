@@ -12,7 +12,7 @@ import type { Signer } from '../schema/signer.js';
 import { accessRequirement, actsForAccount, noteGrants } from '../identity/abilities.js';
 import { createVersion, isStub } from '../schema/version.js';
 import { MAX_SEEN, nextVersion } from '../records/version.js';
-import { keyKind, newRecordKey, onePerForm, ownedKey, ownsKey, RECORD_KEY_PATTERN } from '../records/key.js';
+import { keyKind, newRecordKey, ownedKey, ownsKey, RECORD_KEY_PATTERN } from '../records/key.js';
 import { hasContract } from '../records/contracts.js';
 import type { Writers } from './writers.js';
 import { isSealedBody, sealBody } from '../privacy/space-encryption.js';
@@ -438,49 +438,23 @@ export function createWriting(deps: WritingDeps) {
       const derived = await derivedKey(collection, onePer, { root: deps.rootDid, links, body });
       if (!derived)
         throw new Error(`${collection} is one per ${onePer.join(' + ')} — give it every one of those`);
-      await keepsCollection(derived, collection);
       return view<T>(await write(collection, body, await after(derived), false, links, { as: options.as }));
     }
-    const recordKey = await keyToWrite(collection, options.key, onePer);
+    const recordKey = await keyToWrite(collection, options.key);
     return view<T>(await writeFirst(collection, body, recordKey, links, options.as));
   }
 
   /**
    * Where a new record goes: a fresh key of this account's, or the key the
-   * caller names. A name is put in this account's namespace (`profile` →
-   * `<owner>.profile`); a key this account already owns is taken as it is.
-   * Not a `one:` key outside a `onePer` collection, which every peer refuses
-   * (02 §7.3), nor a key this node holds a record of another collection at.
+   * caller names. A name is put in this account's namespace in the
+   * collection (`settings` → `<owner>.settings`); a key this account already
+   * owns there is taken as it is.
    */
-  async function keyToWrite(
-    collection: string,
-    chosen: string | undefined,
-    onePer: ReadonlyArray<string> | undefined,
-  ): Promise<string> {
-    if (chosen === undefined) return newRecordKey(deps.rootDid);
-    let recordKey: string;
-    if (await ownsKey(chosen, deps.rootDid)) recordKey = chosen;
-    else if (keyKind(chosen) === 'owned') throw new Error(`${chosen} belongs to another account`);
-    else recordKey = keyKind(chosen) === 'shared' ? chosen : await ownedKey(deps.rootDid, chosen);
-    if (onePerForm(recordKey) && !onePer)
-      throw new Error(`${recordKey} is a onePer key, and ${collection} has no onePer`);
-    await keepsCollection(recordKey, collection);
-    return recordKey;
-  }
-
-  /**
-   * Refuses a write at a key this node holds a record of another collection
-   * at. Keys are unique in a space, and a record keeps its collection for
-   * life (02 §4.1, §4.2), so the write could only be refused, or continue the
-   * other record's chain.
-   */
-  async function keepsCollection(recordKey: string, collection: string): Promise<void> {
-    const held = (await currentOf(recordKey)) ?? (await storage.getCurrent(recordKey));
-    if (held && held.collection !== collection)
-      throw new Error(
-        `${recordKey} already holds a ${held.collection} record, and a key keeps its collection for life: ` +
-          `choose a name that includes the collection`,
-      );
+  async function keyToWrite(collection: string, chosen: string | undefined): Promise<string> {
+    if (chosen === undefined) return newRecordKey(deps.rootDid, collection);
+    if (await ownsKey(chosen, deps.rootDid, collection)) return chosen;
+    if (keyKind(chosen) !== null) throw new Error(`${chosen} isn't a key of yours in ${collection}`);
+    return ownedKey(deps.rootDid, collection, chosen);
   }
 
   /** Whether this account holds a grant, now, to do something to a record */

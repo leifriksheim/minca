@@ -331,71 +331,55 @@ A record keeps one `key` for life, and links point at keys (§5), so a comment
 stays on a to-do however often the to-do changes.
 
 - A key MUST match `^[a-z0-9:._-]{1,128}$`.
-- Keys are unique within a **space**, not within a collection.
+- Keys are unique within a space. Outside `sys.*`, a key names its
+  collection (below), so no two collections share one.
 
 **Whose a key is.** Outside the `sys.*` collections, a record's first version
 (`seq 0`) MUST be at a key of one of two kinds, told apart by their form:
 
-| Kind       | Form                                  | Who may write its first version                                                                                           |
-| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **owned**  | `^[a-z2-7]{26}\.[a-z0-9:._-]{1,101}$` | Only the account whose owner part it starts with                                                                          |
-| **shared** | `^one:[0-9a-f]{40}$`                  | Anyone the collection's rules allow, and only in a collection whose rules in force have `onePer` (§7.3) without `@author` |
+| Kind       | Form                                  | Who may write its first version, and where                                   |
+| ---------- | ------------------------------------- | ---------------------------------------------------------------------------- |
+| **owned**  | `^[a-z2-7]{26}\.[a-z0-9:._-]{1,101}$` | Only the account whose owner part it starts with, in the collection it names |
+| **shared** | `^one:[a-z2-7]{26}\.[0-9a-f]{40}$`    | Anyone the collection's grants allow, in the collection its tag names        |
 
-An owned key is `<owner>.<name>`. Its owner part names the creator's account:
+An owned key is `<owner>.<name>`. Its owner part names the creator's account
+and the record's collection. A shared key is `one:<tag>.<hex>`; its tag names
+the collection:
 
 ```
-owner(root) = lowercase( base32( SHA-256( UTF-8( "minca/record-owner/v1|" ‖ root ) )[0..16) ) )   // 26 characters
+owner(root, collection) = lowercase( base32( SHA-256( UTF-8( "minca/record-owner/v1|" ‖ root ‖ "|" ‖ collection ) )[0..16) ) )   // 26 characters
+tag(collection)         = lowercase( base32( SHA-256( UTF-8( "minca/shared-key/v1|" ‖ collection ) )[0..16) ) )               // 26 characters
 ```
 
-`root` is the account's root DID (§9.3), whichever of its keys signs; base32
-is §2's alphabet without padding.
+`root` is the account's root DID (§9.3), whichever of its keys signs; it
+holds no `|`. base32 is §2's alphabet without padding.
 
 - A **fresh** key is an owned key whose name is 16 random bytes, base32 lower
   case without padding: `<owner>.` and 26 characters of `[a-z2-7]`.
   Writers SHOULD use fresh keys unless the key is chosen or derived for a
   reason.
 - A **chosen** key is an owned key whose name an app picks, for a record there
-  is one of per account by nature (`settings`). Two accounts choosing one name
-  get two keys.
+  is one of per account by nature (`settings`). Two accounts choosing one
+  name get two keys, and so do two collections.
 - A **`onePer`** key is derived from the record (§7.3): an owned key named
   `one:<hex>` when the parts include `@author`, a shared key otherwise.
 
 Example: the root `did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E`
-has owner part `akthxqofxox3iszhpi5j3zhl6a`. Its fresh keys look like
-`akthxqofxox3iszhpi5j3zhl6a.mfrggzdfmztwq2lknnwg23tpoa`, and the name
-`settings` chosen by it is `akthxqofxox3iszhpi5j3zhl6a.settings`.
+has owner part `rkltwrl6wmjjdqg2y522kvzyra` in `app.settings`. Its fresh keys
+there look like `rkltwrl6wmjjdqg2y522kvzyra.mfrggzdfmztwq2lknnwg23tpoa`, and
+the name `settings` chosen by it is `rkltwrl6wmjjdqg2y522kvzyra.settings`.
+The tag of `std.decision` is `7elebqud5aetyhmrmrpaoiaggq`.
 
 **Checking.** A peer MUST refuse a first version outside `sys.*` whose key is
-of neither kind, or is an owned key whose owner part is not `owner(root)` of
-the version's root (§9.3). This needs only the envelope and the root, so every
-peer makes it, one that can't read the body or holds only a stub included. A
-peer that can read the collection's definition in force (as of `seen`) MUST
-also refuse a first version at a key of a `onePer` key's form, unless those
-rules have a `onePer` that gives that form: a shared key only for a `onePer`
-without `@author`, and an owned key whose name matches `^one:[0-9a-f]{40}$`
-only for a `onePer` with `@author`. This is judged from the definition alone,
-so peers that can't derive `onePer` keys (§7.3) agree; one that can't read
-the definition accepts it on the other checks. Both are judged in §9.4 step 4.
-Otherwise a record in another collection could take an account's `onePer`
-key, and with it the `onePer` record, for good: keys are unique in a space,
-and a record keeps its collection.
-
-**Shared keys in two collections.** A shared key carries no collection in
-its form, and keys are unique in a space, so a member a collection Y allows
-to create (one with a `onePer` without `@author`) can write first at the
-shared key a collection X derives, from Y. X's record for those parts then
-can't be written: its writer would continue Y's chain (§4.2). Only someone
-who can derive X's keys can aim at one, and in a private space only readers
-can. A known gap; the derived key names its collection only inside the HMAC.
-
-**Chosen names in two collections.** An account's chosen key is the same in
-every collection, so an app of the account's that writes `settings` in
-`app.notes` takes the key another app of the account's would use for
-`settings` in `app.todo`; the second can't write its record there (§4.2).
-Only the account itself, or an app it lets write, can cause this: no one
-else can write at its keys. Apps SHOULD choose names that include their
-collection (`app.todo.settings`), and a writer SHOULD refuse, with a clear
-error, to write a record at a key whose chain it holds in another collection.
+of neither kind, is an owned key whose owner part is not
+`owner(root, collection)` of the version's root (§9.3) and collection, or is a
+shared key whose tag is not `tag(collection)` of the version's collection.
+This needs only the envelope and the root, so every peer makes it, one that
+can't read the body or holds only a stub included (§9.4 step 4). A later
+version stays in its first version's collection (§4.7), so every version at
+a key is in the collection the key names: a record's key can't be taken from
+another collection, and a grant limited to some collections reaches no record
+of another.
 
 The `sys.*` collections keep the formats their parts give them (03:
 `role:…`, `member:…`, `profile:…` and the rest; `collection:<name>` for a
@@ -403,11 +387,10 @@ definition, §6): the access history is judged by its replay
 ([03 — Spaces](03-spaces.md) §4), and readers of the others check the root
 of each version they take, not who wrote first. None of those formats is of
 either kind, and a peer MUST refuse a first version in a `sys.*` collection,
-known or not, at an owned or shared key. Keys are unique in a space, not in a
-collection (§4.3 picks one current version at a key, whatever its
-collection), so otherwise anyone could write a first version at someone's key
-in a collection exempt from the check, grind its id lower, and have it read in
-place of theirs.
+known or not, at an owned or shared key. §4.3 picks one current version at a
+key, whatever its collection, so otherwise anyone could write a first version
+at someone's key in a collection exempt from the check, grind its id lower,
+and have it read in place of theirs.
 
 > Rationale: whose a record is must follow from something no one else can
 > produce. Before keys named their owner, the first version was the `seq 0`
@@ -419,7 +402,7 @@ place of theirs.
 > The owner part says no more than the version does: its `author` and `proof`
 > name the account in the clear in every space.
 
-_Source: `packages/core/src/records/key.ts` (`keyKind`, `onePerForm`, `ownerTag`, `ownedKey`, `newRecordKey`, `ownsKey`), `packages/core/src/node/space-standing.ts` (`keyProblem`, `onePerKeyProblem`, `judgeStanding`), `packages/core/src/node/space-writing.ts` (`keyToWrite`, `keepsCollection`). Tests: `packages/core/tests/record-keys.test.ts` (all), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
+_Source: `packages/core/src/records/key.ts` (`keyKind`, `ownerTag`, `ownedKey`, `sharedKey`, `newRecordKey`, `ownsKey`, `isSharedKeyOf`), `packages/core/src/node/space-standing.ts` (`keyProblem`, `judgeStanding`), `packages/core/src/node/space-writing.ts` (`keyToWrite`). Tests: `packages/core/tests/record-keys.test.ts` (all; "a key in another collection"), `packages/core/tests/records-only.test.ts` ("a note’s policy is checked by every peer…"), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
 
 ### 4.2 Version fields
 
@@ -615,8 +598,8 @@ This closes two attacks open to any member allowed to edit:
 - **Moving a record.** A later version in another `collection`, taking the
   record out of the collection its rules and readers expect it in.
 
-A first version can't move a record either: at an owned key only its owner
-writes one, and a shared key is derived from its collection (§4.1, §7.3).
+A first version can't move a record either: its key names its collection
+(§4.1).
 
 The ordering rule (§4.3) does not change, but which versions reach it does.
 Every edit leaves a stub of the version it replaces, a few hundred bytes,
@@ -1240,14 +1223,14 @@ for each part, in order:
   "link:<rel>"  → "link:<rel>=" ‖ link.to                 (no such link → no key)
   field         → field ‖ "=" ‖ canonical(body[field])    (field absent → no key)
 mac    = HMAC-SHA-256( oneKey, UTF-8( join(lines, "\n") ) )
-name   = "one:" ‖ lowercase-hex( mac[0..20) )                  // 44 characters
-key    = onePer includes "@author" ? owner(rootDid) ‖ "." ‖ name   // owned, §4.1
-                                   : name                          // shared
+hex    = lowercase-hex( mac[0..20) )                                            // 40 characters
+key    = onePer includes "@author" ? owner(rootDid, collection) ‖ ".one:" ‖ hex   // owned, §4.1
+                                   : "one:" ‖ tag(collection) ‖ "." ‖ hex         // shared, §4.1
 ```
 
 `canonical(v)` is the canonical JSON of the value (§1), so a field holding an
 object gives the same key whatever its members' order. A `null` field is
-present and gives `field=null`. `owner` is §4.1's.
+present and gives `field=null`. `owner` and `tag` are §4.1's.
 
 `oneKey` is derived as topic tags' key is (§8.2), from a key that never
 changes for the space:
@@ -1272,24 +1255,24 @@ Example — in the public space
 `bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a`, `std.vote`
 (`onePer: ["@author", "link:about"]`) by
 `did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E` about the record
-`akthxqofxox3iszhpi5j3zhl6a.poll`:
+`f7abdsn45ta362ttnhr44eeli4.poll` in `std.poll`:
 
 ```
 std.vote
 @author=did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E
-link:about=akthxqofxox3iszhpi5j3zhl6a.poll
+link:about=f7abdsn45ta362ttnhr44eeli4.poll
 ```
 
-gives `akthxqofxox3iszhpi5j3zhl6a.one:a91e596711387286109b7a5b7f6d511b2620458a`.
+gives `aoxcamscgsmfuhe522jafpuvaq.one:65f6115ee63c78318cfa13ea2b67123870eb72f8`.
 A `std.decision` (`onePer: ["link:about"]`) about the same record gives the
-shared key `one:a1452e7523f8d551ce60f1a9f265a1878fa6b97a`. With the private
-space key `ff fe … e0` of 03 §8.1 as K₀, the vote's key is
-`akthxqofxox3iszhpi5j3zhl6a.one:22da47c4972f8ae73081b863a93577bd52bbe942`.
+shared key `one:7elebqud5aetyhmrmrpaoiaggq.6f4eeff1be4d44a8aacba29e4ceadc5b6d329bbc`.
+With the private space key `ff fe … e0` of 03 §8.1 as K₀, the vote's key is
+`aoxcamscgsmfuhe522jafpuvaq.one:7ec7e8221bda6f1c6475fca2ed7f9e8678f8b8ad`.
 
 Checking: a peer MUST refuse a `seq 0` version of a collection with `onePer` in
 force whose `key` is not the derived key (including when a part is missing and
-there is no key). Whether a key of a `onePer` key's form is allowed at all, in
-any collection, is §4.1's check, which needs no `oneKey`. The check is made only on `seq 0`, and only by a peer that
+there is no key). Whose key it is, and which collection's, is §4.1's check,
+which needs no `oneKey`. The check is made only on `seq 0`, and only by a peer that
 can read the body and holds `oneKey`; in a private space a peer without the
 key accepts it on the other checks, which include whose key it is (§4.1).
 Later versions keep the key they have. The first version carries `retain`
@@ -1353,7 +1336,7 @@ non-empty strings; `final`: `true`). A definition with anything else,
 `create`, `edit`, `delete` and `check` included, is invalid (§6.1). A
 contract is not a rule: it is the definition's `contract` (§7.6).
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-standing.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`), `packages/core/src/node/space-rules.ts` (`onePerKeying`, `derivedKey`, `rulesAt`), `packages/core/src/node/space-writing.ts` (`mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/contracts-shape.test.ts` ("a contract is not a rule…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-standing.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`), `packages/core/src/node/space-rules.ts` (`onePerKeying`, `derivedKey`, `rulesAt`), `packages/core/src/node/space-writing.ts` (`mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/contracts-shape.test.ts` ("a contract is not a rule…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a shared key in a collection whose onePer names @author…"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
 ### 7.6 The contract
 
@@ -1525,11 +1508,9 @@ Given a valid signature and root, whether the version _stands_ in this space:
       before the rest of this step. A first version is at a key its root may
       write first (§4.1): refused, never withdrawn, since nothing that arrives
       later changes whose a key is.
-   2. The access state as of `seen` is known ([03](03-spaces.md)). A first
-      version at a key of a `onePer` key's form is in a collection whose rules
-      as of then have a `onePer` that gives that form, unless the peer can't
-      read them (§4.1). The collection is not contested with no definition
-      in force as of then (§6.3).
+   2. The access state as of `seen` is known ([03](03-spaces.md)). The
+      collection is not contested with no definition in force as of then
+      (§6.3).
    3. The root is a member as of `seen` and holds a grant for what the version does ([03](03-spaces.md) §5.2), `final` allows it (§7.2), and the access history's own judgement of the writer passes (revoked keys, removals, roles taken — [03](03-spaces.md)).
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`. The `contract` is not judged (§7.6).

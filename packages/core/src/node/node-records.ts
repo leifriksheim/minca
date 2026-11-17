@@ -45,8 +45,8 @@ export function createNodeRecords(ctx: NodeContext, as?: ActiveSession): NodeRec
     get: async <T>(spaceId: string, key: string) => (await runtime(spaceId)).get<T>(key),
     contracts: async (spaceId: string, key: string, version?: string) =>
       (await runtime(spaceId)).contracts(key, version),
-    keyFor: async (spaceId: string, name: string, account?: string) =>
-      (await runtime(spaceId)).keyFor(name, account),
+    keyFor: async (spaceId: string, collection: string, name: string, account?: string) =>
+      (await runtime(spaceId)).keyFor(collection, name, account),
     onePerKey: async (
       spaceId: string,
       collection: string,

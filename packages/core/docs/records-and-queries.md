@@ -204,8 +204,10 @@ signed, not the person. `node.spaces.profiles(space)` maps accounts to names.
 
 ## Keys
 
-A record's key says whose it is. Every key starts with its owner's part, a
-hash of the account, so no one else can create a record there.
+A record's key says whose it is and which collection it is in. Every key
+starts with its owner's part, a hash of the account and the collection, so no
+one else can create a record there, and no record of another collection can
+take it.
 
 Most records just take the fresh key `put` gives them. Some records there is
 one of per account, like settings. For those, pass a name:
@@ -213,34 +215,31 @@ one of per account, like settings. For those, pass a name:
 ```typescript
 await node.records.put(space.id, 'app.settings', { theme: 'dark' }, { key: 'settings' });
 
-const mine = await node.records.keyFor(space.id, 'settings'); // 'akthxqofxox3iszhpi5j3zhl6a.settings'
-const theirs = await node.records.keyFor(space.id, 'settings', did); // someone else's, if they wrote one
+const mine = await node.records.keyFor(space.id, 'app.settings', 'settings'); // 'rkltwrl6wmjjdqg2y522kvzyra.settings'
+const theirs = await node.records.keyFor(space.id, 'app.settings', 'settings', did); // someone else's, if they wrote one
 await node.records.get(space.id, theirs);
 ```
 
-- The name goes in your account's namespace, so two accounts that both
-  choose `settings` get two records.
+- The name goes in your account's namespace for that collection, so two
+  accounts that both choose `settings` get two records, and so do two
+  collections.
 - Names are 1–101 characters of `a`–`z`, `0`–`9` and `: . _ -`.
 - Read and link records by their whole `key`, as `put` gives it, not by the
   name.
-- A name is the same key in every collection, and a record keeps its
-  collection for life. So `put` refuses a name you already hold in another
-  collection, deleted or not. Put the collection in the name
-  (`app.todo.settings`) so two of your apps never clash.
 - Writing a deleted key brings the record back. Pass the whole key when it is
   already yours.
-- A name of the form `one:<hex>` is refused outside a `onePer` collection.
 
 In a collection with a `onePer` rule, the node works out the key for you
 from the parts the rule names, and `node.records.onePerKey` tells you what it
 is. With `@author` the key is the writer's. Without, it is a shared `one:…`
-key ([Collections](collections.md#rules)). In a private space it is keyed with
+key of the collection's ([Collections](collections.md#rules)). In a private space it is keyed with
 the space's key, so it says nothing to someone who can't read the space.
 
 An account's line in a collection, for contracts, has the key
 `lineKey(account, collection)`, exported by `@minca/core`.
 
-Every peer refuses a first version at a key the writer doesn't own. The rule
+Every peer refuses a first version at a key the writer doesn't own in that
+collection. The rule
 is in [spec 02 §4.1](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
 
 ## When two devices edit at once

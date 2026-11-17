@@ -70,7 +70,7 @@ async function handKey(bob: Person, space: string) {
             author: did,
             collection,
             space,
-            version: { key: await newRecordKey(bob.node.did), seq: 0 },
+            version: { key: await newRecordKey(bob.node.did, collection), seq: 0 },
             body: { text },
             proof: note,
             seen,

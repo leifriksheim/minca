@@ -372,7 +372,7 @@ describe('rules: one per something', () => {
       body: { choice: 0 },
       links: [{ rel: 'about', to: poll.key }],
       // A key of Bob's own, so only the onePer rule stands in its way.
-      version: { key: await ownedKey(bob.node.did, 'stuffing-the-ballot'), seq: 0 },
+      version: { key: await ownedKey(bob.node.did, 'app.poll.vote', 'stuffing-the-ballot'), seq: 0 },
       retain: true,
     });
     let rejected = '';

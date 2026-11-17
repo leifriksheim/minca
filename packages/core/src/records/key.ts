@@ -2,15 +2,17 @@
  * Record keys: their shape, and whose they are (spec 02 §4.1).
  *
  * Outside `sys.*`, a record's first version must be at a key of one of two
- * kinds, so that whose a record is can be read from its key and no member can
- * take over another's:
+ * kinds, so that whose a record is, and which collection it is in, can be
+ * read from its key, and no member can take over another's:
  *
- * - **owned**, `<owner>.<name>`: `<owner>` is a hash of the creator's account,
- *   so only that account can write a first version there. A fresh key is an
- *   owned key with a random name; a key an app chooses (`profile`, a line) is
- *   an owned key with that name.
- * - **shared**, `one:<hex>`: a `onePer` key that does not name its author
- *   (one decision per proposal), anyone's to write first.
+ * - **owned**, `<owner>.<name>`: `<owner>` is a hash of the creator's account
+ *   and the collection, so only that account can write a first version there,
+ *   and only in that collection. A fresh key is an owned key with a random
+ *   name; a key an app chooses (`profile`, a line) is an owned key with that
+ *   name.
+ * - **shared**, `one:<tag>.<hex>`: a `onePer` key that does not name its
+ *   author (one decision per proposal), anyone's to write first. `<tag>` is a
+ *   hash of the collection.
  *
  * On its own so that `version` and `links` can both check a key's shape
  * without importing each other.
@@ -21,70 +23,80 @@ import { utf8Encode } from '../utils/encoding.js';
 /** What any record key looks like: `profile`, `collection:app.todo.item`, an owned key */
 export const RECORD_KEY_PATTERN = /^[a-z0-9:._-]{1,128}$/;
 
-/** Characters of the owner part of an owned key: 16 bytes of hash, base32 */
-const OWNER_LENGTH = 26;
+/** Characters of the owner part of an owned key, and of a shared key's tag: 16 bytes of hash, base32 */
+const TAG_LENGTH = 26;
 /** An owned key: the owner part, a dot, and a name of 1–101 key characters */
 const OWNED_KEY_PATTERN = /^[a-z2-7]{26}\.[a-z0-9:._-]{1,101}$/;
-/** A shared `onePer` key: `one:` and 20 bytes of HMAC, in hex */
-const SHARED_KEY_PATTERN = /^one:[0-9a-f]{40}$/;
+/** A shared `onePer` key: `one:`, the collection's tag, a dot, and 20 bytes of HMAC in hex */
+const SHARED_KEY_PATTERN = /^one:[a-z2-7]{26}\.[0-9a-f]{40}$/;
+/** Where a shared key's tag starts, after `one:` */
+const SHARED_TAG_START = 4;
 
-/** A line's key: `<owner>.line:` and 16 bytes of hash, base32 ({@link lineKey}) */
-const LINE_KEY_PATTERN = /^[a-z2-7]{26}\.line:[a-z2-7]{26}$/;
+/** A line's key: `<owner>.line` ({@link lineKey}) */
+const LINE_KEY_PATTERN = /^[a-z2-7]{26}\.line$/;
 
 /** Whether a key has a line key's form, whoever's line and whichever collection's it is */
 export const hasLineKeyForm = (key: string): boolean => LINE_KEY_PATTERN.test(key);
-
-/** An owned key whose name has a `onePer` key's form: `<owner>.one:` and 20 bytes in hex */
-const OWNED_ONE_PER_PATTERN = /^[a-z2-7]{26}\.one:[0-9a-f]{40}$/;
-
-/**
- * Whether a key has the form of a `onePer` key (spec 02 §7.3), and which:
- * `owned` for `<owner>.one:<hex>`, `shared` for `one:<hex>`. Such a key is
- * only for a first version in a collection whose `onePer` gives it.
- */
-export function onePerForm(key: string): 'owned' | 'shared' | null {
-  return SHARED_KEY_PATTERN.test(key) ? 'shared' : OWNED_ONE_PER_PATTERN.test(key) ? 'owned' : null;
-}
 
 /** Which kind a key is, or null when it is neither (and so no first version outside `sys.*` may use it) */
 export function keyKind(key: string): 'owned' | 'shared' | null {
   return OWNED_KEY_PATTERN.test(key) ? 'owned' : SHARED_KEY_PATTERN.test(key) ? 'shared' : null;
 }
 
-/**
- * The owner part of every key an account owns: the first 16 bytes of
- * SHA-256 over a label and its root DID, in base32. Root DIDs are not lower
- * case, so a key names a hash of one.
- */
-export async function ownerTag(root: string): Promise<string> {
-  const digest = await sha256(utf8Encode(`minca/record-owner/v1|${root}`));
-  return base32Encode(digest.subarray(0, 16));
+/** The first 16 bytes of SHA-256 over `input`, in base32 */
+async function tagOf(input: string): Promise<string> {
+  return base32Encode((await sha256(utf8Encode(input))).subarray(0, 16));
 }
 
-/** The key `name` has in `root`'s namespace: `<owner>.<name>` */
-export async function ownedKey(root: string, name: string): Promise<string> {
-  const key = `${await ownerTag(root)}.${name}`;
+/**
+ * The owner part of every key an account owns in a collection. Root DIDs are
+ * not lower case, so a key names a hash of one; they hold no `|`, so the
+ * input reads one way.
+ */
+export function ownerTag(root: string, collection: string): Promise<string> {
+  return tagOf(`minca/record-owner/v1|${root}|${collection}`);
+}
+
+/** The tag that names a collection in its shared keys */
+function sharedKeyTag(collection: string): Promise<string> {
+  return tagOf(`minca/shared-key/v1|${collection}`);
+}
+
+/** The key `name` has in `root`'s namespace in a collection: `<owner>.<name>` */
+export async function ownedKey(root: string, collection: string, name: string): Promise<string> {
+  const key = `${await ownerTag(root, collection)}.${name}`;
   if (!OWNED_KEY_PATTERN.test(key))
     throw new Error('A record key name is 1–101 characters of a–z, 0–9 and : . _ -');
   return key;
 }
 
-/** A fresh key of `root`'s: 128 random bits as its name. Random rather than time-based, so it says nothing about when. */
-export async function newRecordKey(root: string): Promise<string> {
-  return ownedKey(root, base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16))));
+/** A shared key of a collection's, for a `onePer` HMAC in hex: `one:<tag>.<hex>` */
+export async function sharedKey(collection: string, hex: string): Promise<string> {
+  return `one:${await sharedKeyTag(collection)}.${hex}`;
 }
 
-/** Whether `key` is an owned key of `root`'s */
-export async function ownsKey(key: string, root: string): Promise<boolean> {
-  return keyKind(key) === 'owned' && key.slice(0, OWNER_LENGTH) === (await ownerTag(root));
+/** A fresh key of `root`'s in a collection: 128 random bits as its name. Random rather than time-based, so it says nothing about when. */
+export function newRecordKey(root: string, collection: string): Promise<string> {
+  return ownedKey(root, collection, base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16))));
+}
+
+/** Whether `key` is an owned key of `root`'s in `collection` */
+export async function ownsKey(key: string, root: string, collection: string): Promise<boolean> {
+  return keyKind(key) === 'owned' && key.slice(0, TAG_LENGTH) === (await ownerTag(root, collection));
+}
+
+/** Whether `key` is a shared key of `collection`'s */
+export async function isSharedKeyOf(key: string, collection: string): Promise<boolean> {
+  return (
+    keyKind(key) === 'shared' &&
+    key.slice(SHARED_TAG_START, SHARED_TAG_START + TAG_LENGTH) === (await sharedKeyTag(collection))
+  );
 }
 
 /**
- * The key of an account's line in a collection (`spec/drafts/constitution-grants-contracts.md`
- * §3): an owned key, so only that account can write a version in it. The
- * collection is hashed, so a line has a key whatever the collection's name.
+ * The key of an account's line in a collection (`spec/09-contracts.md`): an
+ * owned key, so only that account can write a version in it.
  */
-export async function lineKey(root: string, collection: string): Promise<string> {
-  const digest = await sha256(utf8Encode(collection));
-  return ownedKey(root, `line:${base32Encode(digest.subarray(0, 16))}`);
+export function lineKey(root: string, collection: string): Promise<string> {
+  return ownedKey(root, collection, 'line');
 }

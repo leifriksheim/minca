@@ -112,7 +112,8 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
       if (before !== 'pass') return before;
     }
     // Whose key it is: nobody else may write its first version.
-    if (v.seq === 0 && keyKind(v.key) === 'owned' && !(await ownsKey(v.key, v.author))) return 'fail';
+    if (v.seq === 0 && keyKind(v.key) === 'owned' && !(await ownsKey(v.key, v.author, v.collection)))
+      return 'fail';
     const members = await membersAsOf(id);
     if (!members) return 'pending';
     if (!members.has(v.author)) return 'fail';

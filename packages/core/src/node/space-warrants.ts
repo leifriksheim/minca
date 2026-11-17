@@ -190,7 +190,7 @@ export function createWarrants(deps: WarrantsDeps) {
   async function warrantOnce(violation: { kind: WarrantKind; evidence: Version[] }): Promise<void> {
     // Checked again: the space may have closed while the proof was being worked out.
     if (deps.isClosed()) return;
-    await upsert(WARRANT_COLLECTION, await newRecordKey(deps.rootDid), violation);
+    await upsert(WARRANT_COLLECTION, await newRecordKey(deps.rootDid, WARRANT_COLLECTION), violation);
   }
 
   /** The accounts proven to have broken the protocol's rules here, by the warrants that stand */
