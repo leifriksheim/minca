@@ -23,10 +23,7 @@ export function UnreadableData() {
   return (
     <aside data-tone="warn" className="stack" role="status">
       <strong>Some of your data was saved by another version of Minca</strong>
-      <p>
-        This version can’t read it, so it isn’t shown. Nothing was deleted: the version that saved it can
-        still open it.
-      </p>
+      <p>This version can’t read it, so it isn’t shown. This device has left it as it was.</p>
     </aside>
   );
 }

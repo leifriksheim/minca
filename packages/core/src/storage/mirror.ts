@@ -37,6 +37,7 @@ import {
   segmentBatches,
   segmentName,
   SEGMENT_SUFFIX,
+  SEGMENT_VERSION,
   unpackSegment,
 } from './segment.js';
 import { isStub } from '../schema/version.js';
@@ -94,9 +95,12 @@ const keys = {
   known: (id = '') => `mirror:known:${id}`,
 };
 const MARK = utf8Encode('1');
-/** On a segment read and found to be of another format, so it is neither fetched again nor forgotten */
-const UNREADABLE = utf8Encode('unreadable');
-const isUnreadableMark = (mark: Uint8Array) => mark.length === UNREADABLE.length;
+/**
+ * On a segment of another format, so it is counted and not fetched again. It
+ * names the format this reader had: one that reads another since tries again.
+ */
+const UNREADABLE = `unreadable by ${SEGMENT_VERSION}`;
+const UNREADABLE_BY_ANY = 'unreadable by ';
 
 /** A new store writer id: random hex, never a DID, so a listing does not say whose device wrote it */
 const newWriterId = () => bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(16)));
@@ -226,9 +230,9 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     let unreadable = 0;
     for (const key of await store.list(`${space}/`)) {
       if (!isSegment(key) || key.startsWith(mine)) continue;
-      const mark = await state.get(keys.read(key));
-      if (!mark) unread.push(key);
-      else if (isUnreadableMark(mark)) unreadable += 1;
+      const mark = await readText(state, keys.read(key));
+      if (mark === UNREADABLE) unreadable += 1;
+      else if (!mark || mark.startsWith(UNREADABLE_BY_ANY)) unread.push(key);
     }
     return { unread: unread.sort(), unreadable };
   }
@@ -277,7 +281,7 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
       if (!bytes) continue;
       const versions = unpackSegment(bytes);
       if (!versions) {
-        await state.put(keys.read(key), UNREADABLE);
+        await state.put(keys.read(key), utf8Encode(UNREADABLE));
         unreadable += 1;
         continue;
       }

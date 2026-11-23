@@ -468,7 +468,7 @@ function SyncFacts({ status }: { status: SpaceStatus }) {
             label: 'Can’t read',
             value: `${status.unreadable} ${status.unreadable === 1 ? 'file' : 'files'}`,
             about:
-              'Saved by another version of Minca, in your pod or storage. Not shown here, and not deleted.',
+              'Saved by another version of Minca, in your pod or storage. Not shown here, and left as it was.',
             bad: true,
           },
         ]

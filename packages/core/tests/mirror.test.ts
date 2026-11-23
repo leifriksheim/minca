@@ -430,8 +430,35 @@ describe('a mirror', () => {
     assert.deepEqual(await reader.mirror.pull(), { added: 0, unreadable: 0 }, 'gone once the segment is');
   });
 
+  test('bytes that are no segment at all, planted under a segment’s name, are not counted as another format', async () => {
+    const store = createMemoryBlobStore();
+    const junk = new TextEncoder().encode('not json');
+    await store.put(`${SPACE}/${'e'.repeat(32)}/${await segmentName(1, junk)}`, junk);
+    const reader = await device(store);
+    assert.deepEqual(await reader.mirror.pull(), { added: 0, unreadable: 0 });
+  });
+
+  test('a segment an earlier format of this reader could not read is read once it can', async () => {
+    const store = createMemoryBlobStore();
+    const writer = await device(store);
+    await writer.storage.addVersion(await note(await author(), 'from the newer device'));
+    await writer.mirror.flush();
+    const [key] = await store.list(`${SPACE}/`);
+
+    const state = createMemoryAdapter();
+    await state.put(`mirror:read:${key}`, new TextEncoder().encode('unreadable by 8'));
+    const storage = createStorageProvider(createMemoryAdapter());
+    const accept = async (version: Version): Promise<Taken> => {
+      await storage.addVersion(version);
+      return 'stored';
+    };
+    const updated = await createMirror({ store, space: SPACE, storage, accept, state });
+    assert.deepEqual(await updated.pull(), { added: 1, unreadable: 0 });
+    await updated.close();
+  });
+
   test('a segment that is not one, or of the format before envelopes, opens as nothing', async () => {
-    assert.equal(unpackSegment(new TextEncoder().encode('not json')), null);
+    assert.deepEqual(unpackSegment(new TextEncoder().encode('not json')), []);
     assert.equal(unpackSegment(new TextEncoder().encode('{"v":3,"versions":[]}')), null);
     const [version] = unpackSegment(packSegment([await note(await author(), 'hi')])) ?? [];
     assert.ok(version, 'the current format opens');

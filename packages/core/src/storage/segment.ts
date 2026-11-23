@@ -13,21 +13,22 @@ import { isObject, isStoredVersion } from '../utils/guards.js';
 
 export const SEGMENT_SUFFIX = '.seg';
 /** The segment format; a reader skips segments of any other */
-const SEGMENT_VERSION = 9;
+export const SEGMENT_VERSION = 9;
 
 /** Packs versions into a segment's bytes */
 export function packSegment(versions: ReadonlyArray<Version>): Uint8Array {
   return utf8Encode(JSON.stringify({ v: SEGMENT_VERSION, versions }));
 }
 
-/** The versions in a segment; null for bytes that are not a segment of this format */
+/** The versions in a segment; null for a segment of another format, none for bytes that are not one */
 export function unpackSegment(bytes: Uint8Array): Version[] | null {
   try {
     const parsed: unknown = JSON.parse(utf8Decode(bytes));
-    if (!isObject(parsed) || parsed.v !== SEGMENT_VERSION || !Array.isArray(parsed.versions)) return null;
+    if (!isObject(parsed) || !Array.isArray(parsed.versions)) return [];
+    if (parsed.v !== SEGMENT_VERSION) return typeof parsed.v === 'number' ? null : [];
     return parsed.versions.filter(isStoredVersion);
   } catch {
-    return null;
+    return [];
   }
 }
 
