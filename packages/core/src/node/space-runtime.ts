@@ -307,6 +307,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     watchIntervalMs: deps.watchIntervalMs,
     admit,
     recordsChanged: () => recordsChanged(),
+    statusChanged,
     announceSoon: () => peers.announceSoon(),
   });
 
@@ -630,6 +631,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         accounts,
         fingerprint: await storage.fingerprint(),
         rejected,
+        unreadable: mirrors.unreadableSegments(),
         holds: holding.held(),
         pending: await holding.pending(),
       };

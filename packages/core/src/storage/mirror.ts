@@ -70,8 +70,11 @@ export interface Mirror {
   /** The blob store, and this store writer's id in it: where its files go too (spec 05 §16.6) */
   readonly store: BlobStore;
   readonly writer: string;
-  /** Takes in what others left in the store. How many versions were stored. */
-  pull(): Promise<{ readonly added: number }>;
+  /**
+   * Takes in what others left in the store. How many versions were stored, and
+   * how many of the segments there now are not of the format this reader reads.
+   */
+  pull(): Promise<{ readonly added: number; readonly unreadable: number }>;
   /** Uploads what the store is missing, now */
   flush(): Promise<void>;
   /** Something changed here: flush soon */
@@ -91,6 +94,9 @@ const keys = {
   known: (id = '') => `mirror:known:${id}`,
 };
 const MARK = utf8Encode('1');
+/** On a segment read and found to be of another format, so it is neither fetched again nor forgotten */
+const UNREADABLE = utf8Encode('unreadable');
+const isUnreadableMark = (mark: Uint8Array) => mark.length === UNREADABLE.length;
 
 /** A new store writer id: random hex, never a DID, so a listing does not say whose device wrote it */
 const newWriterId = () => bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(16)));
@@ -196,7 +202,8 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     const seen = new Set<string>();
     async function* keep(): AsyncGenerator<Version> {
       for (const key of old) {
-        for (const version of (await fetchSegment(key)) ?? []) {
+        const bytes = await fetchSegment(key);
+        for (const version of (bytes && unpackSegment(bytes)) ?? []) {
           if (seen.has(version.id)) continue;
           seen.add(version.id);
           const now = await storage.getVersion(version.id);
@@ -210,21 +217,26 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     for (const key of old) await store.delete(key);
   }
 
-  /** The segments other writers left that this one has not read in full */
-  async function unreadSegments(): Promise<string[]> {
+  /**
+   * The segments other writers left: those this one has not read in full,
+   * and how many it read and found to be of another format.
+   */
+  async function othersSegments(): Promise<{ unread: string[]; unreadable: number }> {
     const unread: string[] = [];
+    let unreadable = 0;
     for (const key of await store.list(`${space}/`)) {
       if (!isSegment(key) || key.startsWith(mine)) continue;
-      if (!(await state.get(keys.read(key)))) unread.push(key);
+      const mark = await state.get(keys.read(key));
+      if (!mark) unread.push(key);
+      else if (isUnreadableMark(mark)) unreadable += 1;
     }
-    return unread.sort();
+    return { unread: unread.sort(), unreadable };
   }
 
-  /** A segment's versions; null if it can't be had, or isn't all there yet, so it is tried next time */
-  async function fetchSegment(key: string): Promise<Version[] | null> {
+  /** A segment's bytes; null if it can't be had, or isn't all there yet, so it is tried next time */
+  async function fetchSegment(key: string): Promise<Uint8Array | null> {
     const bytes = await store.get(key).catch(() => null);
-    if (!bytes || !(await isWholeSegment(key, bytes))) return null;
-    return unpackSegment(bytes);
+    return bytes && (await isWholeSegment(key, bytes)) ? bytes : null;
   }
 
   /**
@@ -256,16 +268,24 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     if (!held || isStub(held)) await markKnown(version.id);
   }
 
-  async function pullNow(): Promise<{ added: number }> {
+  async function pullNow(): Promise<{ added: number; unreadable: number }> {
     let added = 0;
-    for (const key of await unreadSegments()) {
-      const versions = await fetchSegment(key);
-      if (!versions) continue;
+    const others = await othersSegments();
+    let unreadable = others.unreadable;
+    for (const key of others.unread) {
+      const bytes = await fetchSegment(key);
+      if (!bytes) continue;
+      const versions = unpackSegment(bytes);
+      if (!versions) {
+        await state.put(keys.read(key), UNREADABLE);
+        unreadable += 1;
+        continue;
+      }
       const taken = await take(versions);
       added += taken.added;
       if (taken.waiting === 0) await state.put(keys.read(key), MARK);
     }
-    return { added };
+    return { added, unreadable };
   }
 
   // A store out of reach: the next change tries again, and nothing is lost meanwhile.

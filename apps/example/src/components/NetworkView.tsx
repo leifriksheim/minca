@@ -462,6 +462,17 @@ function SyncFacts({ status }: { status: SpaceStatus }) {
           : 'Things others sent that broke the space’s rules, so this device didn’t keep them.',
       bad: status.rejected > 0,
     },
+    ...(status.unreadable > 0
+      ? [
+          {
+            label: 'Can’t read',
+            value: `${status.unreadable} ${status.unreadable === 1 ? 'file' : 'files'}`,
+            about:
+              'Saved by another version of Minca, in your pod or storage. Not shown here, and not deleted.',
+            bad: true,
+          },
+        ]
+      : []),
     {
       label: 'Keeps',
       value:

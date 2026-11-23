@@ -25,12 +25,13 @@ export interface MirrorsDeps extends SpaceBase {
   /** Whether a version from outside may be stored, as for a peer's */
   readonly admit: (version: Version) => Promise<Standing>;
   readonly recordsChanged: () => void;
+  readonly statusChanged: () => void;
   /** Tells the peers this node took in something new */
   readonly announceSoon: () => void;
 }
 
 export async function openMirrors(deps: MirrorsDeps) {
-  const { space, storage, adapter, admit, recordsChanged, announceSoon } = deps;
+  const { space, storage, adapter, admit, recordsChanged, statusChanged, announceSoon } = deps;
 
   const fromMirror = async (version: Version): Promise<Taken> => {
     const verdict = await admit(version);
@@ -64,14 +65,28 @@ export async function openMirrors(deps: MirrorsDeps) {
       })
     : null;
   if (folderMirror) mirrors.push(folderMirror);
+
+  /** The segments each mirror held at its last pull that are not of the format this node reads */
+  const unreadableSegments = new Map<Mirror, number>();
+  const countUnreadableSegments = () => [...unreadableSegments.values()].reduce((sum, n) => sum + n, 0);
+
+  /** Takes in what a mirror holds; whether anything new was stored */
+  async function pullMirror(mirror: Mirror): Promise<boolean> {
+    const { added, unreadable } = await mirror.pull();
+    if (unreadable !== (unreadableSegments.get(mirror) ?? 0)) {
+      unreadableSegments.set(mirror, unreadable);
+      statusChanged();
+    }
+    return added > 0;
+  }
+
   /** Reads every mirror in the background: a space that opens from nothing — a host that lost its disk — fills in as it goes */
   const pullMirrors = () =>
     Promise.all(
       mirrors.map((mirror) =>
-        mirror
-          .pull()
-          .then(({ added }) => {
-            if (added === 0) return;
+        pullMirror(mirror)
+          .then((pulled) => {
+            if (!pulled) return;
             recordsChanged();
             announceSoon();
           })
@@ -87,7 +102,7 @@ export async function openMirrors(deps: MirrorsDeps) {
       ? (await reconcileSharedStore(storage, adapter, async (version) => storable(await admit(version))))
           .changed
       : false;
-    const pulled = folderMirror ? (await folderMirror.pull()).added > 0 : false;
+    const pulled = folderMirror ? await pullMirror(folderMirror) : false;
     return reconciled || pulled;
   };
   let watchTimer: ReturnType<typeof setInterval> | null = null;
@@ -132,6 +147,7 @@ export async function openMirrors(deps: MirrorsDeps) {
     /** Every mirror's store and writer, for files */
     all: () => mirrors.map((mirror) => ({ store: mirror.store, writer: mirror.writer })),
     pull: pullMirrors,
+    unreadableSegments: countUnreadableSegments,
     watch,
     /** Records changed here: soon written to every mirror */
     changed(): void {

@@ -17,6 +17,7 @@ const status = (fields: Partial<SpaceStatus>): SpaceStatus => ({
   accounts: {},
   fingerprint: '',
   rejected: 0,
+  unreadable: 0,
   holds: 'all',
   pending: 0,
   ...fields,
