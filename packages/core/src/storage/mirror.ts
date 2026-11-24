@@ -37,7 +37,6 @@ import {
   segmentBatches,
   segmentName,
   SEGMENT_SUFFIX,
-  SEGMENT_VERSION,
   unpackSegment,
 } from './segment.js';
 import { isStub } from '../schema/version.js';
@@ -95,12 +94,8 @@ const keys = {
   known: (id = '') => `mirror:known:${id}`,
 };
 const MARK = utf8Encode('1');
-/**
- * On a segment of another format, so it is counted and not fetched again. It
- * names the format this reader had: one that reads another since tries again.
- */
-const UNREADABLE = `unreadable by ${SEGMENT_VERSION}`;
-const UNREADABLE_BY_ANY = 'unreadable by ';
+/** On a segment that is not of this reader's format, so it is counted and not fetched again */
+const UNREADABLE = 'unreadable';
 
 /** A new store writer id: random hex, never a DID, so a listing does not say whose device wrote it */
 const newWriterId = () => bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(16)));
@@ -223,7 +218,7 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
 
   /**
    * The segments other writers left: those this one has not read in full,
-   * and how many it read and found to be of another format.
+   * and how many it fetched and could not read.
    */
   async function othersSegments(): Promise<{ unread: string[]; unreadable: number }> {
     const unread: string[] = [];
@@ -231,8 +226,8 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     for (const key of await store.list(`${space}/`)) {
       if (!isSegment(key) || key.startsWith(mine)) continue;
       const mark = await readText(state, keys.read(key));
-      if (mark === UNREADABLE) unreadable += 1;
-      else if (!mark || mark.startsWith(UNREADABLE_BY_ANY)) unread.push(key);
+      if (!mark) unread.push(key);
+      else if (mark === UNREADABLE) unreadable += 1;
     }
     return { unread: unread.sort(), unreadable };
   }

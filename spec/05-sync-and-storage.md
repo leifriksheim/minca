@@ -1239,10 +1239,11 @@ carried forward), **then** delete the old ones. A reader in between sees
 duplicates, which are harmless.
 
 > **Known defect:** a segment of another format (§16.3) holds nothing for a
-> reader, and compaction deletes a store writer's own without writing their
-> versions again, since it still counts them known. So what only a blob
-> store held is lost when the format changes; peers bring the rest back.
-> Before v1 a change of format converts nothing.
+> reader, which marks it read and does not read it again once it can. And
+> compaction deletes a store writer's own without writing their versions
+> again, since it still counts them known. So what only a blob store held is
+> lost when the format changes; peers bring the rest back. Before v1 a change
+> of format converts nothing.
 
 **Deleting a space** from a blob store deletes every key under
 `<space id>/` and under `files/<space id>/`.

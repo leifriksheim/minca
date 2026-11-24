@@ -598,8 +598,8 @@ with the value sent, the sender's account and the device it came from.
 connected and whose they are, a fingerprint of what it holds, and what it
 holds and still has pending.
 
-`unreadable` counts the segments in the data folder and mirrors that another
-version of the format wrote. The node skips them, so an app should say so
+`unreadable` counts the segments in the data folder and mirrors that are not
+of the format this version reads. The node skips them, so an app should say so
 when it is above zero: otherwise missing data looks like data still on its way.
 
 `connection` is `offline` with no network, and `connected` while any one
