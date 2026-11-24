@@ -603,4 +603,36 @@ describe('two nodes of one account on one folder', () => {
       await first.close();
     }
   });
+
+  test('a space says how many of the folder’s segments are of a format it does not read', async () => {
+    const folder = createMemoryDirectory();
+    const node = await createNode({
+      signer: await rootSigner(generateSeed()),
+      stores: folderStores(folder.open(), { basePath: 'accounts/a/stores', local: memoryStores() }),
+      watchIntervalMs: 20,
+    });
+    try {
+      const space = await node.spaces.create({ name: 'Notes', ...team, visibility: 'public' });
+      assert.equal((await node.spaces.status(space.id)).unreadable, 0);
+      let statusEvents = 0;
+      node.subscribe((event) => {
+        if (event.type === 'status' && event.space === space.id) statusEvents += 1;
+      });
+
+      const ofAnotherFormat = utf8Encode(
+        JSON.stringify({ v: 8, versions: [await makeVersion('old', space.id)] }),
+      );
+      const spaces = createDirectoryBlobStore(folder.open(), 'accounts/a/stores/spaces');
+      await spaces.put(
+        `${space.id}/${'f'.repeat(32)}/${await segmentName(1, ofAnotherFormat)}`,
+        ofAnotherFormat,
+      );
+
+      await until(async () => (await node.spaces.status(space.id)).unreadable === 1, 5000, 'the count');
+      assert.ok(statusEvents > 0, 'whoever watches the status is told');
+      assert.deepEqual(await node.records.list(space.id), []);
+    } finally {
+      await node.close();
+    }
+  });
 });

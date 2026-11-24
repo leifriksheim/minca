@@ -34,13 +34,13 @@ function useRestOfAccountOnline(): RestOfAccountOnline | null | undefined {
 export function AccountSync() {
   const online = useRestOfAccountOnline();
   if (!online) return null;
-  const isSyncing = online.devices + online.hosts > 0;
+  const isConnected = online.devices + online.hosts > 0;
   const source =
     online.devices > 1 ? 'your other devices' : online.devices === 1 ? 'your other device' : 'your host';
   return (
-    <div className={css.sync} role="status" data-syncing={isSyncing || undefined}>
+    <div className={css.sync} role="status" data-syncing={isConnected || undefined}>
       <div className={css.wire} aria-hidden>
-        <Shape kind="scallop" colour={isSyncing ? 'sage' : 'ink'} size={34} />
+        <Shape kind="scallop" colour={isConnected ? 'sage' : 'ink'} size={34} />
         <span className={css.dots}>
           <i />
           <i />
@@ -49,10 +49,10 @@ export function AccountSync() {
         <Shape kind="squircle" colour="cobalt" size={34} />
       </div>
       <div className="stack" data-gap="tight">
-        <strong>{isSyncing ? `Syncing with ${source}` : 'Have Minca on another device?'}</strong>
+        <strong>{isConnected ? `Connected to ${source}` : 'Have Minca on another device?'}</strong>
         <small>
-          {isSyncing
-            ? 'What you have there shows up here as it arrives. You can carry on meanwhile.'
+          {isConnected
+            ? 'Anything there that this device lacks shows up here as it arrives. You can carry on meanwhile.'
             : 'Open it there, and what you have comes over on its own.'}
         </small>
       </div>

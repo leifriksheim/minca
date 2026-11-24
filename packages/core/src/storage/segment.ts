@@ -20,14 +20,14 @@ export function packSegment(versions: ReadonlyArray<Version>): Uint8Array {
   return utf8Encode(JSON.stringify({ v: SEGMENT_VERSION, versions }));
 }
 
-/** The versions in a segment; none for bytes that are not one */
-export function unpackSegment(bytes: Uint8Array): Version[] {
+/** The versions in a segment; null for bytes that are not a segment of this format */
+export function unpackSegment(bytes: Uint8Array): Version[] | null {
   try {
     const parsed: unknown = JSON.parse(utf8Decode(bytes));
-    if (!isObject(parsed) || parsed.v !== SEGMENT_VERSION || !Array.isArray(parsed.versions)) return [];
+    if (!isObject(parsed) || parsed.v !== SEGMENT_VERSION || !Array.isArray(parsed.versions)) return null;
     return parsed.versions.filter(isStoredVersion);
   } catch {
-    return [];
+    return null;
   }
 }
 

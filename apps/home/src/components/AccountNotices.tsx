@@ -1,11 +1,12 @@
 import { useMinca } from '@minca/react';
 import { relayOnlyLocal, relayProblem } from '@minca/app-shared/relay';
+import { UnreadableData } from '@minca/app-shared/UnreadableData';
 import { PodChoice } from './PodChoice';
 
 /**
  * What the account has to say, above whatever page is showing: a relay that
- * cannot be reached, a pod move waiting on an answer or just finished, and
- * anything that went wrong.
+ * cannot be reached, data this version can't read, a pod move waiting on an
+ * answer or just finished, and anything that went wrong.
  */
 export function AccountNotices() {
   const { auth, state } = useMinca();
@@ -27,6 +28,7 @@ export function AccountNotices() {
         </aside>
       )}
       {!relayProblem() && relayOnlyLocal() && <small>{relayOnlyLocal()}</small>}
+      <UnreadableData />
 
       {podChoice && (
         <PodChoice

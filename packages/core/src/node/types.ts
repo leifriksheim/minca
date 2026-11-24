@@ -427,6 +427,8 @@ export interface SpaceStatus {
   readonly fingerprint: string;
   /** How many versions peers sent that failed validation */
   readonly rejected: number;
+  /** How many segments in the data folder and mirrors are not of the format this version reads, so nothing in them is here */
+  readonly unreadable: number;
   /** What this node holds of the space: `all`, or the collections it uses, sorted */
   readonly holds: 'all' | ReadonlyArray<string>;
   /** Writes of this node's that haven't reached enough keepers yet */

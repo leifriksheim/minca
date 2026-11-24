@@ -180,7 +180,7 @@ describe('a mirror', () => {
     await writer.mirror.compact();
     const after = await shared.store.list(`${SPACE}/`);
     assert.equal(after.length, 1);
-    const kept = unpackSegment((await shared.store.get(after[0]!))!);
+    const kept = unpackSegment((await shared.store.get(after[0]!))!) ?? [];
     assert.equal(kept.length, 12, 'every version, so each edit can still be checked');
     assert.equal(
       kept.filter((version) => 'body' in version).length,
@@ -261,7 +261,7 @@ describe('a mirror', () => {
     const left = await shared.list(`${SPACE}/`);
     assert.equal(left.length, 1);
     assert.deepEqual(
-      unpackSegment((await shared.get(left[0]!))!).map((version) => textOf(version.body)),
+      unpackSegment((await shared.get(left[0]!))!)?.map((version) => textOf(version.body)),
       ['mine'],
     );
   });
@@ -407,13 +407,36 @@ describe('a mirror', () => {
     assert.deepEqual(await texts(fresh.storage), ['one', 'two']);
   });
 
+  test('a segment of another format is counted as unreadable, fetched once, and stops no other', async () => {
+    const shared = counted(createMemoryBlobStore());
+    const writer = await device(shared.store);
+    await writer.storage.addVersion(await note(await author(), 'readable'));
+    await writer.mirror.flush();
+    const ofAnotherFormat = new TextEncoder().encode(
+      JSON.stringify({ v: 8, versions: [await note(await author(), 'written before')] }),
+    );
+    const key = `${SPACE}/${'e'.repeat(32)}/${await segmentName(1, ofAnotherFormat)}`;
+    await shared.store.put(key, ofAnotherFormat);
+
+    const reader = await device(shared.store);
+    assert.deepEqual(await reader.mirror.pull(), { added: 1, unreadable: 1 });
+    assert.deepEqual(await texts(reader.storage), ['readable']);
+
+    const fetchedBefore = shared.calls.get;
+    assert.deepEqual(await reader.mirror.pull(), { added: 0, unreadable: 1 }, 'still said on a later pull');
+    assert.equal(shared.calls.get, fetchedBefore, 'and not fetched again');
+
+    await shared.store.delete(key);
+    assert.deepEqual(await reader.mirror.pull(), { added: 0, unreadable: 0 }, 'gone once the segment is');
+  });
+
   test('a segment that is not one, or of the format before envelopes, opens as nothing', async () => {
-    assert.deepEqual(unpackSegment(new TextEncoder().encode('not json')), []);
-    assert.deepEqual(unpackSegment(new TextEncoder().encode('{"v":3,"versions":[]}')), []);
-    const [version] = unpackSegment(packSegment([await note(await author(), 'hi')]));
+    assert.equal(unpackSegment(new TextEncoder().encode('not json')), null);
+    assert.equal(unpackSegment(new TextEncoder().encode('{"v":3,"versions":[]}')), null);
+    const [version] = unpackSegment(packSegment([await note(await author(), 'hi')])) ?? [];
     assert.ok(version, 'the current format opens');
     const old = JSON.stringify({ v: 1, versions: [version] });
-    assert.deepEqual(unpackSegment(new TextEncoder().encode(old)), []);
+    assert.equal(unpackSegment(new TextEncoder().encode(old)), null);
     // The example in spec 05 §16.3.
     assert.equal(await segmentName(1, packSegment([])), '000001-2e55c7a64e318edd.seg');
   });

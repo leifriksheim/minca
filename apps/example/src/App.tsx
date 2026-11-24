@@ -28,6 +28,7 @@ import { PersonRow } from './components/PeopleParts';
 import { Loading } from './components/Loading';
 import { Opening } from '@minca/app-shared/Opening';
 import { AccountSync } from '@minca/app-shared/AccountSync';
+import { UnreadableData } from '@minca/app-shared/UnreadableData';
 import { ago } from '@minca/ui/time';
 import { byRecent, useLastActive } from './recent';
 import { CallLayer } from './components/calls/Calls';
@@ -253,6 +254,7 @@ export function AllPage() {
   };
   return (
     <>
+      <UnreadableData />
       <SpaceInvites
         names={new Map([...pairs.values()].map((pair) => [pair.face, pair.name]))}
         onJoined={openSpace}
