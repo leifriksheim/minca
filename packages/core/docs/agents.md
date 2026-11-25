@@ -183,9 +183,9 @@ Where a chat app can show its person a form (MCP elicitation, on the
 2026-07-28 revision), the service asks them two things itself, rather than
 leaving it to the model:
 
-- **Which space.** A call may leave `space` out. With one space, it runs
-  there. With more, the person picks, and the result tells the model the id
-  to pass from then on.
+- **Which space.** A call may leave `space` out. A connection given one
+  space runs it there. Otherwise the person picks, and the result tells the
+  model the id to pass from then on.
 - **Whether to delete.** `records_delete` shows the person the record and
   its space, and waits for their yes.
 
@@ -195,6 +195,10 @@ names must be one the connection was given.
 
 An app that can't ask is told the spaces to choose from, and a delete runs
 with only the app's own prompt before a tool call.
+
+The questions are a courtesy to the person, not a defence against a model
+that a member's record has steered. An edit is not asked about, and the yes
+is the app's word: the service can't tell it from one the app made up.
 
 Nothing new goes over the wire between the home and the page. See
 [the CLI's README](https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#agents).

@@ -95,7 +95,7 @@ function reachLine(granted: Granted): string {
       : `Only these spaces: ${grant.spaces.map((space) => `${space.name} (${space.id})`).join(', ') || 'none'}.`;
   return (
     ` This connection reaches: ${spaces} A tool’s "space" may be left out when it isn’t clear which the ` +
-    'person means: with more than one, they are asked.'
+    'person means: they are asked, or you are told the spaces to ask them about.'
   );
 }
 
@@ -289,6 +289,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
             const chosen = chooseSpace({
               toolTitle: tool.title,
               reached: await spacesReached(granted, onNode),
+              reachedIsWhole: granted.grant.scope === 'spaces',
               answers,
               carried: typeof carried === 'string' ? carried : undefined,
               showsForms: appShowsForms,

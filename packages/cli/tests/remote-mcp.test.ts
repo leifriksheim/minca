@@ -28,6 +28,7 @@ import { until } from '../../core/tests/helpers/until.js';
 import { createRemoteMcp, type RemoteMcp } from '../src/remote-mcp/index.js';
 import { checkGranted, createSessions } from '../src/remote-mcp/sessions.js';
 import { mayRedirect } from '../src/remote-mcp/redirects.js';
+import { chooseSpace } from '../src/remote-mcp/questions.js';
 import { isRecord } from '../src/json.js';
 import { onHub } from './helpers/nodes.js';
 
@@ -920,6 +921,43 @@ describe('a host’s MCP endpoint', () => {
       10_000,
       'the agent to offer both spaces',
     );
+  });
+
+  test('given every space, one space synced so far is not taken for the only one: the person is still asked', () => {
+    // A session's node starts from nothing, so its list may hold one of the account's many spaces.
+    const chosen = chooseSpace({
+      toolTitle: 'Add records',
+      reached: [{ id: 'town-square', name: 'Public town square' }],
+      reachedIsWhole: false,
+      answers: undefined,
+      carried: undefined,
+      showsForms: true,
+    });
+    assert.ok('instead' in chosen && 'inputRequests' in chosen.instead, 'a question, not a space');
+
+    // A stranger's space can take the name of one of hers: the two are told apart.
+    const twins = chooseSpace({
+      toolTitle: 'Add records',
+      reached: [
+        { id: 'aaaaaaaaaaaa', name: 'Family' },
+        { id: 'bbbbbbbbbbbb', name: 'Family' },
+      ],
+      reachedIsWhole: true,
+      answers: undefined,
+      carried: undefined,
+      showsForms: true,
+    });
+    const form = JSON.stringify(twins);
+    assert.ok(form.includes('Family (aaaaaaaa…)') && form.includes('Family (bbbbbbbb…)'));
+    const unasked = chooseSpace({
+      toolTitle: 'Add records',
+      reached: [{ id: 'town-square', name: 'Public town square' }],
+      reachedIsWhole: false,
+      answers: undefined,
+      carried: undefined,
+      showsForms: false,
+    });
+    assert.ok('instead' in unasked && unasked.instead.isError === true, 'nor where nobody can be asked');
   });
 
   test('given one space, a call that names none runs there, and nobody is asked', async () => {

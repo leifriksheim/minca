@@ -23,6 +23,7 @@ export interface ReachedSpace {
 /** What a call answers with instead of running: a question for the person, or why it didn't run */
 export type AnsweredInstead = InputRequiredResult | CallToolResult;
 
+/** What a question came to: its answer, or what the call answers with until there is one */
 export type Settled<T> = { readonly settled: T } | { readonly instead: AnsweredInstead };
 
 const notDone = (text: string): CallToolResult => ({ content: [{ type: 'text', text }], isError: true });
@@ -41,32 +42,43 @@ export function showsForms(capabilities: ClientCapabilities | undefined): boolea
 
 const nameAndId = (space: ReachedSpace) => `${space.name} (${space.id})`;
 
+/** A space as the person picks it: by name, with the start of its id where another shares the name, which anyone may copy */
+function titleAmong(space: ReachedSpace, reached: ReadonlyArray<ReachedSpace>): string {
+  const nameIsShared = reached.some((other) => other.id !== space.id && other.name === space.name);
+  return nameIsShared ? `${space.name} (${space.id.slice(0, 8)}…)` : space.name;
+}
+
 /**
- * The space a call that named none runs in: the only one the connection
- * reaches, or the one the person picks. `carried` is the space an earlier
+ * The space a call that named none runs in: the only one the connection was
+ * given, or the one the person picks. `carried` is the space an earlier
  * question of the same call settled.
+ *
+ * A connection given every space is never settled for the person: its list
+ * is what its node has synced so far, and one space there may be one of many.
  */
 export function chooseSpace(asked: {
   readonly toolTitle: string;
   readonly reached: ReadonlyArray<ReachedSpace>;
+  /** Whether `reached` is the grant's own list, signed and whole, rather than what a node holds now */
+  readonly reachedIsWhole: boolean;
   readonly answers: Record<string, unknown> | undefined;
   readonly carried: string | undefined;
   readonly showsForms: boolean;
 }): Settled<ReachedSpace> {
   const { reached } = asked;
-  const oneReached = (id: unknown): Settled<ReachedSpace> => {
+  const reachedSpaceWithId = (id: unknown): Settled<ReachedSpace> => {
     const space = reached.find((one) => one.id === id);
     return space ? { settled: space } : { instead: notDone('That isn’t a space this connection reaches.') };
   };
-  if (asked.carried !== undefined) return oneReached(asked.carried);
+  if (asked.carried !== undefined) return reachedSpaceWithId(asked.carried);
   const answer = inputResponse(asked.answers, SPACE_QUESTION);
   if (answer.kind === 'elicit')
     return answer.action === 'accept'
-      ? oneReached(answer.content?.[SPACE_QUESTION])
+      ? reachedSpaceWithId(answer.content?.[SPACE_QUESTION])
       : { instead: notDone('The person didn’t pick a space, so nothing was done.') };
   const [only, ...others] = reached;
   if (only === undefined) return { instead: notDone('This connection reaches no space yet.') };
-  if (others.length === 0) return { settled: only };
+  if (others.length === 0 && asked.reachedIsWhole) return { settled: only };
   if (!asked.showsForms)
     return {
       instead: notDone(
@@ -85,7 +97,7 @@ export function chooseSpace(asked: {
               [SPACE_QUESTION]: {
                 type: 'string',
                 title: 'Space',
-                oneOf: reached.map((space) => ({ const: space.id, title: space.name })),
+                oneOf: reached.map((space) => ({ const: space.id, title: titleAmong(space, reached) })),
               },
             },
             required: [SPACE_QUESTION],
