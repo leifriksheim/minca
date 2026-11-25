@@ -69,7 +69,8 @@ doing, and propose collections. Each one, with what it takes, is in
 [the list of actions](https://minca.dev/automations/actions/#the-list).
 
 The MCP service leaves out `spaces_preview_invite`, which would have it dial
-addresses a caller chose. `records_query` takes the same JSON query as `node.records.query`
+addresses a caller chose, and lets a tool's `space` be left out
+([Asking the person](#asking-the-person)). `records_query` takes the same JSON query as `node.records.query`
 ([Records and queries](records-and-queries.md)).
 
 A bot also gets `direct_list` and `direct_send`. It holds its own member key,
@@ -175,6 +176,29 @@ person's invites and spaces name at public addresses, and the service's own
 (`network.reach`, see [The node](node.md)). A write is done once the space's
 keepers have it (`spaces.kept`). The one thing kept between calls is where
 the key has signed, so the next node doesn't sign at a place it used.
+
+### Asking the person
+
+Where a chat app can show its person a form (MCP elicitation, on the
+2026-07-28 revision), the service asks them two things itself, rather than
+leaving it to the model:
+
+- **Which space.** A call may leave `space` out. A connection given one
+  space runs it there. Otherwise the person picks, and the result tells the
+  model the id to pass from then on.
+- **Whether to delete.** `records_delete` shows the person the record and
+  its space, and waits for their yes.
+
+The app sends the call again with the answer, so the service keeps nothing
+in between. An answer is checked as the call's own arguments are: a space it
+names must be one the connection was given.
+
+An app that can't ask is told the spaces to choose from, and a delete runs
+with only the app's own prompt before a tool call.
+
+The questions are a courtesy to the person, not a defence against a model
+that a member's record has steered. An edit is not asked about, and the yes
+is the app's word: the service can't tell it from one the app made up.
 
 Nothing new goes over the wire between the home and the page. See
 [the CLI's README](https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#agents).

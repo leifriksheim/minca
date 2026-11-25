@@ -28,6 +28,7 @@ import { until } from '../../core/tests/helpers/until.js';
 import { createRemoteMcp, type RemoteMcp } from '../src/remote-mcp/index.js';
 import { checkGranted, createSessions } from '../src/remote-mcp/sessions.js';
 import { mayRedirect } from '../src/remote-mcp/redirects.js';
+import { chooseSpace } from '../src/remote-mcp/questions.js';
 import { isRecord } from '../src/json.js';
 import { onHub } from './helpers/nodes.js';
 
@@ -335,15 +336,30 @@ async function signIn(
   return { tokens, did: key.did, key: key.jwk };
 }
 
-async function mcpClient(resource: string, token: string) {
-  const client = new Client({ name: 'test app', version: '1' });
+/** What a chat app's person answers a form with */
+type Answer = { readonly action: 'accept' | 'decline'; readonly content?: Record<string, string> };
+
+/** A chat app; given `answer`, one that shows its person the forms a call asks with, and keeps what they said */
+async function mcpClient(resource: string, token: string, answer?: (message: string) => Answer) {
+  const client = new Client(
+    { name: 'test app', version: '1' },
+    // Asking rides the 2026-07-28 revision: the call is answered with a question, and sent again with the answer.
+    answer ? { capabilities: { elicitation: { form: {} } }, versionNegotiation: { mode: 'auto' } } : {},
+  );
+  const shown: Array<{ readonly message: string; readonly form: string }> = [];
+  if (answer)
+    client.setRequestHandler('elicitation/create', (request) => {
+      const form = 'requestedSchema' in request.params ? JSON.stringify(request.params.requestedSchema) : '';
+      shown.push({ message: request.params.message, form });
+      return answer(request.params.message);
+    });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(resource), {
       requestInit: { headers: { authorization: `Bearer ${token}` } },
     }),
   );
   closing.push(() => client.close());
-  return client;
+  return Object.assign(client, { shown });
 }
 
 /** A JSON object's fields, by name: undefined for anything else */
@@ -790,6 +806,230 @@ describe('a host’s MCP endpoint', () => {
     assert.equal(result.isError, true);
     assert.match(textOf(result), /wasn’t given the space not-given\. It can use: Given/);
     assert.ok(Date.now() - started < 5000, 'without waiting to catch up with a space it can’t have');
+  });
+
+  /** Ada with two spaces her node keeps, and a chat app's token for both */
+  async function adaWithTwoSpaces() {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const spaces = [];
+    for (const name of ['Lunch club', 'Book club']) {
+      const space = await ada.node.spaces.create({ name, visibility: 'private' });
+      await hold(ada.node, space.id);
+      await ada.node.spaces.setKeepers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
+      spaces.push(space);
+    }
+    const host = await aHost(hub);
+    const { tokens } = await signIn(await anApp(host.resource), host.resource, (audience) =>
+      ada.grantFor(audience),
+    );
+    const [lunch, books] = spaces;
+    return { ada, lunch: lunch!, books: books!, resource: host.resource, token: tokens.access_token };
+  }
+
+  const notesIn = async (node: Awaited<ReturnType<typeof accountHolder>>['node'], space: string) =>
+    (await node.records.list(space, { collection: 'app.note' })).map((record) => field(record.body)('text'));
+
+  test('a call that names no space asks the person which, and runs in the one they pick', async () => {
+    const { ada, lunch, books, resource, token } = await adaWithTwoSpaces();
+    const put = {
+      name: 'records_put',
+      arguments: { records: [{ collection: 'app.note', body: { text: 'Chapter 4' } }] },
+    };
+
+    const client = await mcpClient(resource, token, () => ({
+      action: 'accept',
+      content: { space: books.id },
+    }));
+    const { tools } = await client.listTools();
+    const offered = tools.find((tool) => tool.name === 'records_put')?.inputSchema;
+    assert.ok(!offered?.required?.includes('space'), 'a model may leave the space out');
+    let said = '';
+    await until(
+      async () => {
+        const result = await client.callTool(put);
+        said = textOf(result);
+        return !result.isError;
+      },
+      10_000,
+      'the agent to write where the person said',
+    );
+    assert.match(client.shown[0]!.message, /in which space\?/);
+    assert.ok(client.shown[0]!.form.includes('Lunch club') && client.shown[0]!.form.includes('Book club'));
+    assert.ok(
+      said.includes(`ran in Book club (${books.id})`),
+      'the model is told the space, to name it next time',
+    );
+    await until(
+      async () => (await notesIn(ada.node, books.id)).includes('Chapter 4'),
+      8000,
+      'the note to reach Ada',
+    );
+    assert.deepEqual(await notesIn(ada.node, lunch.id), [], 'nothing in the space she didn’t pick');
+
+    const declining = await mcpClient(resource, token, () => ({ action: 'decline' }));
+    const declined = await declining.callTool(put);
+    assert.equal(declined.isError, true);
+    assert.match(textOf(declined), /didn’t pick a space, so nothing was done/);
+
+    // An app that can't ask is told the spaces, for the model to choose or ask in the chat.
+    const plain = await mcpClient(resource, token);
+    const told = await plain.callTool(put);
+    assert.equal(told.isError, true);
+    assert.ok(
+      textOf(told).includes(`Lunch club (${lunch.id})`) && textOf(told).includes(`Book club (${books.id})`),
+    );
+    assert.deepEqual(await notesIn(ada.node, books.id), ['Chapter 4'], 'neither wrote anything');
+  });
+
+  test('an answer naming a space the connection wasn’t given runs nowhere', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    for (const name of ['Given', 'Also given']) await ada.node.spaces.create({ name, visibility: 'private' });
+    const host = await aHost(hub);
+    const { tokens } = await signIn(await anApp(host.resource), host.resource, (audience) =>
+      ada.grantFor(audience),
+    );
+    // Made after the note was signed: hers, but not this connection's.
+    const kept = await ada.node.spaces.create({ name: 'Kept back', visibility: 'private' });
+    const client = await mcpClient(host.resource, tokens.access_token, () => ({
+      action: 'accept',
+      content: { space: kept.id },
+    }));
+    const result = await client.callTool({ name: 'records_query', arguments: { collection: 'app.note' } });
+    assert.equal(result.isError, true);
+    assert.match(textOf(result), /isn’t a space this connection reaches/);
+  });
+
+  test('given every space, the person picks among the ones the account is in now', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub);
+    const { tokens } = await signIn(await anApp(host.resource), host.resource, (audience) =>
+      ada.everySpace(audience),
+    );
+    // Made after the chat app connected.
+    for (const name of ['Lunch club', 'Book club'])
+      await ada.node.spaces.create({ name, visibility: 'private' });
+    const client = await mcpClient(host.resource, tokens.access_token, () => ({ action: 'decline' }));
+    await until(
+      async () => {
+        await client.callTool({ name: 'records_query', arguments: { collection: 'app.note' } });
+        const form = client.shown.at(-1)?.form ?? '';
+        return form.includes('Lunch club') && form.includes('Book club');
+      },
+      10_000,
+      'the agent to offer both spaces',
+    );
+  });
+
+  test('given every space, one space synced so far is not taken for the only one: the person is still asked', () => {
+    // A session's node starts from nothing, so its list may hold one of the account's many spaces.
+    const chosen = chooseSpace({
+      toolTitle: 'Add records',
+      reached: [{ id: 'town-square', name: 'Public town square' }],
+      reachedIsWhole: false,
+      answers: undefined,
+      carried: undefined,
+      showsForms: true,
+    });
+    assert.ok('instead' in chosen && 'inputRequests' in chosen.instead, 'a question, not a space');
+
+    // A stranger's space can take the name of one of hers, or one like it: every space shows the start of its id.
+    const twins = chooseSpace({
+      toolTitle: 'Add records',
+      reached: [
+        { id: 'aaaaaaaaaaaa', name: 'Family' },
+        { id: 'bbbbbbbbbbbb', name: 'Family' },
+      ],
+      reachedIsWhole: true,
+      answers: undefined,
+      carried: undefined,
+      showsForms: true,
+    });
+    const form = JSON.stringify(twins);
+    assert.ok(form.includes('Family (aaaaaaaa…)') && form.includes('Family (bbbbbbbb…)'));
+    const unasked = chooseSpace({
+      toolTitle: 'Add records',
+      reached: [{ id: 'town-square', name: 'Public town square' }],
+      reachedIsWhole: false,
+      answers: undefined,
+      carried: undefined,
+      showsForms: false,
+    });
+    assert.ok('instead' in unasked && unasked.instead.isError === true, 'nor where nobody can be asked');
+  });
+
+  test('given one space, a call that names none runs there, and nobody is asked', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const space = await ada.node.spaces.create({ name: 'Lunch club', visibility: 'private' });
+    await hold(ada.node, space.id);
+    await ada.node.spaces.setKeepers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
+    const host = await aHost(hub);
+    const { tokens } = await signIn(await anApp(host.resource), host.resource, (audience) =>
+      ada.grantFor(audience),
+    );
+    const client = await mcpClient(host.resource, tokens.access_token, () => ({ action: 'decline' }));
+    await until(
+      async () =>
+        !(
+          await client.callTool({
+            name: 'records_put',
+            arguments: { records: [{ collection: 'app.note', body: { text: 'Soup on Friday' } }] },
+          })
+        ).isError,
+      10_000,
+      'the agent to write in the only space',
+    );
+    assert.deepEqual(client.shown, []);
+    await until(
+      async () => (await notesIn(ada.node, space.id)).includes('Soup on Friday'),
+      8000,
+      'the note to reach Ada',
+    );
+  });
+
+  test('a delete waits for the person’s yes, shown what goes and from where', async () => {
+    const { ada, lunch, resource, token } = await adaWithTwoSpaces();
+    const note = await ada.node.records.put(lunch.id, 'app.note', { text: 'Soup on Friday' });
+    const remove = { name: 'records_delete', arguments: { key: note.key } };
+    const inLunch = { action: 'accept', content: { space: lunch.id } } as const;
+    const isDeleteQuestion = (message: string) => message.startsWith('Delete this');
+
+    const refusing = await mcpClient(resource, token, (message) =>
+      isDeleteQuestion(message) ? { action: 'decline' } : inLunch,
+    );
+    let refused = '';
+    await until(
+      async () => {
+        refused = textOf(await refusing.callTool(remove));
+        return refusing.shown.some((form) => isDeleteQuestion(form.message));
+      },
+      10_000,
+      'the agent’s node to hold the note',
+    );
+    assert.match(refused, /chose not to delete it, so it is still there/);
+    const question = refusing.shown.find((form) => isDeleteQuestion(form.message))!.message;
+    assert.match(question, /^Delete this app\.note record from Lunch club \(\w{8}…\), for every member\?/);
+    assert.ok(question.includes('Soup on Friday'), 'she sees what the record holds');
+    assert.deepEqual(await notesIn(ada.node, lunch.id), ['Soup on Friday']);
+
+    // Asked which space first, then whether to delete: the space she picked is the one deleted from.
+    const agreeing = await mcpClient(resource, token, (message) =>
+      isDeleteQuestion(message) ? { action: 'accept' } : inLunch,
+    );
+    const deleted = await agreeing.callTool(remove);
+    assert.equal(deleted.isError, false, textOf(deleted));
+    assert.deepEqual(
+      agreeing.shown.map((form) => isDeleteQuestion(form.message)),
+      [false, true],
+    );
+    await until(
+      async () => (await notesIn(ada.node, lunch.id)).length === 0,
+      8000,
+      'the delete to reach Ada',
+    );
   });
 
   test('a sign-in is answered once, and a grant must be what its note is', async () => {

@@ -15,9 +15,10 @@
  * records-only note their account home signed for the spaces they picked, or
  * for every space (`sessions.ts`). It writes as them, "via agent", and can't add collections
  * or change who is in a space. The tools are `NODE_ACTIONS`, less what needs
- * a person (`mcpTools` in `mcp.ts`). The service keeps the key sealed under one only the
- * token carries, and a copy of the spaces only while their node runs
- * (`sessions.ts`).
+ * a person (`mcpTools` in `mcp.ts`); where the app can ask its person, a call
+ * asks them which space it means and whether to delete (`questions.ts`). The
+ * service keeps the key sealed under one only the token carries, and a copy
+ * of the spaces only while their node runs (`sessions.ts`).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
@@ -34,8 +35,8 @@ import {
   type JSONValue,
 } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import { type NodeConfig, type StorageAdapter, type StoreFactory } from '@minca/core';
-import { callAction, NODE_ACTIONS } from '@minca/actions';
+import { type NodeConfig, type P2PNode, type StorageAdapter, type StoreFactory } from '@minca/core';
+import { callAction, NODE_ACTIONS, type ActionSchema } from '@minca/actions';
 import type { Grant } from '@minca/session';
 import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
@@ -44,6 +45,7 @@ import { keptAfter } from '../level.js';
 import { createConsent } from './consent.js';
 import { createOAuth, MCP_SCOPE } from './oauth.js';
 import { mayRedirect } from './redirects.js';
+import { askBeforeDelete, chooseSpace, ranInSpace, showsForms, type ReachedSpace } from './questions.js';
 
 /** Where the endpoint is */
 const MCP_PATH = '/mcp';
@@ -64,6 +66,26 @@ const NOT_HOSTED = new Set(['spaces_preview_invite']);
 /** The tools a connection is offered */
 const hostedTools = () => mcpTools(AGENT).filter((tool) => !NOT_HOSTED.has(tool.name));
 
+/** Asked of the person first, where their app can ask: it goes for every member */
+const ASKED_FIRST = 'records_delete';
+
+/** A tool's input as offered here: its space may be left out, for the person to say which (`questions.ts`) */
+function withSpaceLeftOut(input: ActionSchema) {
+  const { space, ...others } = input.properties;
+  if (space === undefined) return input;
+  return {
+    ...input,
+    properties: {
+      ...others,
+      space: {
+        ...space,
+        description: 'Space id, from spaces_list. Leave it out to have the person say which.',
+      },
+    },
+    required: (input.required ?? []).filter((field) => field !== 'space'),
+  };
+}
+
 /** What a model is told of what its connection reaches, so it doesn't try what every peer would refuse */
 function reachLine(granted: Granted): string {
   const { grant } = granted;
@@ -71,7 +93,10 @@ function reachLine(granted: Granted): string {
     grant.scope === 'account'
       ? 'Every space of the account, including ones made later.'
       : `Only these spaces: ${grant.spaces.map((space) => `${space.name} (${space.id})`).join(', ') || 'none'}.`;
-  return ` This connection reaches: ${spaces}`;
+  return (
+    ` This connection reaches: ${spaces} A tool’s "space" may be left out when it isn’t clear which the ` +
+    'person means: they are asked, or you are told the spaces to ask them about.'
+  );
 }
 
 /** Why a call names a space this connection can't use, or null */
@@ -84,6 +109,16 @@ function outsideGrant(granted: Granted, space: string | undefined): string | nul
     `${grant.spaces.map((one) => `${one.name} (${one.id})`).join(', ') || 'no space'}. ` +
     'To use another, the person connects the chat app again and picks it, or gives it every space.'
   );
+}
+
+/** The spaces a connection reaches: the ones it was given, or every one its account is in now */
+function spacesReached(
+  granted: Granted,
+  onNode: <T>(space: undefined, work: (node: P2PNode) => Promise<T>) => Promise<T>,
+): Promise<ReadonlyArray<ReachedSpace>> {
+  return granted.grant.scope === 'spaces'
+    ? Promise.resolve(granted.grant.spaces)
+    : onNode(undefined, (node) => node.spaces.list());
 }
 
 /** A plain copy, as the SDK types JSON: the actions' schemas are frozen, read-only data */
@@ -230,24 +265,59 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
       server.setRequestHandler('tools/list', () => ({
         tools: hostedTools().map((tool) => ({
           ...tool,
-          inputSchema: { ...objectOf(tool.inputSchema), type: 'object' },
+          inputSchema: { ...objectOf(withSpaceLeftOut(tool.inputSchema)), type: 'object' },
         })),
       }));
-      server.setRequestHandler('tools/call', async (request) => {
+      server.setRequestHandler('tools/call', async (request, ctx) => {
         const name = request.params.name;
         const failed = (text: string) => ({ content: [{ type: 'text' as const, text }], isError: true });
-        if (!hostedTools().some((tool) => tool.name === name))
+        const tool = hostedTools().find((offered) => offered.name === name);
+        if (!tool)
           return failed(`There is no tool ${name} here. tools/list has the ones this connection offers.`);
         if (!session || !granted)
           return failed('This chat app isn’t signed in to Minca. Connect it again from the app’s settings.');
-        const args = request.params.arguments ?? {};
-        const space = typeof args.space === 'string' ? args.space : undefined;
-        const outside = outsideGrant(granted, space);
-        if (outside) return failed(outside);
+        const onNode = <T>(space: string | undefined, work: (node: P2PNode) => Promise<T>) =>
+          sessions.use(session, granted, space, work);
+        const answers = ctx.mcpReq.inputResponses;
+        const appShowsForms = showsForms(server.getClientCapabilities());
+        let args = request.params.arguments ?? {};
+        let settledSpace: ReachedSpace | undefined;
         let said: Awaited<ReturnType<typeof callAction>>;
         try {
+          if (tool.inputSchema.properties.space !== undefined && args.space === undefined) {
+            const carried = ctx.mcpReq.requestState<unknown>();
+            const chosen = chooseSpace({
+              toolTitle: tool.title,
+              reached: await spacesReached(granted, onNode),
+              reachedIsWhole: granted.grant.scope === 'spaces',
+              answers,
+              carried: typeof carried === 'string' ? carried : undefined,
+              showsForms: appShowsForms,
+            });
+            if ('instead' in chosen) return chosen.instead;
+            settledSpace = chosen.settled;
+            args = { ...args, space: settledSpace.id };
+          }
+          const space = typeof args.space === 'string' ? args.space : undefined;
+          const outside = outsideGrant(granted, space);
+          if (outside) return failed(outside);
+          const key = args.key;
+          if (name === ASKED_FIRST && appShowsForms && space !== undefined && typeof key === 'string') {
+            const instead = await askBeforeDelete(answers, () =>
+              onNode(space, async (node) => {
+                const [record, summary] = await Promise.all([
+                  node.records.get(space, key),
+                  node.spaces.get(space),
+                ]);
+                return record && summary
+                  ? { space: summary, collection: record.collection, body: record.body }
+                  : null;
+              }),
+            );
+            if (instead) return instead;
+          }
           const writes = !NODE_ACTIONS.find((action) => action.name === name)?.readOnly;
-          said = await sessions.use(session, granted, space, async (node) => {
+          said = await onNode(space, async (node) => {
             if (!writes || space === undefined) return callAction(node, name, args);
             // What the node holds goes when it stops: a write is done once it is kept elsewhere.
             const since = Date.now();
@@ -262,7 +332,8 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
         } catch (error) {
           return failed(messageOf(error));
         }
-        const { text, isError, value } = said;
+        const { isError, value } = said;
+        const text = settledSpace ? `${said.text}\n\n${ranInSpace(settledSpace)}` : said.text;
         return {
           content: [{ type: 'text', text }],
           ...(isError ? {} : { structuredContent: isRecord(value) ? value : { result: value } }),
