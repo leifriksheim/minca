@@ -42,11 +42,13 @@ export function showsForms(capabilities: ClientCapabilities | undefined): boolea
 
 const nameAndId = (space: ReachedSpace) => `${space.name} (${space.id})`;
 
-/** A space as the person picks it: by name, with the start of its id where another shares the name, which anyone may copy */
-function titleAmong(space: ReachedSpace, reached: ReadonlyArray<ReachedSpace>): string {
-  const nameIsShared = reached.some((other) => other.id !== space.id && other.name === space.name);
-  return nameIsShared ? `${space.name} (${space.id.slice(0, 8)}…)` : space.name;
-}
+/**
+ * A space as the person is shown it: its name on one line, and the start of
+ * its id. Anyone may give a space any name, one of hers or one like it, so
+ * the id is what tells two apart; it doesn't say which is hers.
+ */
+const titleOf = (space: ReachedSpace) =>
+  `${space.name.replace(/\s+/g, ' ').trim()} (${space.id.slice(0, 8)}…)`;
 
 /**
  * The space a call that named none runs in: the only one the connection was
@@ -97,7 +99,7 @@ export function chooseSpace(asked: {
               [SPACE_QUESTION]: {
                 type: 'string',
                 title: 'Space',
-                oneOf: reached.map((space) => ({ const: space.id, title: titleAmong(space, reached) })),
+                oneOf: reached.map((space) => ({ const: space.id, title: titleOf(space) })),
               },
             },
             required: [SPACE_QUESTION],
@@ -145,7 +147,7 @@ export async function askBeforeDelete(
     inputRequests: {
       [DELETE_QUESTION]: inputRequired.elicit({
         message:
-          `Delete this ${record.collection} record from ${record.space.name}, for every member?\n\n` +
+          `Delete this ${record.collection} record from ${titleOf(record.space)}, for every member?\n\n` +
           previewOf(record.body),
         requestedSchema: { type: 'object', properties: {} },
       }),

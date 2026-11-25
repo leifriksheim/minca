@@ -935,7 +935,7 @@ describe('a host’s MCP endpoint', () => {
     });
     assert.ok('instead' in chosen && 'inputRequests' in chosen.instead, 'a question, not a space');
 
-    // A stranger's space can take the name of one of hers: the two are told apart.
+    // A stranger's space can take the name of one of hers, or one like it: every space shows the start of its id.
     const twins = chooseSpace({
       toolTitle: 'Add records',
       reached: [
@@ -1011,7 +1011,7 @@ describe('a host’s MCP endpoint', () => {
     );
     assert.match(refused, /chose not to delete it, so it is still there/);
     const question = refusing.shown.find((form) => isDeleteQuestion(form.message))!.message;
-    assert.match(question, /^Delete this app\.note record from Lunch club, for every member\?/);
+    assert.match(question, /^Delete this app\.note record from Lunch club \(\w{8}…\), for every member\?/);
     assert.ok(question.includes('Soup on Friday'), 'she sees what the record holds');
     assert.deepEqual(await notesIn(ada.node, lunch.id), ['Soup on Friday']);
 
